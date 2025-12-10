@@ -241,6 +241,28 @@ Auth: Email or Google OAuth. Redirects: `${NEXT_PUBLIC_SUPABASE_URL}/auth/v1/cal
 3) Run dev server: `npm run dev`
 4) Apply schema: paste `supabase/schema.sql` into Supabase SQL editor and run.
 
+### Creating Test Users
+
+To test the authentication flow, you need to create test user accounts:
+
+**Option 1: Using the Sign-Up Form** (Recommended for basic testing)
+1. Go to `http://localhost:3000/auth`
+2. Click "Need an account? Sign up" to toggle to sign-up mode
+3. Enter email (e.g., `test@example.com`) and password (e.g., `TestPassword123!`)
+4. Click "Create Account"
+5. Use the same credentials to log in
+
+**Option 2: Using the Admin Script** (For direct database user creation)
+1. Get your Supabase Service Role Key from the Supabase Dashboard (Settings → API → Service Role)
+2. Add to `.env.local`: `SUPABASE_SERVICE_ROLE_KEY=<your-key>`
+3. Run: `node scripts/create-test-user.mjs`
+4. Use the printed credentials to log in
+
+**Testing OAuth (Google Sign-In)**
+1. Click "Continue with Google" on the login page
+2. A new profile will be automatically created via Supabase trigger
+3. You'll be redirected to the organizations page after OAuth completes
+
 ---
 
 ## 🔐 Security & Compliance

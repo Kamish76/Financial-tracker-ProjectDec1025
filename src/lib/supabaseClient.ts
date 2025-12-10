@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -8,5 +8,5 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error("Missing Supabase env vars: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
 }
 
-// Browser client (use server-side clients separately if needed later)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Browser client using SSR package - stores session in cookies for server-side access
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
