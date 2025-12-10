@@ -210,18 +210,36 @@ OrgFinance solves two critical challenges:
 
 ### Branching Strategy
 - `main` - Production releases
-- `develop` - Development branch
-- `feature/` - Feature branches
-- `bugfix/` - Bug fix branches
+- `develop` - Integration branch (no direct commits; create a branch, PR/merge into `develop`)
+- `init/*` - One-time initialization branches (e.g., foundation setup) merged into `develop`
+- `feature/*` - One feature or page per branch; merge back to `develop`
+- `bugfix/*` - Bug fix branches; merge back to `develop`
+
+**Note:** Create a dedicated branch for each page/feature before starting work, then merge into `develop` via PR.
 
 ### Database Migrations
 All schema changes use Supabase migrations to maintain version control.
+
+For Phase 1 the source of truth lives in `supabase/schema.sql` (run in the Supabase SQL editor). See `docs/database.md` for table/policy details.
 
 ### Security Considerations
 - All data access filtered through RLS policies
 - OAuth tokens securely stored in Supabase Auth
 - Edge Function secrets managed via Supabase environment variables
 - Google Service Account key stored securely
+
+### Roles & Permissions (Supabase)
+- **Owner**: Full control; can transfer ownership and delete organization (exclusive)
+- **Admin**: Can manage roles/invites, accept invites, and create/update/delete transactions
+- **Member (Viewer)**: Read-only for org data and transactions
+
+Auth: Email or Google OAuth. Redirects: `${NEXT_PUBLIC_SUPABASE_URL}/auth/v1/callback` (prod) and `http://localhost:3000/auth/callback` (dev).
+
+### Local Setup
+1) Copy `.env.example` to `.env.local` and fill Supabase + Google creds.
+2) Install deps: `npm install`
+3) Run dev server: `npm run dev`
+4) Apply schema: paste `supabase/schema.sql` into Supabase SQL editor and run.
 
 ---
 
@@ -260,6 +278,6 @@ This project is developed as part of a semester project. Contributions welcome v
 ## 🎓 Project Context
 
 **Creator**: Kamish76  
-**Repository**: Financial-tracker-ProjectDec1025-  
+**Repository**: Financial-tracker-ProjectDec1025  
 **Status**: In Active Development  
 **Current Phase**: Foundation & Core Infrastructure
