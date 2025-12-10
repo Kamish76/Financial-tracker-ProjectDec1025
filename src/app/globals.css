@@ -13,6 +13,12 @@
   --accent-muted: #ffedd5;
   --ring: #f97316;
   --radius: 12px;
+  
+  --sidebar-background: #ffffff;
+  --sidebar-foreground: #0f172a;
+  --sidebar-border: #cbd5e1;
+  --sidebar-accent: #f97316;
+  --sidebar-accent-foreground: #ffffff;
 }
 
 [data-theme="dark"] {
@@ -27,6 +33,12 @@
   --accent-strong: #f59e0b;
   --accent-muted: #1f2933;
   --ring: #fb923c;
+  
+  --sidebar-background: #0f172a;
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-border: #1f2933;
+  --sidebar-accent: #fb923c;
+  --sidebar-accent-foreground: #ffffff;
 }
 
 @theme inline {
