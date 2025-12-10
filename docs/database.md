@@ -4,7 +4,7 @@ Run the SQL in `supabase/schema.sql` inside the Supabase SQL editor (email or Go
 
 ## Tables
 - `profiles`: 1:1 with `auth.users` (id, full_name, avatar_url, created_at).
-- `organizations`: org metadata; `owner_id` points to `profiles.id`.
+- `organizations`: org metadata (id, name, description, owner_id, created_at); `owner_id` points to `profiles.id`.
 - `organization_members`: membership + role (`owner`, `admin`, `member`), unique per org/user, tracks inviter.
 - `invite_codes`: org invite codes (code, expires_at, created_by).
 - `transactions`: org-scoped financial entries with `type` (`income`, `expense_business`, `expense_out_of_pocket`), amount, category, description, occurred_at, created/updated timestamps.
