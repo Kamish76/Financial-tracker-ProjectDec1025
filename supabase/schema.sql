@@ -51,6 +51,7 @@ create trigger on_auth_user_created
 create table if not exists public.organizations (
   id uuid primary key default gen_random_uuid(),
   name text not null,
+  description text,
   owner_id uuid not null references public.profiles (id) on delete restrict,
   created_at timestamptz not null default now()
 );
@@ -134,6 +135,20 @@ drop policy if exists org_members_select_member on public.organization_members;
 create policy org_members_select_member on public.organization_members
   for select using (public.fn_has_org_role(organization_id, array['owner','admin','member']));
 
+-- Allow org owners to insert themselves when creating a new organization
+drop policy if exists org_members_insert_self_owner on public.organization_members;
+create policy org_members_insert_self_owner on public.organization_members
+  for insert with check (
+    user_id = auth.uid() 
+    and role = 'owner'
+    and exists (
+      select 1 from public.organizations 
+      where id = organization_id 
+      and owner_id = auth.uid()
+    )
+  );
+
+-- Allow admins/owners to add other members
 drop policy if exists org_members_insert_admin on public.organization_members;
 create policy org_members_insert_admin on public.organization_members
   for insert with check (public.fn_has_org_role(organization_id, array['owner','admin']));

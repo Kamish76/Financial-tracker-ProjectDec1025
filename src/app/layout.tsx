@@ -46,22 +46,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
-        <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-6">
-          <header className="mb-8 flex items-center justify-between rounded-xl border border-border/70 bg-card px-4 py-3 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-white font-semibold">OF</div>
-              <div>
-                <div className="text-base font-semibold text-foreground">OrgFinance</div>
-                <div className="text-sm text-muted-foreground">Multi-tenant financial tracker</div>
-              </div>
-            </div>
-            <ThemeToggle />
-          </header>
-          <main className="flex-1">{children}</main>
-          <footer className="mt-10 pb-6 text-sm text-muted-foreground">
-            Foundation phase · Supabase + Next.js · Tailwind v4
-          </footer>
-        </div>
+        {children}
       </body>
     </html>
   );
