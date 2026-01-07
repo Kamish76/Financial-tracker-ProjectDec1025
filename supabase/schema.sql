@@ -170,6 +170,11 @@ drop policy if exists orgs_select_member on public.organizations;
 create policy orgs_select_member on public.organizations
   for select using (public.fn_has_org_role(id, array['owner','admin','member']));
 
+-- Allow authenticated users to search organizations for joining
+drop policy if exists orgs_select_all_authenticated on public.organizations;
+create policy orgs_select_all_authenticated on public.organizations
+  for select using (auth.role() = 'authenticated');
+
 drop policy if exists orgs_insert_owner on public.organizations;
 create policy orgs_insert_owner on public.organizations
   for insert with check (auth.uid() = owner_id);
