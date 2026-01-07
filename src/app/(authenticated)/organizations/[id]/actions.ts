@@ -9,10 +9,12 @@ interface AddIncomeInput {
   description?: string
   category?: string
   occurredAt: string
+  fundedByType: 'business' | 'personal'
+  fundedByUserId?: string | null
 }
 
 export async function addIncome(input: AddIncomeInput) {
-  const { organizationId, amount, description, category, occurredAt } = input
+  const { organizationId, amount, description, category, occurredAt, fundedByType, fundedByUserId } = input
 
   if (!organizationId) {
     return { error: "Organization is required" }
@@ -41,6 +43,10 @@ export async function addIncome(input: AddIncomeInput) {
     return { error: "You must be signed in" }
   }
 
+  // Validate source
+  const sourceType = fundedByType === 'personal' ? 'personal' : 'business'
+  const sourceUserId = sourceType === 'personal' ? (fundedByUserId || user.id) : null
+
   // Check role: only owner/admin can insert
   const admin = createAdminClient()
   const { data: membership, error: membershipError } = await admin
@@ -67,8 +73,8 @@ export async function addIncome(input: AddIncomeInput) {
     description: description?.trim() || null,
     category: category?.trim() || null,
     occurred_at: occurredDate.toISOString(),
-    funded_by_type: "business",
-    funded_by_user_id: null,
+    funded_by_type: sourceType,
+    funded_by_user_id: sourceUserId,
     updated_by_user_id: user.id,
   }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { PlusCircle } from "lucide-react"
 
@@ -17,6 +17,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
+import { supabase } from "@/lib/supabaseClient"
 
 type AddIncomeSheetProps = {
   organizationId: string
@@ -31,6 +32,10 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
   const [occurredAt, setOccurredAt] = useState<string>("")
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [fundedByType, setFundedByType] = useState<'business' | 'personal'>('business')
+  const [fundedByUserId, setFundedByUserId] = useState<string | null>(null)
+  const [members, setMembers] = useState<Array<{ id: string; name: string }>>([])
+  const [membersError, setMembersError] = useState<string | null>(null)
 
   const defaultDate = useMemo(() => new Date().toISOString().slice(0, 10), [])
 
@@ -47,7 +52,28 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
     setDescription("")
     setOccurredAt("")
     setError(null)
+    setFundedByType('business')
+    setFundedByUserId(null)
   }
+
+  // Load organization members for personal funding selection
+  useEffect(() => {
+    if (!open) return
+    setMembersError(null)
+    supabase
+      .from('organization_members')
+      .select('user_id, profiles!inner(id, full_name)')
+      .eq('organization_id', organizationId)
+      .then(({ data, error }) => {
+        if (error) {
+          setMembersError('Unable to load members')
+          return
+        }
+        const rows = (data || []) as any[]
+        const mapped = rows.map((r) => ({ id: r.user_id, name: r.profiles?.full_name || r.user_id }))
+        setMembers(mapped)
+      })
+  }, [open, organizationId])
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -73,6 +99,8 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
         category: category.trim() || undefined,
         description: description.trim() || undefined,
         occurredAt: dateValue,
+        fundedByType,
+        fundedByUserId: fundedByType === 'personal' ? (fundedByUserId || undefined) : undefined,
       })
 
       if (result?.error) {
@@ -104,6 +132,46 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
           <SheetTitle>Add income</SheetTitle>
           <SheetDescription>Log new income for this organization. Funded by business funds.</SheetDescription>
         </SheetHeader>
+          <div className="space-y-2">
+            <Label>Money Source</Label>
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant={fundedByType === 'business' ? 'default' : 'outline'}
+                onClick={() => setFundedByType('business')}
+              >
+                Business
+              </Button>
+              <Button
+                type="button"
+                variant={fundedByType === 'personal' ? 'default' : 'outline'}
+                onClick={() => setFundedByType('personal')}
+              >
+                Personal
+              </Button>
+            </div>
+          </div>
+
+          {fundedByType === 'personal' && (
+            <div className="space-y-2">
+              <Label htmlFor="fundedByUser">Contributor</Label>
+              <select
+                id="fundedByUser"
+                name="fundedByUser"
+                className="flex h-10 w-full rounded-lg border border-border bg-card px-4 py-2 text-sm text-foreground shadow-sm"
+                value={fundedByUserId || ''}
+                onChange={(e) => setFundedByUserId(e.target.value || null)}
+              >
+                <option value="">Select member</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+              {membersError && (
+                <p className="text-xs text-destructive">{membersError}</p>
+              )}
+            </div>
+          )}
 
         <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-2">
