@@ -36,6 +36,8 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
   const [fundedByUserId, setFundedByUserId] = useState<string | null>(null)
   const [members, setMembers] = useState<Array<{ id: string; name: string }>>([])
   const [membersError, setMembersError] = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [currentUserName, setCurrentUserName] = useState<string | null>(null)
 
   const defaultDate = useMemo(() => new Date().toISOString().slice(0, 10), [])
 
@@ -74,6 +76,27 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
         setMembers(mapped)
       })
   }, [open, organizationId])
+
+  // Load current user and default contributor to self when personal
+  useEffect(() => {
+    if (!open) return
+    supabase.auth.getUser().then(({ data }) => {
+      const u = data.user
+      setCurrentUserId(u?.id ?? null)
+      const name = (u?.user_metadata?.full_name as string | undefined) || (u?.email as string | undefined) || null
+      setCurrentUserName(name)
+      // Default contributor to current user when personal is selected
+      if (fundedByType === 'personal' && !fundedByUserId && u?.id) {
+        setFundedByUserId(u.id)
+      }
+    })
+  }, [open])
+
+  useEffect(() => {
+    if (fundedByType === 'personal' && !fundedByUserId && currentUserId) {
+      setFundedByUserId(currentUserId)
+    }
+  }, [fundedByType, fundedByUserId, currentUserId])
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -130,7 +153,7 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
       <SheetContent side="right">
         <SheetHeader>
           <SheetTitle>Add income</SheetTitle>
-          <SheetDescription>Log new income for this organization. Funded by business funds.</SheetDescription>
+          <SheetDescription>Log new income and choose its money source (business or personal).</SheetDescription>
         </SheetHeader>
           <div className="space-y-2">
             <Label>Money Source</Label>
@@ -162,7 +185,7 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
                 value={fundedByUserId || ''}
                 onChange={(e) => setFundedByUserId(e.target.value || null)}
               >
-                <option value="">Select member</option>
+                <option value="">{currentUserName ? `Me (${currentUserName})` : 'Select member'}</option>
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>{m.name}</option>
                 ))}
