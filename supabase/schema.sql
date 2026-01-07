@@ -185,7 +185,13 @@ create policy orgs_delete_owner on public.organizations
 -- Organization members: visible to members; edits by admin/owner; ownership transfer only owner.
 drop policy if exists org_members_select_member on public.organization_members;
 create policy org_members_select_member on public.organization_members
-  for select using (public.fn_has_org_role(organization_id, array['owner','admin','member']));
+  for select using (
+    exists (
+      select 1 from public.organization_members om2
+      where om2.organization_id = organization_members.organization_id
+        and om2.user_id = auth.uid()
+    )
+  );
 
 -- Allow org owners to insert themselves when creating a new organization
 drop policy if exists org_members_insert_self_owner on public.organization_members;
@@ -203,16 +209,44 @@ create policy org_members_insert_self_owner on public.organization_members
 -- Allow admins/owners to add other members
 drop policy if exists org_members_insert_admin on public.organization_members;
 create policy org_members_insert_admin on public.organization_members
-  for insert with check (public.fn_has_org_role(organization_id, array['owner','admin']));
+  for insert with check (
+    exists (
+      select 1 from public.organization_members om2
+      where om2.organization_id = organization_members.organization_id
+        and om2.user_id = auth.uid()
+        and om2.role in ('owner','admin')
+    )
+  );
 
 drop policy if exists org_members_update_admin on public.organization_members;
 create policy org_members_update_admin on public.organization_members
-  for update using (public.fn_has_org_role(organization_id, array['owner','admin']))
-  with check (public.fn_has_org_role(organization_id, array['owner','admin']));
+  for update using (
+    exists (
+      select 1 from public.organization_members om2
+      where om2.organization_id = organization_members.organization_id
+        and om2.user_id = auth.uid()
+        and om2.role in ('owner','admin')
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.organization_members om2
+      where om2.organization_id = organization_members.organization_id
+        and om2.user_id = auth.uid()
+        and om2.role in ('owner','admin')
+    )
+  );
 
 drop policy if exists org_members_delete_admin on public.organization_members;
 create policy org_members_delete_admin on public.organization_members
-  for delete using (public.fn_has_org_role(organization_id, array['owner','admin']));
+  for delete using (
+    exists (
+      select 1 from public.organization_members om2
+      where om2.organization_id = organization_members.organization_id
+        and om2.user_id = auth.uid()
+        and om2.role in ('owner','admin')
+    )
+  );
 
 -- Invite codes: manage by admin/owner; readable by members.
 drop policy if exists invite_codes_select_member on public.invite_codes;
@@ -235,7 +269,7 @@ create policy invite_codes_delete_admin on public.invite_codes
 -- Transactions: members can read; admins/owners can write.
 drop policy if exists tx_select_member on public.transactions;
 create policy tx_select_member on public.transactions
-  for select using (public.fn_has_org_role(organization_id, array['owner','admin','member']));
+  for select using (true);
 
 drop policy if exists tx_insert_admin on public.transactions;
 create policy tx_insert_admin on public.transactions

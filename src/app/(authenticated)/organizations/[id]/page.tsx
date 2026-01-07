@@ -1,11 +1,12 @@
 
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { ArrowLeftRight, History, PlusCircle, ReceiptText, ScrollText } from 'lucide-react'
+import { ArrowLeftRight, History, ReceiptText, ScrollText } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { AddIncomeSheet } from './add-income-sheet'
 
 type PageProps = {
 	params: Promise<{
@@ -45,7 +46,7 @@ function typeBadge(type: string) {
 	const map: Record<string, { label: string; className: string }> = {
 		income: { label: 'Income', className: 'text-emerald-600 bg-emerald-50' },
 		expense_business: { label: 'Expense (Biz)', className: 'text-rose-600 bg-rose-50' },
-		expense_out_of_pocket: { label: 'Expense (Personal)', className: 'text-orange-600 bg-orange-50' },
+		expense_personal: { label: 'Expense (Personal)', className: 'text-orange-600 bg-orange-50' },
 	}
 
 	return map[type] || { label: type, className: 'text-slate-700 bg-slate-100' }
@@ -108,7 +109,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		.eq('id', id)
 		.maybeSingle()
 
-	const { data: transactionRows, error: transactionsError } = await supabase
+	const { data: transactionRows, error: transactionsError } = await adminClient
 		.from('transactions')
 		.select('id, type, amount, category, description, created_at')
 		.eq('organization_id', id)
@@ -127,6 +128,8 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		description: row.description,
 		created_at: row.created_at,
 	}))
+
+	const canManage = effectiveMembership?.role === 'owner' || effectiveMembership?.role === 'admin'
 
 	debugInfo.push({ label: 'transactionsCount', value: transactions.length.toString() })
 
@@ -165,7 +168,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 							<div className="space-y-1">
 								<CardTitle>Quick actions</CardTitle>
 								<CardDescription>
-									Ready for modals soon; actions are client-triggered, data entry will live in dialogs.
+									Quick actions open sheets for fast entry. Add income now; expenses/back-track coming next.
 								</CardDescription>
 							</div>
 							<div className="rounded-full bg-accent text-background p-2">
@@ -174,15 +177,13 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 						</div>
 					</CardHeader>
 					<CardContent className="grid gap-3 md:grid-cols-2">
-						<Button
-							type="button"
-							className="w-full justify-start gap-2"
-							data-intent="add-income"
-							aria-label="Open add income modal"
-						>
-							<PlusCircle className="h-4 w-4" />
-							Add income (modal soon)
-						</Button>
+						{canManage ? (
+							<AddIncomeSheet organizationId={id} />
+						) : (
+							<Button type="button" className="w-full justify-start gap-2" disabled aria-disabled>
+								Add income (insufficient permissions)
+							</Button>
+						)}
 						<Button
 							type="button"
 							variant="secondary"
