@@ -109,7 +109,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		.eq('id', id)
 		.maybeSingle()
 
-	const { data: transactionRows, error: transactionsError } = await supabase
+	const { data: transactionRows, error: transactionsError } = await adminClient
 		.from('transactions')
 		.select('id, type, amount, category, description, created_at')
 		.eq('organization_id', id)

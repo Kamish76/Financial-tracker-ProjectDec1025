@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/sidebar'
 import { usePathname, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const navigationItems = [
   {
@@ -34,12 +34,15 @@ const navigationItems = [
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    if (typeof window !== 'undefined') {
-      return document.documentElement.dataset.theme as 'light' | 'dark' || 'light'
-    }
-    return 'light'
-  })
+  const [mounted, setMounted] = useState(false)
+  const [theme, setTheme] = useState<'light' | 'dark'>('light')
+
+  useEffect(() => {
+    setMounted(true)
+    const stored = window.localStorage.getItem('orgfinance-theme') as 'light' | 'dark' | null
+    const current = document.documentElement.dataset.theme as 'light' | 'dark' | undefined
+    setTheme(stored || current || 'light')
+  }, [])
 
   const handleLogout = async () => {
     try {
@@ -114,7 +117,7 @@ export function AppSidebar() {
               
               <SidebarMenuItem>
                 <SidebarMenuButton onClick={handleThemeToggle} className="w-full cursor-pointer">
-                  {theme === 'dark' ? <Sun /> : <Moon />}
+                  {mounted && theme === 'dark' ? <Sun /> : <Moon />}
                   <span>Theme</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
