@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { AddIncomeSheet } from './add-income-sheet'
+import { AddExpenseSheet } from './add-expense-sheet'
 import { getOrganizationStats } from '@/lib/finance'
 import { StatsCards } from '@/components/stats-cards'
 import { MemberBalancesTable } from '@/components/member-balances-table'
@@ -203,16 +204,19 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 								Add income (insufficient permissions)
 							</Button>
 						)}
-						<Button
-							type="button"
-							variant="secondary"
-							className="w-full justify-start gap-2"
-							data-intent="add-expense"
-							aria-label="Open add expense modal"
-						>
-							<ReceiptText className="h-4 w-4" />
-							Add expense (modal soon)
-						</Button>
+						{canManage ? (
+							<AddExpenseSheet organizationId={id} />
+						) : (
+							<Button
+								type="button"
+								variant="secondary"
+								className="w-full justify-start gap-2"
+								disabled
+								aria-disabled
+							>
+								Add expense (insufficient permissions)
+							</Button>
+						)}
 						<Button
 							type="button"
 							variant="outline"
