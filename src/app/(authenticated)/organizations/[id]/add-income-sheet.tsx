@@ -34,8 +34,6 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
   const [isPending, startTransition] = useTransition()
   const [fundedByType, setFundedByType] = useState<'business' | 'personal'>('business')
   const [fundedByUserId, setFundedByUserId] = useState<string | null>(null)
-  const [members, setMembers] = useState<Array<{ id: string; name: string }>>([])
-  const [membersError, setMembersError] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentUserName, setCurrentUserName] = useState<string | null>(null)
 
@@ -58,24 +56,7 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
     setFundedByUserId(null)
   }
 
-  // Load organization members for personal funding selection
-  useEffect(() => {
-    if (!open) return
-    setMembersError(null)
-    supabase
-      .from('organization_members')
-      .select('user_id, profiles!inner(id, full_name)')
-      .eq('organization_id', organizationId)
-      .then(({ data, error }) => {
-        if (error) {
-          setMembersError('Unable to load members')
-          return
-        }
-        const rows = (data || []) as any[]
-        const mapped = rows.map((r) => ({ id: r.user_id, name: r.profiles?.full_name || r.user_id }))
-        setMembers(mapped)
-      })
-  }, [open, organizationId])
+  // Removed member dropdown: contributor defaults to current user when personal
 
   // Load current user and default contributor to self when personal
   useEffect(() => {
@@ -177,22 +158,10 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
 
           {fundedByType === 'personal' && (
             <div className="space-y-2">
-              <Label htmlFor="fundedByUser">Contributor</Label>
-              <select
-                id="fundedByUser"
-                name="fundedByUser"
-                className="flex h-10 w-full rounded-lg border border-border bg-card px-4 py-2 text-sm text-foreground shadow-sm"
-                value={fundedByUserId || ''}
-                onChange={(e) => setFundedByUserId(e.target.value || null)}
-              >
-                <option value="">{currentUserName ? `Me (${currentUserName})` : 'Select member'}</option>
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </select>
-              {membersError && (
-                <p className="text-xs text-destructive">{membersError}</p>
-              )}
+              <Label>Contributor</Label>
+              <div className="text-sm text-muted-foreground">
+                {currentUserName ? `Me (${currentUserName})` : 'Me'}
+              </div>
             </div>
           )}
 
