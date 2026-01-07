@@ -1,13 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, Building2, ArrowLeft } from 'lucide-react'
+import { Search, Building2, ArrowLeft, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { searchOrganizations } from './actions'
+import { searchOrganizations, joinOrganization } from './actions'
 
 interface SearchResult {
   id: string
@@ -20,6 +20,7 @@ export default function JoinOrganizationPage() {
   const [isSearching, setIsSearching] = useState(false)
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [joiningOrgId, setJoiningOrgId] = useState<string | null>(null)
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
@@ -45,8 +46,17 @@ export default function JoinOrganizationPage() {
   }
 
   const handleJoinOrganization = async (orgId: string) => {
-    // TODO: Implement join organization API call
-    console.log('Joining organization:', orgId)
+    setJoiningOrgId(orgId)
+    setError(null)
+
+    try {
+      await joinOrganization(orgId)
+      // The redirect will happen server-side if successful
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to join organization'
+      setError(errorMessage)
+      setJoiningOrgId(null)
+    }
   }
 
   return (
@@ -133,8 +143,18 @@ export default function JoinOrganizationPage() {
                           <CardTitle className="text-lg">{org.name}</CardTitle>
                         </div>
                       </div>
-                      <Button onClick={() => handleJoinOrganization(org.id)}>
-                        Join
+                      <Button 
+                        onClick={() => handleJoinOrganization(org.id)}
+                        disabled={joiningOrgId !== null}
+                      >
+                        {joiningOrgId === org.id ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Joining...
+                          </>
+                        ) : (
+                          'Join'
+                        )}
                       </Button>
                     </div>
                   </CardHeader>
