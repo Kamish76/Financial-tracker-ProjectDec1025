@@ -42,7 +42,8 @@ export async function addIncome(input: AddIncomeInput) {
   }
 
   // Check role: only owner/admin can insert
-  const { data: membership, error: membershipError } = await supabase
+  const admin = createAdminClient()
+  const { data: membership, error: membershipError } = await admin
     .from("organization_members")
     .select("role")
     .eq("organization_id", organizationId)
@@ -72,7 +73,6 @@ export async function addIncome(input: AddIncomeInput) {
   }
 
   // Use admin client to bypass RLS after explicit role check
-  const admin = createAdminClient()
   const { error: insertError } = await admin.from("transactions").insert(insertPayload)
 
   if (insertError) {
