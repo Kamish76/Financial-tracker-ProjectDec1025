@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { createClient } from "@/lib/supabase/server"
+import { createClient, createAdminClient } from "@/lib/supabase/server"
 
 interface AddIncomeInput {
   organizationId: string
@@ -41,6 +41,23 @@ export async function addIncome(input: AddIncomeInput) {
     return { error: "You must be signed in" }
   }
 
+  // Check role: only owner/admin can insert
+  const { data: membership, error: membershipError } = await supabase
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", organizationId)
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (membershipError) {
+    console.error("[ADD_INCOME] Membership lookup failed", membershipError.message)
+    return { error: "Unable to verify permissions" }
+  }
+
+  if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
+    return { error: "You don’t have permission to add income" }
+  }
+
   const insertPayload = {
     organization_id: organizationId,
     user_id: user.id,
@@ -54,7 +71,9 @@ export async function addIncome(input: AddIncomeInput) {
     updated_by_user_id: user.id,
   }
 
-  const { error: insertError } = await supabase.from("transactions").insert(insertPayload)
+  // Use admin client to bypass RLS after explicit role check
+  const admin = createAdminClient()
+  const { error: insertError } = await admin.from("transactions").insert(insertPayload)
 
   if (insertError) {
     console.error("[ADD_INCOME] Insert failed", insertError.message)

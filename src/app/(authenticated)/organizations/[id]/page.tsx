@@ -129,6 +129,8 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		created_at: row.created_at,
 	}))
 
+	const canManage = effectiveMembership?.role === 'owner' || effectiveMembership?.role === 'admin'
+
 	debugInfo.push({ label: 'transactionsCount', value: transactions.length.toString() })
 
 	return (
@@ -175,7 +177,13 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 						</div>
 					</CardHeader>
 					<CardContent className="grid gap-3 md:grid-cols-2">
-						<AddIncomeSheet organizationId={id} />
+						{canManage ? (
+							<AddIncomeSheet organizationId={id} />
+						) : (
+							<Button type="button" className="w-full justify-start gap-2" disabled aria-disabled>
+								Add income (insufficient permissions)
+							</Button>
+						)}
 						<Button
 							type="button"
 							variant="secondary"
