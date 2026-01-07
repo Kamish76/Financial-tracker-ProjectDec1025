@@ -7,6 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { AddIncomeSheet } from './add-income-sheet'
+import { getOrganizationStats } from '@/lib/finance'
+import { StatsCards } from '@/components/stats-cards'
+import { MemberBalancesTable } from '@/components/member-balances-table'
 
 type PageProps = {
 	params: Promise<{
@@ -129,6 +132,9 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		created_at: row.created_at,
 	}))
 
+	// Compute organization stats (totals + per-member balances)
+	const stats = await getOrganizationStats(id)
+
 	const canManage = effectiveMembership?.role === 'owner' || effectiveMembership?.role === 'admin'
 
 	debugInfo.push({ label: 'transactionsCount', value: transactions.length.toString() })
@@ -160,6 +166,19 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 					for adding entries or back tracking. View the full ledger in the dedicated records page.
 				</p>
 			</div>
+
+			{/* Top-level stats */}
+			<StatsCards totals={stats.totals} />
+
+			<Card>
+				<CardHeader>
+					<CardTitle>Member balances</CardTitle>
+					<CardDescription>Personal contributions, reimbursements paid, and outstanding reimbursable.</CardDescription>
+				</CardHeader>
+				<CardContent>
+					<MemberBalancesTable members={stats.members} />
+				</CardContent>
+			</Card>
 
 			<div className="grid gap-4 lg:grid-cols-[1.1fr,1.2fr]">
 				<Card>

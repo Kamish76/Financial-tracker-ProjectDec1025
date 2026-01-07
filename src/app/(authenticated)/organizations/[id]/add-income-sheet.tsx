@@ -32,7 +32,6 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
   const [occurredAt, setOccurredAt] = useState<string>("")
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [fundedByType, setFundedByType] = useState<'business' | 'personal'>('business')
   const [fundedByUserId, setFundedByUserId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentUserName, setCurrentUserName] = useState<string | null>(null)
@@ -52,7 +51,6 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
     setDescription("")
     setOccurredAt("")
     setError(null)
-    setFundedByType('business')
     setFundedByUserId(null)
   }
 
@@ -66,18 +64,11 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
       setCurrentUserId(u?.id ?? null)
       const name = (u?.user_metadata?.full_name as string | undefined) || (u?.email as string | undefined) || null
       setCurrentUserName(name)
-      // Default contributor to current user when personal is selected
-      if (fundedByType === 'personal' && !fundedByUserId && u?.id) {
+      if (!fundedByUserId && u?.id) {
         setFundedByUserId(u.id)
       }
     })
   }, [open])
-
-  useEffect(() => {
-    if (fundedByType === 'personal' && !fundedByUserId && currentUserId) {
-      setFundedByUserId(currentUserId)
-    }
-  }, [fundedByType, fundedByUserId, currentUserId])
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -103,8 +94,8 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
         category: category.trim() || undefined,
         description: description.trim() || undefined,
         occurredAt: dateValue,
-        fundedByType,
-        fundedByUserId: fundedByType === 'personal' ? (fundedByUserId || undefined) : undefined,
+        fundedByType: 'business',
+        fundedByUserId: fundedByUserId || undefined,
       })
 
       if (result?.error) {
@@ -134,36 +125,14 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
       <SheetContent side="right">
         <SheetHeader>
           <SheetTitle>Add income</SheetTitle>
-          <SheetDescription>Log new income and choose its money source (business or personal).</SheetDescription>
+          <SheetDescription>Log new income. Cash is held by the member who records it.</SheetDescription>
         </SheetHeader>
           <div className="space-y-2">
-            <Label>Money Source</Label>
-            <div className="flex gap-3">
-              <Button
-                type="button"
-                variant={fundedByType === 'business' ? 'default' : 'outline'}
-                onClick={() => setFundedByType('business')}
-              >
-                Business
-              </Button>
-              <Button
-                type="button"
-                variant={fundedByType === 'personal' ? 'default' : 'outline'}
-                onClick={() => setFundedByType('personal')}
-              >
-                Personal
-              </Button>
+            <Label>Holder</Label>
+            <div className="text-sm text-muted-foreground">
+              {currentUserName ? `Me (${currentUserName})` : 'Me'}
             </div>
           </div>
-
-          {fundedByType === 'personal' && (
-            <div className="space-y-2">
-              <Label>Contributor</Label>
-              <div className="text-sm text-muted-foreground">
-                {currentUserName ? `Me (${currentUserName})` : 'Me'}
-              </div>
-            </div>
-          )}
 
         <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-2">

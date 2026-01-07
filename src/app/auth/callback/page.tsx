@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 
-export default function AuthCallbackPage() {
+function CallbackInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
@@ -39,15 +39,17 @@ export default function AuthCallbackPage() {
           error: sessionError?.message
         })
 
-        if (!session?.user) {
+        let currentSession = session
+        if (!currentSession?.user) {
           console.error('[AUTH_CALLBACK] No session established')
           // If there's still no session but we had a code, something went wrong
           if (code) {
             console.log('[AUTH_CALLBACK] Code was present but session not established - retrying')
             // Try once more
             await new Promise(resolve => setTimeout(resolve, 1000))
-            const { data: { session: session2 } } = await supabase.auth.getSession()
-            if (!session2?.user) {
+            const { data: { session: retrySession } } = await supabase.auth.getSession()
+            currentSession = retrySession
+            if (!currentSession?.user) {
               setError('Failed to complete authentication. Please try again.')
               return
             }
@@ -57,7 +59,7 @@ export default function AuthCallbackPage() {
           }
         }
 
-        console.log('[AUTH_CALLBACK] Successfully authenticated as:', session?.user?.email || session2?.user?.email)
+        console.log('[AUTH_CALLBACK] Successfully authenticated as:', currentSession?.user?.email)
         
         // Wait before redirecting
         await new Promise(resolve => setTimeout(resolve, 500))
@@ -98,5 +100,20 @@ export default function AuthCallbackPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function AuthCallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold">Preparing sign-in...</h1>
+          <p className="text-muted-foreground mt-2">Loading...</p>
+        </div>
+      </div>
+    }>
+      <CallbackInner />
+    </Suspense>
   )
 }

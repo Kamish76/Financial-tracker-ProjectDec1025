@@ -44,8 +44,9 @@ export async function addIncome(input: AddIncomeInput) {
   }
 
   // Validate source
-  const sourceType = fundedByType === 'personal' ? 'personal' : 'business'
-  const sourceUserId = sourceType === 'personal' ? (fundedByUserId || user.id) : null
+  // For income, we model revenue as business funds held by the recorder (user)
+  const sourceType = 'business'
+  const sourceUserId = user.id
 
   // Check role: only owner/admin can insert
   const admin = createAdminClient()
