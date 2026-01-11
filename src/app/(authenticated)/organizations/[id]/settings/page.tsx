@@ -29,7 +29,16 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 		.eq('user_id', user.id)
 		.maybeSingle()
 
-	if (!membership) {
+	const { data: membershipAdmin } = await adminClient
+		.from('organization_members')
+		.select('organization_id, role, user_id')
+		.eq('organization_id', id)
+		.eq('user_id', user.id)
+		.maybeSingle()
+
+	const effectiveMembership = membership || membershipAdmin
+
+	if (!effectiveMembership) {
 		redirect('/organizations')
 	}
 
@@ -75,7 +84,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 
 	const organizationWithRole = {
 		...organization,
-		user_role: membership.role,
+		user_role: effectiveMembership.role,
 		member_count: memberCount || 0,
 	}
 
@@ -94,10 +103,12 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 	})
 
 	return (
-		<OrganizationSettings
-			organization={organizationWithRole}
-			members={membersFormatted}
-			ownerName={owner?.full_name || owner?.email || 'Unknown'}
-		/>
+		<div className="min-h-screen bg-background">
+			<OrganizationSettings
+				organization={organizationWithRole}
+				members={membersFormatted}
+				ownerName={owner?.full_name || owner?.email || 'Unknown'}
+			/>
+		</div>
 	)
 }
