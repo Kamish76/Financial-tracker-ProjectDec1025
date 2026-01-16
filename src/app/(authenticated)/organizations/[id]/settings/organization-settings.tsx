@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
 	Building2,
@@ -12,6 +12,7 @@ import {
 	UserCog,
 	ArrowLeft,
 	Pencil,
+	Receipt,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -33,7 +34,10 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
 import { EditOrganizationDialog } from './edit-organization-dialog'
+import { AddInitialValueSheet } from './add-initial-value-sheet'
+import { deleteInitialTransaction } from '../actions'
 
 type OrganizationRole = 'owner' | 'admin' | 'member'
 
@@ -58,16 +62,35 @@ type MemberWithUser = {
 	}
 }
 
+type InitialTransaction = {
+	id: string
+	type: string
+	amount: number
+	category: string | null
+	description: string | null
+	occurred_at: string
+	assigned_to_name: string | null
+	assigned_to_email: string | null
+}
+
 type OrganizationSettingsProps = {
 	organization: OrganizationWithRole
 	members: MemberWithUser[]
 	ownerName: string
+	initialTransactions?: InitialTransaction[]
+	currentUserEmail?: string | null
+	currentUserName?: string | null
+	currentUserId?: string | null
 }
 
 export function OrganizationSettings({
 	organization,
 	members,
 	ownerName,
+	initialTransactions = [],
+	currentUserEmail,
+	currentUserName,
+	currentUserId,
 }: OrganizationSettingsProps) {
 	const router = useRouter()
 	const isOwner = organization.user_role === 'owner'
@@ -88,6 +111,11 @@ export function OrganizationSettings({
 	const [transferConfirmation, setTransferConfirmation] = useState('')
 	const [isTransferring, setIsTransferring] = useState(false)
 
+	// Delete initial transaction state
+	const [deleteInitialDialogOpen, setDeleteInitialDialogOpen] = useState(false)
+	const [selectedInitialTx, setSelectedInitialTx] = useState<string | null>(null)
+	const [isDeletingInitial, startDeletingInitial] = useTransition()
+
 	const formatDate = (dateString: string) => {
 		return new Date(dateString).toLocaleDateString('en-US', {
 			year: 'numeric',
@@ -96,8 +124,50 @@ export function OrganizationSettings({
 		})
 	}
 
+	const getTransactionTypeInfo = (type: string) => {
+		switch (type) {
+			case 'income':
+				return { label: 'Income', className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100' }
+			case 'expense_business':
+				return { label: 'Expense (Biz)', className: 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-100' }
+			case 'expense_personal':
+				return { label: 'Expense (Personal)', className: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100' }
+			default:
+				return { label: type, className: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100' }
+		}
+	}
+
+	const handleDeleteInitialTransaction = async () => {
+		if (!selectedInitialTx) return
+
+		startDeletingInitial(async () => {
+			const result = await deleteInitialTransaction({
+				organizationId: organization.id,
+				transactionId: selectedInitialTx,
+			})
+
+			if (result?.error) {
+				alert(result.error)
+			} else {
+				setDeleteInitialDialogOpen(false)
+				setSelectedInitialTx(null)
+				router.refresh()
+			}
+		})
+	}
+
 	// Get members who can become owners (everyone except current owner)
 	const transferableMembers = members.filter((m) => m.user_id !== organization.owner_id)
+
+	// Prepare members list for the AddInitialValueSheet
+	// Include all members except current user for the dropdown
+	const membersForSheet = members
+		.map((m) => ({
+			user_id: m.user_id,
+			email: m.user.email,
+			full_name: m.user.name,
+		}))
+		.filter((m) => m.email && m.user_id) // Only include members with valid data
 
 	const handleDeleteOrganization = async () => {
 		const expectedPhrase = 'i confirm in deleting the organization'
@@ -258,6 +328,96 @@ export function OrganizationSettings({
 						</div>
 					</CardContent>
 				</Card>
+
+				{/* Initial Values Section - Owner Only */}
+				{isOwner && (
+					<Card>
+						<CardHeader>
+							<div className="flex items-center justify-between">
+								<div className="flex items-center gap-3">
+									<div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+										<Receipt className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+									</div>
+									<div>
+										<CardTitle>Initial Values</CardTitle>
+										<CardDescription>
+											Set up opening balances and initial capital contributions ({members.length} members)
+										</CardDescription>
+									</div>
+								</div>
+								<AddInitialValueSheet
+									organizationId={organization.id}
+									members={membersForSheet}
+									currentUserEmail={currentUserEmail}
+									currentUserName={currentUserName}
+									currentUserId={currentUserId}
+								/>
+							</div>
+						</CardHeader>
+						<CardContent>
+							{initialTransactions.length === 0 ? (
+								<div className="text-center py-8 text-muted-foreground">
+									<p>No initial transactions set up yet.</p>
+									<p className="text-sm mt-1">
+										Add initial values to set up your organization&apos;s starting financial state.
+									</p>
+								</div>
+							) : (
+								<div className="space-y-2">
+									{initialTransactions.map((tx) => {
+										const typeInfo = getTransactionTypeInfo(tx.type)
+										return (
+											<div
+												key={tx.id}
+												className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/50 transition-colors"
+											>
+												<div className="flex-1 space-y-1">
+													<div className="flex items-center gap-2">
+														<Badge className={typeInfo.className}>{typeInfo.label}</Badge>
+														<span className="font-semibold">
+															${tx.amount.toLocaleString('en-US', {
+																minimumFractionDigits: 2,
+																maximumFractionDigits: 2,
+															})}
+														</span>
+														{tx.category && (
+															<span className="text-sm text-muted-foreground">
+																• {tx.category}
+															</span>
+														)}
+													</div>
+													<div className="flex items-center gap-3 text-sm text-muted-foreground">
+														<span>{formatDate(tx.occurred_at)}</span>
+														<span>•</span>
+														<span>
+															Assigned to:{' '}
+															{tx.assigned_to_name ||
+																tx.assigned_to_email ||
+																'Organization'}
+														</span>
+													</div>
+													{tx.description && (
+														<p className="text-sm text-muted-foreground">{tx.description}</p>
+													)}
+												</div>
+												<Button
+													variant="ghost"
+													size="sm"
+													onClick={() => {
+														setSelectedInitialTx(tx.id)
+														setDeleteInitialDialogOpen(true)
+													}}
+												>
+													<Trash2 className="h-4 w-4 text-destructive" />
+												</Button>
+											</div>
+										)
+									})}
+								</div>
+							)}
+						</CardContent>
+					</Card>
+				)}
 
 				{/* Danger Zone - Owner Only */}
 				{isOwner && (
@@ -455,6 +615,36 @@ export function OrganizationSettings({
 				onOpenChange={setEditDialogOpen}
 				organization={organization}
 			/>
+
+			{/* Delete Initial Transaction Dialog */}
+			<Dialog open={deleteInitialDialogOpen} onOpenChange={setDeleteInitialDialogOpen}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>Delete Initial Transaction</DialogTitle>
+						<DialogDescription>
+							Are you sure you want to delete this initial transaction? This action cannot be undone.
+						</DialogDescription>
+					</DialogHeader>
+					<DialogFooter>
+						<Button
+							variant="outline"
+							onClick={() => {
+								setDeleteInitialDialogOpen(false)
+								setSelectedInitialTx(null)
+							}}
+						>
+							Cancel
+						</Button>
+						<Button
+							variant="destructive"
+							onClick={handleDeleteInitialTransaction}
+							disabled={isDeletingInitial}
+						>
+							{isDeletingInitial ? 'Deleting...' : 'Delete'}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	)
 }

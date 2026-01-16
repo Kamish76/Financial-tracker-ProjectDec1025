@@ -102,12 +102,63 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 		}
 	})
 
+	// Fetch initial transactions (only if user is owner)
+	let initialTransactions: Array<{
+		id: string
+		type: string
+		amount: number
+		category: string | null
+		description: string | null
+		occurred_at: string
+		assigned_to_name: string | null
+		assigned_to_email: string | null
+	}> = []
+
+	if (effectiveMembership.role === 'owner') {
+		const { data: initialTxData } = await adminClient
+			.from('transactions')
+			.select(`
+				id,
+				type,
+				amount,
+				category,
+				description,
+				occurred_at,
+				funded_by_user_id,
+				profiles:funded_by_user_id (
+					full_name,
+					email
+				)
+			`)
+			.eq('organization_id', id)
+			.eq('is_initial', true)
+			.order('occurred_at', { ascending: false })
+
+		initialTransactions = (initialTxData || []).map((tx) => {
+			const profile = tx.profiles as unknown as { full_name: string | null; email: string | null } | null
+			return {
+				id: tx.id,
+				type: tx.type,
+				amount: tx.amount,
+				category: tx.category,
+				description: tx.description,
+				occurred_at: tx.occurred_at,
+				assigned_to_name: profile?.full_name || null,
+				assigned_to_email: profile?.email || null,
+			}
+		})
+	}
+
 	return (
 		<div className="min-h-screen bg-background">
 			<OrganizationSettings
 				organization={organizationWithRole}
 				members={membersFormatted}
 				ownerName={owner?.full_name || owner?.email || 'Unknown'}
+				initialTransactions={initialTransactions}
+				currentUserEmail={user.email}
+				currentUserName={user.user_metadata?.full_name || null}
+				currentUserId={user.id}
 			/>
 		</div>
 	)

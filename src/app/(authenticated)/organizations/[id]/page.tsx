@@ -25,6 +25,7 @@ type TransactionRecord = {
 	category: string | null
 	description: string | null
 	created_at: string
+	is_initial: boolean
 }
 
 const formatter = new Intl.NumberFormat('en-US', {
@@ -115,7 +116,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 
 	const { data: transactionRows, error: transactionsError } = await adminClient
 		.from('transactions')
-		.select('id, type, amount, category, description, created_at')
+		.select('id, type, amount, category, description, created_at, is_initial')
 		.eq('organization_id', id)
 		.order('created_at', { ascending: false })
 		.limit(10)
@@ -131,6 +132,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		category: row.category,
 		description: row.description,
 		created_at: row.created_at,
+		is_initial: row.is_initial ?? false,
 	}))
 
 	// Compute organization stats (totals + per-member balances)
@@ -211,12 +213,13 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 							<div className="divide-y divide-border/70 rounded-xl border border-border/70">
 								{transactions.map((tx) => {
 									const badge = typeBadge(tx.type)
+									const badgeLabel = tx.is_initial ? `${badge.label} (Initial)` : badge.label
 									return (
 										<div key={tx.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
 											<div className="space-y-1">
 												<div className="flex flex-wrap items-center gap-2">
 													<span className={`rounded-full px-2 py-1 text-xs font-medium ${badge.className}`}>
-														{badge.label}
+														{badgeLabel}
 													</span>
 													{tx.category && (
 														<span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
