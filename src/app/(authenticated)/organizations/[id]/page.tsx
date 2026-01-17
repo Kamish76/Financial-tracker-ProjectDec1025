@@ -43,7 +43,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 })
 
 function formatAmount(type: string, amount: number) {
-	const sign = type === 'income' ? '+' : '-'
+	const sign = type === 'income' ? '+' : type === 'held_allocate' ? '+' : '-'
 	return `${sign} ${formatter.format(amount)}`
 }
 
@@ -52,6 +52,8 @@ function typeBadge(type: string) {
 		income: { label: 'Income', className: 'text-emerald-600 bg-emerald-50' },
 		expense_business: { label: 'Expense (Biz)', className: 'text-rose-600 bg-rose-50' },
 		expense_personal: { label: 'Expense (Personal)', className: 'text-orange-600 bg-orange-50' },
+		held_allocate: { label: 'Allocation +', className: 'text-blue-600 bg-blue-50' },
+		held_return: { label: 'Allocation −', className: 'text-purple-600 bg-purple-50' },
 	}
 
 	return map[type] || { label: type, className: 'text-slate-700 bg-slate-100' }

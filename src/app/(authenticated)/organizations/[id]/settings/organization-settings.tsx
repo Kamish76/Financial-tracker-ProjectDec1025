@@ -132,6 +132,10 @@ export function OrganizationSettings({
 				return { label: 'Expense (Biz)', className: 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-100' }
 			case 'expense_personal':
 				return { label: 'Expense (Personal)', className: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100' }
+			case 'held_allocate':
+				return { label: 'Allocation +', className: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100' }
+			case 'held_return':
+				return { label: 'Allocation −', className: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100' }
 			default:
 				return { label: type, className: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100' }
 		}
@@ -328,6 +332,38 @@ export function OrganizationSettings({
 						</div>
 					</CardContent>
 				</Card>
+
+				{/* Business Held Allocations - Owner Only */}
+				{isOwner && (
+					<Card>
+						<CardHeader>
+							<div className="flex items-center justify-between">
+								<div className="flex items-center gap-3">
+									<div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg flex items-center justify-center">
+										<Users className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+									</div>
+									<div>
+										<CardTitle>Business Held Allocations</CardTitle>
+										<CardDescription>
+											Allocate cash on hand to members as baseline business held amounts
+										</CardDescription>
+									</div>
+								</div>
+								<Button
+									onClick={() => router.push(`/organizations/${organization.id}/settings/holdings`)}
+								>
+									Manage Allocations
+								</Button>
+							</div>
+						</CardHeader>
+						<CardContent>
+							<p className="text-sm text-muted-foreground">
+								Set baseline business held for each member from the available cash on hand. 
+								Members&apos; business held will then update automatically as they receive income and create expenses.
+							</p>
+						</CardContent>
+					</Card>
+				)}
 
 				{/* Initial Values Section - Owner Only */}
 				{isOwner && (
