@@ -1,7 +1,7 @@
 
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { ArrowLeftRight, History, ReceiptText, ScrollText } from 'lucide-react'
+import { ArrowLeftRight, History, ScrollText, Settings } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -25,6 +25,7 @@ type TransactionRecord = {
 	category: string | null
 	description: string | null
 	created_at: string
+	is_initial: boolean
 }
 
 const formatter = new Intl.NumberFormat('en-US', {
@@ -42,7 +43,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 })
 
 function formatAmount(type: string, amount: number) {
-	const sign = type === 'income' ? '+' : '-'
+	const sign = type === 'income' ? '+' : type === 'held_allocate' ? '+' : '-'
 	return `${sign} ${formatter.format(amount)}`
 }
 
@@ -51,6 +52,8 @@ function typeBadge(type: string) {
 		income: { label: 'Income', className: 'text-emerald-600 bg-emerald-50' },
 		expense_business: { label: 'Expense (Biz)', className: 'text-rose-600 bg-rose-50' },
 		expense_personal: { label: 'Expense (Personal)', className: 'text-orange-600 bg-orange-50' },
+		held_allocate: { label: 'Allocation +', className: 'text-blue-600 bg-blue-50' },
+		held_return: { label: 'Allocation −', className: 'text-purple-600 bg-purple-50' },
 	}
 
 	return map[type] || { label: type, className: 'text-slate-700 bg-slate-100' }
@@ -115,7 +118,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 
 	const { data: transactionRows, error: transactionsError } = await adminClient
 		.from('transactions')
-		.select('id, type, amount, category, description, created_at')
+		.select('id, type, amount, category, description, created_at, is_initial')
 		.eq('organization_id', id)
 		.order('created_at', { ascending: false })
 		.limit(10)
@@ -131,6 +134,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		category: row.category,
 		description: row.description,
 		created_at: row.created_at,
+		is_initial: row.is_initial ?? false,
 	}))
 
 	// Compute organization stats (totals + per-member balances)
@@ -182,6 +186,67 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 			</Card>
 
 			<div className="grid gap-4 lg:grid-cols-[1.1fr,1.2fr]">
+				<Card>
+					<CardHeader className="flex flex-row items-start justify-between">
+						<div className="space-y-1">
+							<CardTitle>Recent activity</CardTitle>
+							<CardDescription>10 most recent changes for this organization.</CardDescription>
+						</div>
+						<span className="text-xs text-muted-foreground">Auto-refreshed on load</span>
+					</CardHeader>
+					<CardContent className="space-y-3">
+						{transactionsError && (
+							<div className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+								Unable to load transactions right now.
+							</div>
+						)}
+
+						{!transactionsError && transactions.length === 0 && (
+							<div className="flex items-center justify-between rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
+								<div>
+									No transactions yet.
+									<span className="ml-2 text-foreground">Use the quick actions to create your first one.</span>
+								</div>
+								<ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
+							</div>
+						)}
+
+						{!transactionsError && transactions.length > 0 && (
+							<div className="divide-y divide-border/70 rounded-xl border border-border/70">
+								{transactions.map((tx) => {
+									const badge = typeBadge(tx.type)
+									const badgeLabel = tx.is_initial ? `${badge.label} (Initial)` : badge.label
+									return (
+										<div key={tx.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+											<div className="space-y-1">
+												<div className="flex flex-wrap items-center gap-2">
+													<span className={`rounded-full px-2 py-1 text-xs font-medium ${badge.className}`}>
+														{badgeLabel}
+													</span>
+													{tx.category && (
+														<span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
+															{tx.category}
+														</span>
+													)}
+												</div>
+												{tx.description && (
+													<p className="text-sm text-foreground">{tx.description}</p>
+												)}
+												<p className="text-xs text-muted-foreground">
+													{dateFormatter.format(new Date(tx.created_at))}
+												</p>
+											</div>
+											<div className="text-right text-base font-semibold text-foreground">
+												{formatAmount(tx.type, tx.amount)}
+											</div>
+										</div>
+									)
+								})}
+							</div>
+						)}
+					</CardContent>
+				</Card>
+
 				<Card>
 					<CardHeader>
 						<div className="flex items-start justify-between gap-3">
@@ -237,66 +302,17 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 								View full records
 							</Link>
 						</Button>
-					</CardContent>
-				</Card>
-
-				<Card>
-					<CardHeader className="flex flex-row items-start justify-between">
-						<div className="space-y-1">
-							<CardTitle>Recent activity</CardTitle>
-							<CardDescription>10 most recent changes for this organization.</CardDescription>
-						</div>
-						<span className="text-xs text-muted-foreground">Auto-refreshed on load</span>
-					</CardHeader>
-					<CardContent className="space-y-3">
-						{transactionsError && (
-							<div className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-								Unable to load transactions right now.
-							</div>
-						)}
-
-						{!transactionsError && transactions.length === 0 && (
-							<div className="flex items-center justify-between rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
-								<div>
-									No transactions yet.
-									<span className="ml-2 text-foreground">Use the quick actions to create your first one.</span>
-								</div>
-								<ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
-							</div>
-						)}
-
-						{!transactionsError && transactions.length > 0 && (
-							<div className="divide-y divide-border/70 rounded-xl border border-border/70">
-								{transactions.map((tx) => {
-									const badge = typeBadge(tx.type)
-									return (
-										<div key={tx.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-											<div className="space-y-1">
-												<div className="flex flex-wrap items-center gap-2">
-													<span className={`rounded-full px-2 py-1 text-xs font-medium ${badge.className}`}>
-														{badge.label}
-													</span>
-													{tx.category && (
-														<span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
-															{tx.category}
-														</span>
-													)}
-												</div>
-												{tx.description && (
-													<p className="text-sm text-foreground">{tx.description}</p>
-												)}
-												<p className="text-xs text-muted-foreground">
-													{dateFormatter.format(new Date(tx.created_at))}
-												</p>
-											</div>
-											<div className="text-right text-base font-semibold text-foreground">
-												{formatAmount(tx.type, tx.amount)}
-											</div>
-										</div>
-									)
-								})}
-							</div>
-						)}
+						<Button
+							asChild
+							variant="outline"
+							className="w-full justify-start gap-2 md:col-span-2"
+							aria-label="Manage organization settings"
+						>
+							<Link href={`/organizations/${id}/settings`}>
+								<Settings className="h-4 w-4" />
+								Manage Settings
+							</Link>
+						</Button>
 					</CardContent>
 				</Card>
 			</div>

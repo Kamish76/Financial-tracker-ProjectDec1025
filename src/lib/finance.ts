@@ -63,6 +63,7 @@ export async function getOrganizationStats(organizationId: string): Promise<Orga
     const type = r.type as string
     const category = (r.category ?? '') as string
 
+    // Exclude held_allocate/held_return from org totals (they only affect member balances)
     if (type === 'income') totalIncome += amount
     if (type === 'expense_business') totalExpensesBusiness += amount
     if (type === 'expense_personal') totalExpensesPersonal += amount
@@ -128,22 +129,33 @@ export async function getOrganizationStats(organizationId: string): Promise<Orga
     }
   }
 
-  // Compute per-user business held: income held minus business expenses paid from held
+  // Compute per-user business held: baseline allocation + income held - business expenses paid from held
   const businessHeldByUser: Record<string, number> = {}
   for (const r of rows as any[]) {
     const amount = Number(r.amount ?? 0)
     const type = r.type as string
     const isBusinessFunded = (r.funded_by_type as string | null) === 'business'
     const hasHolder = typeof r.funded_by_user_id === 'string'
-    // For income with no explicit holder, fallback to transaction creator (user_id)
-    const holder = r.funded_by_user_id || (type === 'income' ? r.user_id : null)
-    if (!holder || !isBusinessFunded) continue
+    // No fallback for income - only explicitly assigned holders
+    const holder = r.funded_by_user_id
+    if (!holder) continue
     const uid = holder as string
-    if (type === 'income') {
+    
+    // Baseline allocations (always counted, regardless of funded_by_type)
+    if (type === 'held_allocate') {
       businessHeldByUser[uid] = (businessHeldByUser[uid] ?? 0) + amount
-      console.log('[finance] Income held by:', { uid, amount, total: businessHeldByUser[uid] })
-    } else if (type === 'expense_business') {
+      console.log('[finance] Allocation to:', { uid, amount, total: businessHeldByUser[uid] })
+    } else if (type === 'held_return') {
       businessHeldByUser[uid] = (businessHeldByUser[uid] ?? 0) - amount
+      console.log('[finance] Return from:', { uid, amount, total: businessHeldByUser[uid] })
+    } else if (isBusinessFunded) {
+      // Dynamic updates from business-funded transactions
+      if (type === 'income') {
+        businessHeldByUser[uid] = (businessHeldByUser[uid] ?? 0) + amount
+        console.log('[finance] Income held by:', { uid, amount, total: businessHeldByUser[uid] })
+      } else if (type === 'expense_business') {
+        businessHeldByUser[uid] = (businessHeldByUser[uid] ?? 0) - amount
+      }
     }
   }
   console.log('[finance] Final businessHeldByUser:', businessHeldByUser)

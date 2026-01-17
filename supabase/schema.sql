@@ -81,7 +81,7 @@ create table if not exists public.transactions (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations (id) on delete cascade,
   user_id uuid not null references public.profiles (id) on delete set null, -- who recorded it
-  type text not null check (type in ('income','expense_business','expense_personal')),
+  type text not null check (type in ('income','expense_business','expense_personal','held_allocate','held_return')),
   amount numeric(12,2) not null check (amount > 0),
   description text,
   category text,
@@ -169,6 +169,11 @@ create policy profiles_update_own on public.profiles
 drop policy if exists orgs_select_member on public.organizations;
 create policy orgs_select_member on public.organizations
   for select using (public.fn_has_org_role(id, array['owner','admin','member']));
+
+-- Allow authenticated users to search organizations for joining
+drop policy if exists orgs_select_all_authenticated on public.organizations;
+create policy orgs_select_all_authenticated on public.organizations
+  for select using (auth.role() = 'authenticated');
 
 drop policy if exists orgs_insert_owner on public.organizations;
 create policy orgs_insert_owner on public.organizations

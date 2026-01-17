@@ -1,32 +1,62 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, Building2, ArrowLeft } from 'lucide-react'
+import { Search, Building2, ArrowLeft, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { searchOrganizations, joinOrganization } from './actions'
+
+interface SearchResult {
+  id: string
+  name: string
+  description?: string
+}
 
 export default function JoinOrganizationPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearching, setIsSearching] = useState(false)
-  const [searchResults, setSearchResults] = useState<Array<{ id: string; name: string; code: string; description?: string }>>([])
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [joiningOrgId, setJoiningOrgId] = useState<string | null>(null)
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
 
     setIsSearching(true)
-    // TODO: Implement actual search API call
-    setTimeout(() => {
+    setError(null)
+
+    try {
+      const result = await searchOrganizations(searchQuery)
+      
+      if (result.error) {
+        setError(result.error)
+        setSearchResults([])
+      } else {
+        setSearchResults(result.data)
+      }
+    } catch (err) {
+      setError('Failed to search organizations')
       setSearchResults([])
+    } finally {
       setIsSearching(false)
-    }, 1000)
+    }
   }
 
   const handleJoinOrganization = async (orgId: string) => {
-    // TODO: Implement join organization API call
-    console.log('Joining organization:', orgId)
+    setJoiningOrgId(orgId)
+    setError(null)
+
+    try {
+      await joinOrganization(orgId)
+      // The redirect will happen server-side if successful
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to join organization'
+      setError(errorMessage)
+      setJoiningOrgId(null)
+    }
   }
 
   return (
@@ -88,6 +118,15 @@ export default function JoinOrganizationPage() {
               </CardDescription>
             </CardContent>
           </Card>
+        ) : error ? (
+          <Card className="border-dashed border-red-200 bg-red-50">
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <CardTitle className="mb-2 text-red-900">Search Error</CardTitle>
+              <CardDescription className="text-center max-w-md text-red-700">
+                {error}
+              </CardDescription>
+            </CardContent>
+          </Card>
         ) : searchResults.length > 0 ? (
           <div className="space-y-4">
             <h2 className="text-lg font-semibold">Search Results</h2>
@@ -102,11 +141,20 @@ export default function JoinOrganizationPage() {
                         </div>
                         <div>
                           <CardTitle className="text-lg">{org.name}</CardTitle>
-                          <CardDescription>{org.code}</CardDescription>
                         </div>
                       </div>
-                      <Button onClick={() => handleJoinOrganization(org.id)}>
-                        Join
+                      <Button 
+                        onClick={() => handleJoinOrganization(org.id)}
+                        disabled={joiningOrgId !== null}
+                      >
+                        {joiningOrgId === org.id ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Joining...
+                          </>
+                        ) : (
+                          'Join'
+                        )}
                       </Button>
                     </div>
                   </CardHeader>
