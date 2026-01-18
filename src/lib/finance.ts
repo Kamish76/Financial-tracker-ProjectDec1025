@@ -14,6 +14,7 @@ export type MemberBalance = {
   user_id: string
   email?: string | null
   role?: string | null
+  is_active?: boolean
   businessHeld: number
   contributedPersonal: number
   reimbursementsPaid: number
@@ -87,7 +88,7 @@ export async function getOrganizationStats(organizationId: string): Promise<Orga
   // Members
   const { data: members, error: membersError } = await admin
     .from('organization_members')
-    .select('user_id, role')
+    .select('user_id, role, is_active')
     .eq('organization_id', organizationId)
 
   if (membersError) {
@@ -189,6 +190,7 @@ export async function getOrganizationStats(organizationId: string): Promise<Orga
       user_id: uid,
       email: emailByUserId[uid] ?? null,
       role: m.role ?? null,
+      is_active: m.is_active ?? true,
       businessHeld,
       contributedPersonal,
       reimbursementsPaid,

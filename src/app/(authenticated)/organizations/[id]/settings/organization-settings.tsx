@@ -342,6 +342,44 @@ export function OrganizationSettings({
 					</CardContent>
 				</Card>
 
+				{/* Manage Members Card - Admin and Owner */}
+				{canEdit && (
+					<Card>
+						<CardHeader>
+							<div className="flex items-center justify-between">
+								<div className="flex items-center gap-3">
+									<div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+										<Users className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+									</div>
+									<div>
+										<CardTitle>Member Management</CardTitle>
+										<CardDescription>
+											View and manage organization members and invite codes
+										</CardDescription>
+									</div>
+								</div>
+								<Button
+									onClick={() => router.push(`/organizations/${organization.id}/members`)}
+								>
+									<UserCog className="h-4 w-4 mr-2" />
+									Manage Members
+								</Button>
+							</div>
+						</CardHeader>
+						<CardContent>
+							<div className="space-y-3">
+								<div className="flex items-center justify-between">
+									<span className="text-sm text-muted-foreground">Total Active Members</span>
+									<span className="font-semibold">{organization.member_count}</span>
+								</div>
+								<p className="text-sm text-muted-foreground">
+									Manage member roles, deactivate members (preserves data), generate invite codes for new members, and view membership history.
+								</p>
+							</div>
+						</CardContent>
+					</Card>
+				)}
+
 				{/* Business Held Allocations - Owner Only */}
 				{isOwner && (
 					<Card>

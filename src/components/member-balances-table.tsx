@@ -36,7 +36,12 @@ export function MemberBalancesTable({ members }: Props) {
             <tr key={m.user_id} className="border-t">
               <td className="px-3 py-2">
                 <div className="flex flex-col">
-                  <span className="text-foreground font-medium">{m.email ?? m.user_id}</span>
+                  <span className="text-foreground font-medium">
+                    {m.email ?? m.user_id}
+                    {m.is_active === false && (
+                      <span className="text-muted-foreground ml-2">(Inactive)</span>
+                    )}
+                  </span>
                   {m.role && <span className="text-xs text-muted-foreground">{m.role}</span>}
                 </div>
               </td>

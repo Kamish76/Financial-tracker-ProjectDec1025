@@ -1,67 +1,76 @@
 'use client'
 
-import { useState } from 'react'
-import { Search, Building2, ArrowLeft, Loader2 } from 'lucide-react'
+import { useState, useTransition } from 'react'
+import { Ticket, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { searchOrganizations, joinOrganization } from './actions'
-
-interface SearchResult {
-  id: string
-  name: string
-  description?: string
-}
+import { joinWithInviteCode } from './actions'
+import { cleanInviteCode, formatInviteCode, isValidInviteCodeFormat } from '@/lib/types/invite'
 
 export default function JoinOrganizationPage() {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [isSearching, setIsSearching] = useState(false)
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const router = useRouter()
+  const [inviteCode, setInviteCode] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [joiningOrgId, setJoiningOrgId] = useState<string | null>(null)
+  const [success, setSuccess] = useState<{ organizationName: string; organizationId: string } | null>(null)
+  const [isPending, startTransition] = useTransition()
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return
+'use client'
 
-    setIsSearching(true)
+import { useState, useTransition } from 'react'
+import { Ticket, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { joinWithInviteCode } from './actions'
+import { cleanInviteCode, formatInviteCode, isValidInviteCodeFormat } from '@/lib/types/invite'
+
+export default function JoinOrganizationPage() {
+  const router = useRouter()
+  const [inviteCode, setInviteCode] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<{ organizationName: string; organizationId: string } | null>(null)
+  const [isPending, startTransition] = useTransition()
+
+  const handleJoinWithCode = () => {
     setError(null)
+    setSuccess(null)
 
-    try {
-      const result = await searchOrganizations(searchQuery)
-      
+    const cleanedCode = cleanInviteCode(inviteCode)
+
+    // Validate format
+    if (!isValidInviteCodeFormat(cleanedCode)) {
+      setError('Invalid invite code format. Code should be 12 characters (letters and numbers only).')
+      return
+    }
+
+    startTransition(async () => {
+      const result = await joinWithInviteCode({ code: cleanedCode })
+
       if (result.error) {
         setError(result.error)
-        setSearchResults([])
-      } else {
-        setSearchResults(result.data)
+      } else if (result.success && result.organizationId && result.organizationName) {
+        setSuccess({
+          organizationName: result.organizationName,
+          organizationId: result.organizationId,
+        })
+        // Redirect after short delay
+        setTimeout(() => {
+          router.push(`/organizations/${result.organizationId}`)
+        }, 2000)
       }
-    } catch (err) {
-      setError('Failed to search organizations')
-      setSearchResults([])
-    } finally {
-      setIsSearching(false)
-    }
-  }
-
-  const handleJoinOrganization = async (orgId: string) => {
-    setJoiningOrgId(orgId)
-    setError(null)
-
-    try {
-      await joinOrganization(orgId)
-      // The redirect will happen server-side if successful
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to join organization'
-      setError(errorMessage)
-      setJoiningOrgId(null)
-    }
+    })
   }
 
   return (
     <div className="min-h-screen">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="container mx-auto px-4 py-8 max-w-2xl">
         <div className="mb-8">
           <Button variant="ghost" asChild className="mb-4">
             <Link href="/organizations">
@@ -71,116 +80,92 @@ export default function JoinOrganizationPage() {
           </Button>
           <h1 className="text-3xl font-semibold text-foreground">Join an Organization</h1>
           <p className="text-muted-foreground mt-1">
-            Search for and join existing financial organizations
+            Enter an invite code to join a financial organization
           </p>
         </div>
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Search Organizations</CardTitle>
-            <CardDescription>
-              Enter an organization name, code, or keyword to find organizations you can join
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="search">Organization Name or Code</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="search"
-                    placeholder="e.g., Acme Corp, ORG-12345"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSearch()
-                    }}
-                  />
-                  <Button onClick={handleSearch} disabled={isSearching || !searchQuery.trim()}>
-                    <Search className="mr-2 h-4 w-4" />
-                    {isSearching ? 'Searching...' : 'Search'}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {searchResults.length === 0 && searchQuery && !isSearching ? (
-          <Card className="border-dashed">
+        {success ? (
+          <Card className="border-green-200 bg-green-50 dark:bg-green-900/20">
             <CardContent className="flex flex-col items-center justify-center py-12">
-              <div className="rounded-full bg-muted p-6 mb-4">
-                <Building2 className="h-12 w-12 text-muted-foreground" />
-              </div>
-              <CardTitle className="mb-2">No organizations found</CardTitle>
-              <CardDescription className="text-center max-w-md">
-                We couldn&apos;t find any organizations matching &quot;{searchQuery}&quot;. Try a different search term or ask your organization admin for the correct code.
+              <CheckCircle2 className="h-16 w-16 text-green-600 dark:text-green-400 mb-4" />
+              <CardTitle className="mb-2 text-green-900 dark:text-green-100">
+                Successfully Joined!
+              </CardTitle>
+              <CardDescription className="text-center max-w-md text-green-700 dark:text-green-300">
+                You are now a member of <strong>{success.organizationName}</strong>. Redirecting to organization...
               </CardDescription>
             </CardContent>
           </Card>
-        ) : error ? (
-          <Card className="border-dashed border-red-200 bg-red-50">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <CardTitle className="mb-2 text-red-900">Search Error</CardTitle>
-              <CardDescription className="text-center max-w-md text-red-700">
-                {error}
-              </CardDescription>
-            </CardContent>
-          </Card>
-        ) : searchResults.length > 0 ? (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold">Search Results</h2>
-            <div className="grid gap-4">
-              {searchResults.map((org) => (
-                <Card key={org.id}>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="rounded-lg bg-accent p-2">
-                          <Building2 className="h-5 w-5 text-white" />
-                        </div>
-                        <div>
-                          <CardTitle className="text-lg">{org.name}</CardTitle>
-                        </div>
-                      </div>
-                      <Button 
-                        onClick={() => handleJoinOrganization(org.id)}
-                        disabled={joiningOrgId !== null}
-                      >
-                        {joiningOrgId === org.id ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Joining...
-                          </>
-                        ) : (
-                          'Join'
-                        )}
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  {org.description && (
-                    <CardContent>
-                      <p className="text-sm text-muted-foreground">{org.description}</p>
-                    </CardContent>
-                  )}
-                </Card>
-              ))}
-            </div>
-          </div>
         ) : (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <div className="rounded-full bg-muted p-6 mb-4">
-                <Search className="h-12 w-12 text-muted-foreground" />
-              </div>
-              <CardTitle className="mb-2">Start your search</CardTitle>
-              <CardDescription className="text-center max-w-md">
-                Enter an organization name or code above to search for organizations you can join.
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Ticket className="h-5 w-5" />
+                Enter Invite Code
+              </CardTitle>
+              <CardDescription>
+                Ask an organization admin or owner for an invite code to join their organization
               </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="invite-code">Invite Code</Label>
+                  <Input
+                    id="invite-code"
+                    placeholder="XXXX-XXXX-XXXX"
+                    value={inviteCode}
+                    onChange={(e) => {
+                      setInviteCode(e.target.value)
+                      setError(null)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !isPending) {
+                        handleJoinWithCode()
+                      }
+                    }}
+                    disabled={isPending}
+                    className="font-mono text-lg"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Format: 12 characters (letters and numbers). Dashes optional.
+                  </p>
+                </div>
+
+                {error && (
+                  <div className="flex items-start gap-2 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                    <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+                  </div>
+                )}
+
+                <Button
+                  onClick={handleJoinWithCode}
+                  disabled={isPending || !inviteCode.trim()}
+                  className="w-full"
+                >
+                  {isPending ? 'Joining...' : 'Join Organization'}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}
+
+        <Card className="mt-6 border-dashed">
+          <CardHeader>
+            <CardTitle className="text-lg">Don&apos;t have an invite code?</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              Contact an administrator or owner of the organization you want to join. They can generate an invite code for you from their organization settings.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              If you want to create your own organization, go back and click <strong>&quot;Create Organization&quot;</strong>.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
 }
+
