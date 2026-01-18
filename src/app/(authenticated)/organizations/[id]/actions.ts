@@ -300,6 +300,130 @@ interface DeleteInitialTransactionInput {
   transactionId: string
 }
 
+interface UpdateInitialTransactionInput {
+  organizationId: string
+  transactionId: string
+  amount: number
+  description?: string
+  category?: string
+  occurredAt: string
+  assignedToUserId?: string | null
+}
+
+export async function updateInitialTransaction(input: UpdateInitialTransactionInput) {
+  const { organizationId, transactionId, amount, description, category, occurredAt, assignedToUserId } = input
+
+  if (!organizationId || !transactionId) {
+    return { error: "Organization and transaction are required" }
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { error: "Amount must be greater than 0" }
+  }
+
+  if (!occurredAt) {
+    return { error: "Date is required" }
+  }
+
+  const occurredDate = new Date(occurredAt)
+  if (Number.isNaN(occurredDate.getTime())) {
+    return { error: "Invalid date" }
+  }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    return { error: "You must be signed in" }
+  }
+
+  // Owner-only guard
+  const admin = createAdminClient()
+  const { data: membership, error: membershipError } = await admin
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", organizationId)
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (membershipError) {
+    console.error("[UPDATE_INITIAL_TRANSACTION] Membership lookup failed", membershipError.message)
+    return { error: "Unable to verify permissions" }
+  }
+
+  if (!membership || membership.role !== "owner") {
+    return { error: "Only organization owners can edit initial transactions" }
+  }
+
+  // Load existing transaction to enforce org match, initial flag, and immutable type
+  const { data: existingTx, error: txError } = await admin
+    .from("transactions")
+    .select("id, organization_id, type, is_initial")
+    .eq("id", transactionId)
+    .maybeSingle()
+
+  if (txError || !existingTx) {
+    return { error: "Transaction not found" }
+  }
+
+  if (existingTx.organization_id !== organizationId) {
+    return { error: "Transaction does not belong to this organization" }
+  }
+
+  if (!existingTx.is_initial) {
+    return { error: "Cannot edit non-initial transactions through this action" }
+  }
+
+  // Validate assigned member if provided
+  if (assignedToUserId) {
+    const { data: memberCheck, error: memberCheckError } = await admin
+      .from("organization_members")
+      .select("user_id")
+      .eq("organization_id", organizationId)
+      .eq("user_id", assignedToUserId)
+      .maybeSingle()
+
+    if (memberCheckError || !memberCheck) {
+      return { error: "Selected member is not part of this organization" }
+    }
+  }
+
+  // Determine funding details based on immutable type
+  let fundedByType: "business" | "personal" = "business"
+  if (existingTx.type === "expense_personal") {
+    fundedByType = "personal"
+  }
+
+  const updatePayload = {
+    amount,
+    description: description?.trim() || null,
+    category: category?.trim() || null,
+    occurred_at: occurredDate.toISOString(),
+    funded_by_type: fundedByType,
+    funded_by_user_id: assignedToUserId || null,
+    updated_by_user_id: user.id,
+  }
+
+  const { error: updateError } = await admin
+    .from("transactions")
+    .update(updatePayload)
+    .eq("id", transactionId)
+    .eq("organization_id", organizationId)
+
+  if (updateError) {
+    console.error("[UPDATE_INITIAL_TRANSACTION] Update failed", updateError.message)
+    return { error: "Unable to update transaction right now" }
+  }
+
+  revalidatePath(`/organizations/${organizationId}`)
+  revalidatePath(`/organizations/${organizationId}/settings`)
+
+  return { success: true }
+}
+
 export async function deleteInitialTransaction(input: DeleteInitialTransactionInput) {
   const { organizationId, transactionId } = input
 
@@ -372,6 +496,167 @@ interface SetMemberBaselineInput {
   organizationId: string
   userId: string
   targetBaseline: number // desired baseline allocation amount
+}
+
+// New: Owner-only actions to add regular transactions on behalf of members
+interface AddIncomeForMemberInput {
+  organizationId: string
+  amount: number
+  description?: string
+  category?: string
+  occurredAt: string
+  assignedToUserId?: string | null
+}
+
+export async function addIncomeForMember(input: AddIncomeForMemberInput) {
+  const { organizationId, amount, description, category, occurredAt, assignedToUserId } = input
+
+  if (!organizationId) return { error: "Organization is required" }
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "Amount must be greater than 0" }
+  if (!occurredAt) return { error: "Date is required" }
+
+  const occurredDate = new Date(occurredAt)
+  if (Number.isNaN(occurredDate.getTime())) return { error: "Invalid date" }
+
+  const supabase = await createClient()
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user) return { error: "You must be signed in" }
+
+  const admin = createAdminClient()
+  const { data: membership, error: membershipError } = await admin
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", organizationId)
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (membershipError) {
+    console.error("[ADD_INCOME_FOR_MEMBER] Membership lookup failed", membershipError.message)
+    return { error: "Unable to verify permissions" }
+  }
+
+  if (!membership || membership.role !== "owner") {
+    return { error: "Only organization owners can add income for members" }
+  }
+
+  if (assignedToUserId) {
+    const { data: memberCheck, error: memberCheckError } = await admin
+      .from("organization_members")
+      .select("user_id")
+      .eq("organization_id", organizationId)
+      .eq("user_id", assignedToUserId)
+      .maybeSingle()
+
+    if (memberCheckError || !memberCheck) {
+      return { error: "Selected member is not part of this organization" }
+    }
+  }
+
+  const insertPayload = {
+    organization_id: organizationId,
+    user_id: user.id, // owner recording the transaction
+    type: "income" as const,
+    amount,
+    description: description?.trim() || null,
+    category: category?.trim() || null,
+    occurred_at: occurredDate.toISOString(),
+    funded_by_type: "business" as const,
+    funded_by_user_id: assignedToUserId || null,
+    updated_by_user_id: user.id,
+    is_initial: false,
+  }
+
+  const { error: insertError } = await admin.from("transactions").insert(insertPayload)
+  if (insertError) {
+    console.error("[ADD_INCOME_FOR_MEMBER] Insert failed", insertError.message)
+    return { error: "Unable to add income right now" }
+  }
+
+  revalidatePath(`/organizations/${organizationId}`)
+  revalidatePath(`/organizations/${organizationId}/settings`)
+  return { success: true }
+}
+
+interface AddExpenseForMemberInput {
+  organizationId: string
+  amount: number
+  description?: string
+  category?: string
+  occurredAt: string
+  expenseType: 'business' | 'personal'
+  assignedToUserId?: string | null
+}
+
+export async function addExpenseForMember(input: AddExpenseForMemberInput) {
+  const { organizationId, amount, description, category, occurredAt, expenseType, assignedToUserId } = input
+
+  if (!organizationId) return { error: "Organization is required" }
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "Amount must be greater than 0" }
+  if (!occurredAt) return { error: "Date is required" }
+
+  const occurredDate = new Date(occurredAt)
+  if (Number.isNaN(occurredDate.getTime())) return { error: "Invalid date" }
+
+  const supabase = await createClient()
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user) return { error: "You must be signed in" }
+
+  const admin = createAdminClient()
+  const { data: membership, error: membershipError } = await admin
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", organizationId)
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (membershipError) {
+    console.error("[ADD_EXPENSE_FOR_MEMBER] Membership lookup failed", membershipError.message)
+    return { error: "Unable to verify permissions" }
+  }
+
+  if (!membership || membership.role !== "owner") {
+    return { error: "Only organization owners can add expenses for members" }
+  }
+
+  if (assignedToUserId) {
+    const { data: memberCheck, error: memberCheckError } = await admin
+      .from("organization_members")
+      .select("user_id")
+      .eq("organization_id", organizationId)
+      .eq("user_id", assignedToUserId)
+      .maybeSingle()
+
+    if (memberCheckError || !memberCheck) {
+      return { error: "Selected member is not part of this organization" }
+    }
+  }
+
+  const transactionType = expenseType === 'personal' ? 'expense_personal' : 'expense_business'
+  const fundedByType = expenseType === 'personal' ? 'personal' : 'business'
+
+  const insertPayload = {
+    organization_id: organizationId,
+    user_id: user.id, // owner recording the transaction
+    type: transactionType as const,
+    amount,
+    description: description?.trim() || null,
+    category: category?.trim() || null,
+    occurred_at: occurredDate.toISOString(),
+    funded_by_type: fundedByType as const,
+    funded_by_user_id: assignedToUserId || null,
+    updated_by_user_id: user.id,
+    is_initial: false,
+  }
+
+  const { error: insertError } = await admin.from("transactions").insert(insertPayload)
+  if (insertError) {
+    console.error("[ADD_EXPENSE_FOR_MEMBER] Insert failed", insertError.message)
+    return { error: "Unable to add expense right now" }
+  }
+
+  revalidatePath(`/organizations/${organizationId}`)
+  revalidatePath(`/organizations/${organizationId}/settings`)
+  return { success: true }
 }
 
 export async function setMemberBaseline(input: SetMemberBaselineInput) {
@@ -538,6 +823,147 @@ export async function setMemberBaseline(input: SetMemberBaselineInput) {
   revalidatePath(`/organizations/${organizationId}`)
   revalidatePath(`/organizations/${organizationId}/settings`)
   revalidatePath(`/organizations/${organizationId}/settings/holdings`)
+
+  return { success: true }
+}
+
+interface CreateRefundInput {
+  organizationId: string
+  amount: number
+  description?: string
+}
+
+export async function createRefund(input: CreateRefundInput) {
+  const { organizationId, amount, description } = input
+
+  if (!organizationId) {
+    return { error: "Organization is required" }
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { error: "Amount must be greater than 0" }
+  }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    return { error: "You must be signed in" }
+  }
+
+  // Check role: only owner/admin can create refunds
+  const admin = createAdminClient()
+  const { data: membership, error: membershipError } = await admin
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", organizationId)
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (membershipError) {
+    console.error("[CREATE_REFUND] Membership lookup failed", membershipError.message)
+    return { error: "Unable to verify permissions" }
+  }
+
+  if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
+    return { error: "You don't have permission to create refunds" }
+  }
+
+  // Get current user's outstanding reimbursable amount
+  const { data: txRows, error: txError } = await admin
+    .from("transactions")
+    .select("type, amount, funded_by_type, funded_by_user_id")
+    .eq("organization_id", organizationId)
+
+  if (txError) {
+    console.error("[CREATE_REFUND] Transactions fetch error", txError.message)
+    return { error: "Unable to fetch transaction data" }
+  }
+
+  // Calculate current user's personal contributions
+  let contributedPersonal = 0
+  for (const r of txRows || []) {
+    const txAmount = Number(r.amount ?? 0)
+    const type = r.type as string
+    const isPersonalFunded = (r.funded_by_type as string | null) === 'personal'
+    const fundedByUserId = r.funded_by_user_id as string | null
+
+    if (isPersonalFunded && fundedByUserId === user.id && type === 'expense_personal') {
+      contributedPersonal += txAmount
+    }
+  }
+
+  // Get current user's reimbursements paid
+  const { data: reimbursementRows, error: reimbError } = await admin
+    .from("reimbursement_requests")
+    .select("amount, status")
+    .eq("organization_id", organizationId)
+    .eq("from_user_id", user.id)
+    .eq("status", "paid")
+
+  if (reimbError) {
+    console.error("[CREATE_REFUND] Reimbursements fetch error", reimbError.message)
+    return { error: "Unable to fetch reimbursement data" }
+  }
+
+  let reimbursementsPaid = 0
+  for (const r of reimbursementRows || []) {
+    reimbursementsPaid += Number(r.amount ?? 0)
+  }
+
+  const outstanding = Math.max(contributedPersonal - reimbursementsPaid, 0)
+
+  if (outstanding <= 0) {
+    return { error: "You have no outstanding balance to refund" }
+  }
+
+  if (amount > outstanding) {
+    return { error: `Amount exceeds outstanding balance of $${outstanding.toFixed(2)}` }
+  }
+
+  // Create reimbursement request with status = 'paid' (no approval needed)
+  const { error: insertError } = await admin
+    .from("reimbursement_requests")
+    .insert({
+      organization_id: organizationId,
+      from_user_id: user.id,
+      amount,
+      status: "paid",
+      approval_required: false,
+      notes: description?.trim() || null,
+    })
+
+  if (insertError) {
+    console.error("[CREATE_REFUND] Reimbursement insert failed", insertError.message)
+    return { error: "Unable to create refund right now" }
+  }
+
+  // Also create a held_return transaction to deduct from user's business held balance
+  const { error: txInsertError } = await admin
+    .from("transactions")
+    .insert({
+      organization_id: organizationId,
+      user_id: user.id,
+      type: "held_return",
+      amount,
+      description: `Refund withdrawal${description ? ': ' + description : ''}`,
+      category: "Refund",
+      occurred_at: new Date().toISOString(),
+      funded_by_type: "business" as const,
+      funded_by_user_id: user.id,
+      updated_by_user_id: user.id,
+      is_initial: false,
+    })
+
+  if (txInsertError) {
+    console.error("[CREATE_REFUND] Transaction insert failed", txInsertError.message)
+    return { error: "Unable to record refund transaction" }
+  }
+
+  revalidatePath(`/organizations/${organizationId}`)
 
   return { success: true }
 }

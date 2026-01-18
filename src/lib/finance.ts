@@ -14,6 +14,7 @@ export type MemberBalance = {
   user_id: string
   email?: string | null
   role?: string | null
+  is_active?: boolean
   businessHeld: number
   contributedPersonal: number
   reimbursementsPaid: number
@@ -57,21 +58,24 @@ export async function getOrganizationStats(organizationId: string): Promise<Orga
   let totalExpensesBusiness = 0
   let totalExpensesPersonal = 0
   let expensesCapital = 0
+  let totalRefundWithdrawals = 0
 
   for (const r of rows as any[]) {
     const amount = Number(r.amount ?? 0)
     const type = r.type as string
     const category = (r.category ?? '') as string
 
-    // Exclude held_allocate/held_return from org totals (they only affect member balances)
+    // Exclude held_allocate from org totals (only affects member balances)
+    // held_return with category "Refund" represents cash leaving the org
     if (type === 'income') totalIncome += amount
     if (type === 'expense_business') totalExpensesBusiness += amount
     if (type === 'expense_personal') totalExpensesPersonal += amount
+    if (type === 'held_return' && category === 'Refund') totalRefundWithdrawals += amount
     if (category && category.toLowerCase() === 'capital') expensesCapital += amount
   }
 
   const actualExpensesWithoutCapital = totalExpensesBusiness + Math.max(totalExpensesPersonal - expensesCapital, 0)
-  const cashOnHand = totalIncome - totalExpensesBusiness
+  const cashOnHand = totalIncome - totalExpensesBusiness - totalRefundWithdrawals
   const actualExpensesVsIncome = totalIncome - actualExpensesWithoutCapital
 
   const totals: Totals = {
@@ -87,7 +91,7 @@ export async function getOrganizationStats(organizationId: string): Promise<Orga
   // Members
   const { data: members, error: membersError } = await admin
     .from('organization_members')
-    .select('user_id, role')
+    .select('user_id, role, is_active')
     .eq('organization_id', organizationId)
 
   if (membersError) {
@@ -189,6 +193,7 @@ export async function getOrganizationStats(organizationId: string): Promise<Orga
       user_id: uid,
       email: emailByUserId[uid] ?? null,
       role: m.role ?? null,
+      is_active: m.is_active ?? true,
       businessHeld,
       contributedPersonal,
       reimbursementsPaid,

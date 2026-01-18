@@ -37,7 +37,10 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { EditOrganizationDialog } from './edit-organization-dialog'
 import { AddInitialValueSheet } from './add-initial-value-sheet'
+import { EditInitialValueSheet } from './edit-initial-value-sheet'
 import { deleteInitialTransaction } from '../actions'
+import { AddRegularIncomeSheet } from './add-regular-income-sheet'
+import { AddRegularExpenseSheet } from './add-regular-expense-sheet'
 
 type OrganizationRole = 'owner' | 'admin' | 'member'
 
@@ -69,6 +72,7 @@ type InitialTransaction = {
 	category: string | null
 	description: string | null
 	occurred_at: string
+	assigned_to_user_id: string | null
 	assigned_to_name: string | null
 	assigned_to_email: string | null
 }
@@ -172,6 +176,13 @@ export function OrganizationSettings({
 			full_name: m.user.name,
 		}))
 		.filter((m) => m.email && m.user_id) // Only include members with valid data
+
+	// Debug: log members for initial value sheets
+	if (typeof window !== 'undefined') {
+		console.log('[OrganizationSettings] Total members:', members.length)
+		console.log('[OrganizationSettings] Members for sheet:', membersForSheet)
+		console.log('[OrganizationSettings] Raw members:', members)
+	}
 
 	const handleDeleteOrganization = async () => {
 		const expectedPhrase = 'i confirm in deleting the organization'
@@ -333,6 +344,44 @@ export function OrganizationSettings({
 					</CardContent>
 				</Card>
 
+				{/* Manage Members Card - Admin and Owner */}
+				{canEdit && (
+					<Card>
+						<CardHeader>
+							<div className="flex items-center justify-between">
+								<div className="flex items-center gap-3">
+									<div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+										<Users className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+									</div>
+									<div>
+										<CardTitle>Member Management</CardTitle>
+										<CardDescription>
+											View and manage organization members and invite codes
+										</CardDescription>
+									</div>
+								</div>
+								<Button
+									onClick={() => router.push(`/organizations/${organization.id}/members`)}
+								>
+									<UserCog className="h-4 w-4 mr-2" />
+									Manage Members
+								</Button>
+							</div>
+						</CardHeader>
+						<CardContent>
+							<div className="space-y-3">
+								<div className="flex items-center justify-between">
+									<span className="text-sm text-muted-foreground">Total Active Members</span>
+									<span className="font-semibold">{organization.member_count}</span>
+								</div>
+								<p className="text-sm text-muted-foreground">
+									Manage member roles, deactivate members (preserves data), generate invite codes for new members, and view membership history.
+								</p>
+							</div>
+						</CardContent>
+					</Card>
+				)}
+
 				{/* Business Held Allocations - Owner Only */}
 				{isOwner && (
 					<Card>
@@ -360,6 +409,46 @@ export function OrganizationSettings({
 							<p className="text-sm text-muted-foreground">
 								Set baseline business held for each member from the available cash on hand. 
 								Members&apos; business held will then update automatically as they receive income and create expenses.
+							</p>
+						</CardContent>
+					</Card>
+				)}
+
+				{/* Add Transactions for Members - Owner Only */}
+				{isOwner && (
+					<Card>
+						<CardHeader>
+							<div className="flex items-center justify-between">
+								<div className="flex items-center gap-3">
+									<div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
+										<Receipt className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+									</div>
+									<div>
+										<CardTitle>Add Transactions for Members</CardTitle>
+										<CardDescription>
+											Record regular income and expenses on behalf of members
+										</CardDescription>
+									</div>
+								</div>
+								<div className="flex items-center gap-2">
+									<AddRegularIncomeSheet
+										organizationId={organization.id}
+										members={membersForSheet}
+										currentUserEmail={currentUserEmail}
+										currentUserId={currentUserId}
+									/>
+									<AddRegularExpenseSheet
+										organizationId={organization.id}
+										members={membersForSheet}
+										currentUserEmail={currentUserEmail}
+										currentUserId={currentUserId}
+									/>
+								</div>
+							</div>
+						</CardHeader>
+						<CardContent>
+							<p className="text-sm text-muted-foreground">
+								As an owner, you can record transactions on behalf of any member. These are normal transactions and will affect balances as usual.
 							</p>
 						</CardContent>
 					</Card>
@@ -436,16 +525,25 @@ export function OrganizationSettings({
 														<p className="text-sm text-muted-foreground">{tx.description}</p>
 													)}
 												</div>
-												<Button
-													variant="ghost"
-													size="sm"
-													onClick={() => {
-														setSelectedInitialTx(tx.id)
-														setDeleteInitialDialogOpen(true)
-													}}
-												>
-													<Trash2 className="h-4 w-4 text-destructive" />
-												</Button>
+												<div className="flex items-center gap-1">
+													<EditInitialValueSheet
+														organizationId={organization.id}
+														members={membersForSheet}
+														currentUserEmail={currentUserEmail}
+														currentUserId={currentUserId}
+														initialTransaction={tx}
+													/>
+													<Button
+														variant="ghost"
+														size="sm"
+														onClick={() => {
+															setSelectedInitialTx(tx.id)
+															setDeleteInitialDialogOpen(true)
+														}}
+													>
+														<Trash2 className="h-4 w-4 text-destructive" />
+													</Button>
+												</div>
 											</div>
 										)
 									})}

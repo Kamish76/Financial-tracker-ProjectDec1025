@@ -1,75 +1,93 @@
-# OrgFinance: Multi-Tenant Financial Tracker with Keep-Alive Architecture
+# OrgFinance: Multi-Tenant Financial Tracker
 
-A sophisticated multi-tenant web application designed to help individuals, student groups, and small businesses track their financial health with a "Business-First" mindset. Built with resilience in mind, OrgFinance implements a self-keeping-alive architecture to overcome Supabase's free-tier pausing policy.
+A sophisticated multi-tenant web application designed to help individuals, student groups, and small businesses track their financial health with a "Business-First" mindset. Built with resilience in mind, OrgFinance implements a database keep-alive system to prevent Supabase free-tier auto-pausing.
 
 ## 🎯 Project Vision
 
 OrgFinance solves two critical challenges:
 
-1. **Complex Financial Tracking**: Unlike standard expense trackers, it distinguishes between operational expenses (business funds) and capital injections (out-of-pocket member payments).
+1. **Complex Financial Tracking**: Unlike standard expense trackers, it distinguishes between operational expenses (business funds) and capital injections (out-of-pocket member payments). It also supports advanced features like held allocations (baseline business funds allocated to members) and initial setup transactions.
 
-2. **Serverless Infrastructure Resilience**: Implements an innovative "Keep-Alive Loop" architecture where daily backups to Google Sheets prevent database pausing while providing portable financial records.
+2. **Serverless Infrastructure Resilience**: Implements a lightweight keep-alive system using Vercel Cron Jobs that ping the database daily to prevent automatic pausing, with full audit logging for monitoring.
 
 ---
 
-## 🏗️ Core Architecture: "The Keep-Alive Loop"
+## 🏗️ Core Architecture: Database Keep-Alive System
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│          Scheduled Edge Function (8:00 AM UTC)          │
-│        (Supabase - Deno TypeScript Runtime)             │
+│        Vercel Cron Job (Daily at ~1:00 AM UTC)         │
+│         (Hobby Plan: ±1 hour timing variance)           │
 └──────────────────────┬──────────────────────────────────┘
                        │
                        ▼
         ┌──────────────────────────────┐
-        │  Fetch Transaction Data      │
-        │  from PostgreSQL Database    │
+        │  GET /api/health-check       │
+        │  (Protected by CRON_SECRET)  │
+        └──────────┬───────────────────┘
+                   │
+                   ▼
+        ┌──────────────────────────────┐
+        │  Query Database Activity     │
+        │  - Count organizations       │
+        │  - Count transactions        │
+        │  - Measure response time     │
+        └──────────┬───────────────────┘
+                   │
+                   ▼
+        ┌──────────────────────────────┐
+        │  Log to keep_alive_logs      │
+        │  (Audit Trail & Monitoring)  │
         │  (Prevents Auto-Pause)       │
-        └──────────┬───────────────────┘
-                   │
-                   ▼
-        ┌──────────────────────────────┐
-        │  Transform & Validate        │
-        │  (Apply Business Logic)      │
-        └──────────┬───────────────────┘
-                   │
-                   ▼
-        ┌──────────────────────────────┐
-        │  Clear & Replace Strategy    │
-        │  Google Sheets API Sync      │
-        │  (Portable Backup)           │
         └──────────────────────────────┘
 ```
+
+**Implementation Details:**
+- **Trigger**: Vercel Cron Job configured in `vercel.json`
+- **Schedule**: `0 1 * * *` (daily at ~1:00 AM UTC, Hobby plan has ±1 hour variance)
+- **Security**: Protected by `CRON_SECRET` environment variable
+- **Monitoring**: All executions logged to `keep_alive_logs` table
+- **Purpose**: Prevents Supabase free-tier from pausing after 7 days of inactivity
 
 ---
 
 ## ✨ Core Features
 
 ### 1. **Multi-Tenancy (Organizations)**
-- **Create**: Users can spawn new organizations and automatically become Admin
-- **Join**: Users join existing organizations using a unique 6-digit Invite Code
+- **Create**: Users can spawn new organizations and automatically become Owner
+- **Join**: Users join existing organizations using a unique 12-character alphanumeric Invite Code (never expires, optional usage limits)
 - **Context Switching**: Toggle between different organizations without logging out
-- **Role-Based Access**: Admin, Member, and Viewer roles with granular permissions
+- **Role-Based Access**: Owner, Admin, and Member roles with granular permissions
+- **Member Management**: Soft delete/reactivate members, change roles, manage invite codes
+- **Ownership Transfer**: Secure API endpoint for transferring ownership between members
 
 ### 2. **Advanced Financial Logic**
 - **Income**: Revenue generated by the organization
 - **Expense (Business Funds)**: Money spent from organization's cash-on-hand
 - **Expense (Personal/Out-of-Pocket)**: Capital injections or expenses paid using personal funds (tracked as member equity contributions)
-- **User Balance Tracking**: Each member can view their personal contribution balance and transaction history
-- **Reimbursement System**: Track out-of-pocket expenses that need reimbursement (approval system disabled by default, can be enabled per organization)
-- **Reporting**: Automatic calculation of Cash on Hand, Total Capital, Net Profit, and per-user contribution balances
+- **Refund**: Reimbursements paid to members for out-of-pocket expenses
+- **Initial Transactions**: Owner-only setup transactions for recording pre-existing balances (marked with `is_initial` flag)
+- **Held Allocations**: Baseline allocation of business funds to specific members (`held_allocation_add`/`held_allocation_remove`)
+- **User Balance Tracking**: Each member can view their personal contribution balance, held amounts, and transaction history
+- **Reimbursement System**: Track out-of-pocket expenses that need reimbursement
+- **Reporting**: Automatic calculation of Cash on Hand, Total Income, Business Expenses, Personal Contributions, Actual Expenses, Net Profit, and per-user contribution balances
+- **Bulk Operations**: Owners can add income/expenses on behalf of other members
 
-### 3. **Keep-Alive Backup System**
-- **Automatic Daily Sync**: Scheduled Edge Function runs every morning at 8:00 AM UTC
-- **Clear & Replace Strategy**: Ensures data integrity by rewriting sheet from scratch
-- **Portable Access**: Users can access financial data offline via Google Sheets
-- **Zero Cost Backup**: Leverages free Google Sheets API for unlimited historical records
+### 3. **Database Keep-Alive System**
+- **Automatic Daily Ping**: Vercel Cron Job runs daily at ~1:00 AM UTC (Hobby plan: ±1 hour variance)
+- **Health Check Endpoint**: `/api/health-check` queries database statistics (organization count, transaction count, response time)
+- **Audit Logging**: All executions logged to `keep_alive_logs` table with status, timing, and error details
+- **Security**: Protected by `CRON_SECRET` environment variable to prevent unauthorized access
+- **Purpose**: Prevents Supabase free-tier from auto-pausing after 7 days of inactivity
+- **Future Enhancement**: Google Sheets backup integration planned for Phase 6+
 
 ### 4. **Modern UI/UX**
 - Built with Shadcn UI (Radix primitives + Tailwind CSS)
-- Real-time data synchronization
-- Intuitive dashboard with key financial metrics
+- Collapsible sidebar navigation with organization switcher
+- Light/dark theme toggle with persistent preferences
+- Intuitive dashboard with key financial metrics and member balances
 - Mobile-responsive design
+- Sheet-based modals for transaction entry and management
 
 ---
 
@@ -87,11 +105,12 @@ OrgFinance solves two critical challenges:
 #### `transactions` (Enhanced)
 Core financial records with accountability fields:
 - `id`, `organization_id`, `user_id` (who recorded it)
-- `type`: income | expense_business | expense_personal
+- `type`: income | expense_business | expense_personal | refund | held_allocation_add | held_allocation_remove
 - `amount`, `description`, `category`, `occurred_at`
 - **`funded_by_type`**: "business" | "personal"
 - **`funded_by_user_id`**: Who actually paid (null = business account)
 - **`updated_by_user_id`**: Audit trail for edits
+- **`is_initial`**: Boolean flag for owner-created setup transactions
 - `created_at`, `updated_at`
 
 #### `user_contributions`
@@ -117,6 +136,14 @@ Support for split/shared costs:
 - `allocated_amount`: This user's share
 - `allocation_reason`: Optional note
 
+#### `keep_alive_logs`
+Audit trail for database keep-alive system:
+- `id`, `executed_at`, `database_active`
+- `organization_count`, `transaction_count`, `response_time_ms`
+- `status`: success | error | warning
+- `error_message`: Error details if applicable
+- `created_at`
+
 ### **User-Facing Views**
 Each user sees:
 1. **Personal Balance**: Total contributed, total received, net balance
@@ -130,109 +157,118 @@ Each user sees:
 
 | Layer | Technology |
 |-------|-----------|
-| **Frontend** | Next.js (App Router), TypeScript, Tailwind CSS, Shadcn UI |
-| **Backend** | Supabase (PostgreSQL, Auth, Realtime, Row Level Security) |
-| **Automation** | Supabase Edge Functions (Deno/TypeScript) |
-| **Authentication** | Supabase Auth (Google OAuth) |
-| **External Integration** | Google Sheets API (Service Account) |
-| **Validation** | Zod, React Hook Form |
+| **Frontend** | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4 |
+| **UI Components** | Shadcn UI (Radix primitives), Lucide React (icons) |
+| **Backend** | Supabase (PostgreSQL, Auth, Row Level Security) |
+| **Automation** | Vercel Cron Jobs (keep-alive system) |
+| **Authentication** | Supabase Auth (Google OAuth + Email/Password) |
+| **Deployment** | Vercel (Edge Runtime for API routes) |
+| **Future Integrations** | Google Sheets API (planned for backup system) |
 
 ---
 
 ## 🚀 Implementation Roadmap
 
-### **Phase 1: Foundation & Core Infrastructure** (Weeks 1-2)
-- [ ] Set up Next.js project with TypeScript and Tailwind CSS
-- [ ] Configure Supabase project (PostgreSQL database, Auth)
-- [ ] Implement database schema:
-  - `users` table with OAuth integration
-  - `organizations` table with admin/member relationships
-  - `organization_members` table (junction with roles)
+### **Phase 1: Foundation & Core Infrastructure** ✅ **COMPLETE**
+- [✅] Set up Next.js project with TypeScript and Tailwind CSS
+- [✅] Configure Supabase project (PostgreSQL database, Auth)
+- [✅] Implement database schema:
+  - `profiles` table with OAuth integration
+  - `organizations` table with description field
+  - `organization_members` table (junction with roles, soft delete)
   - `transactions` table with enhanced accountability fields:
     - `funded_by_type`: Distinguish "business" vs "personal" funds
     - `funded_by_user_id`: Track who actually paid (if different from creator)
     - `updated_by_user_id`: Audit trail for edits
+    - `is_initial`: Flag for owner-created setup transactions
+    - Support for held allocation transaction types
   - `user_contributions` table: Track per-user balances (calculated on-demand)
   - `reimbursement_requests` table: Track out-of-pocket expenses needing reimbursement
-  - `transaction_allocations` table (optional): Support cost-splitting for shared expenses
-  - `invite_codes` table for organization invitations
+  - `transaction_allocations` table: Support cost-splitting for shared expenses
+  - `invite_codes` table for organization invitations (12-char alphanumeric, never expires)
+  - `keep_alive_logs` table: Audit trail for database keep-alive pings
   - Row Level Security (RLS) policies for multi-tenancy
-- [ ] Set up environment variables and secrets management
-- [ ] Create basic project structure and folder organization
+- [✅] Set up environment variables and secrets management
+- [✅] Create basic project structure and folder organization
 
-### **Phase 2: Authentication & User Management** (Weeks 2-3)
-- [ ] Implement Google OAuth sign-up/login
-- [ ] Create user profile management
-- [ ] Implement session persistence
-- [ ] Add logout functionality
-- [ ] Set up Supabase RLS policies for user data isolation
-- [ ] Add password/email recovery options
+### **Phase 2: Authentication & User Management** ✅ **COMPLETE**
+- [✅] Implement Google OAuth sign-up/login
+- [✅] Implement Email/Password authentication
+- [✅] Create user profile management (auto-created via trigger)
+- [✅] Implement session persistence
+- [✅] Add logout functionality
+- [✅] Set up Supabase RLS policies for user data isolation
+- [✅] OAuth callback handling
 
-### **Phase 3: Organization Management** (Weeks 3-4)
-- [ ] Create "Create Organization" form
-- [ ] Implement organization switching in UI
-- [ ] Generate unique 6-digit invite codes
-- [ ] Build "Join Organization" feature
-- [ ] Create organization settings page
-- [ ] Implement role-based access control (Admin, Member, Viewer)
-- [ ] Add member management UI (view, remove, change roles)
+### **Phase 3: Organization Management** ✅ **COMPLETE**
+- [✅] Create "Create Organization" form
+- [✅] Implement organization switching in UI (sidebar navigation)
+- [✅] Generate unique 12-character alphanumeric invite codes (never-expiring, optional usage limits)
+- [✅] Build "Join Organization" feature
+- [✅] Create organization settings page (name, description, initial values, regular expenses/income)
+- [✅] Implement role-based access control (Owner, Admin, Member)
+- [✅] Add member management UI:
+  - View all members (active/inactive tabs)
+  - Change roles (Admin/Member)
+  - Deactivate/reactivate members (soft delete)
+  - Manage invite codes (create, revoke, view usage)
+- [✅] Transfer ownership API endpoint
+- [✅] Holdings management page for held allocations
 
-### **Phase 4: Transaction Management - Core Data Layer** (Weeks 4-5)
-- [ ] Implement transaction input form with:
-  - Transaction type selector (Income, Expense-Business, Expense-Personal)
+### **Phase 4: Transaction Management - Core Data Layer** ✅ **COMPLETE**
+- [✅] Implement transaction input forms:
+  - Transaction type selector (Income, Expense-Business, Expense-Personal, Refund)
   - **Funded by**: Business account or specific user (for personal funds)
-  - Amount input
+  - Amount input with validation
   - Description/notes
   - Date picker
   - Category selector
-- [ ] Add transaction list view with filtering/sorting (by type, user, funding source)
-- [ ] Implement transaction edit/delete functionality (with audit trail)
-- [ ] Add bulk import from CSV (optional for Phase 1)
-- [ ] Validate all financial operations with Zod schemas
+- [✅] Add transaction list view with type badges and formatting
+- [✅] Implement transaction edit/delete functionality (with audit trail)
+- [✅] Initial transactions system (owner-only, marked with `is_initial` flag)
+- [✅] Held allocation system (add/remove held business funds to members)
+- [✅] Bulk operations (owners can add income/expenses on behalf of members)
 
-### **Phase 4.5: User Balance & Accountability** (Week 5)
-- [ ] Create user contribution calculation service:
+### **Phase 4.5: User Balance & Accountability** ✅ **COMPLETE**
+- [✅] Create user contribution calculation service:
   - Calculate total contributed per user
   - Calculate reimbursements received
+  - Calculate held allocations
   - Compute net balance on-demand
-- [ ] Implement "My Contributions" page for each user:
-  - Show personal balance summary
-  - List transactions they created/funded
-  - Display reimbursement requests
-- [ ] Add reimbursement request system:
-  - Create reimbursement request from out-of-pocket transaction
-  - Track status (pending → paid)
-  - Manual approval flow (approval disabled by default)
-- [ ] Optional: Implement cost-splitting UI for shared expenses
+- [✅] Implement member balances display on dashboard
+- [✅] Add refund/reimbursement system:
+  - Create refund transactions for out-of-pocket expenses
+  - Track refund status
+- [✅] Cost-splitting support via `transaction_allocations` table
 
-### **Phase 5: Dashboard & Analytics** (Weeks 5-6)
-- [ ] Create dashboard layout with key metrics:
+### **Phase 5: Dashboard & Analytics** ✅ **COMPLETE**
+- [✅] Create dashboard layout with key metrics:
   - Cash on Hand (total available funds)
-  - Total Capital (member equity contributions)
-  - Net Profit (Income - Business Expenses)
+  - Total Income
+  - Business Expenses
+  - Personal Contributions
+  - Actual Expenses (excluding capital)
+  - Net Profit
   - **Per-User Balances**: Show each member's contribution and net balance
-  - Transaction count and trends
-- [ ] Build transaction history table (filterable by user, funding source, type)
-- [ ] Implement basic charts (monthly income/expense trends, user contribution breakdown)
-- [ ] Add financial ratio calculations
-- [ ] Create printable/shareable reports
-- [ ] Add organization settings:
-  - Toggle reimbursement approval requirement
-  - Configure notification preferences
+- [✅] Build transaction history table (recent 10 transactions with type badges)
+- [✅] Implement financial calculations (via `lib/finance.ts`)
+- [✅] Stats cards component for dashboard metrics
 
-### **Phase 6: Keep-Alive Architecture Setup** (Weeks 6-7)
-- [ ] Create Supabase Edge Function (Deno/TypeScript):
-  - Fetch all transactions from PostgreSQL
-  - Calculate aggregate financial metrics
-  - Format data for Google Sheets
-- [ ] Set up Google Cloud Service Account
-- [ ] Implement Google Sheets API integration:
-  - Create/retrieve Master Google Sheet
-  - Clear & Replace strategy implementation
-  - Error handling and retry logic
-- [ ] Configure Cron trigger (0 8 * * * UTC)
-- [ ] Add logging and monitoring
-- [ ] Test with multiple organizations simultaneously
+### **Phase 6: Keep-Alive & Backup System** ✅ **KEEP-ALIVE COMPLETE** | ⏳ **BACKUP PLANNED**
+- [✅] **Keep-Alive System (Implemented):**
+  - [✅] Create health-check API route (`/api/health-check`)
+  - [✅] Add security with `CRON_SECRET` environment variable
+  - [✅] Configure Vercel Cron Job (`vercel.json` - daily at ~1:00 AM UTC)
+  - [✅] Create `keep_alive_logs` table for audit trail
+  - [✅] Log execution stats (org count, transaction count, response time, status)
+- [ ] **Google Sheets Backup (Future Enhancement):**
+  - [ ] Set up Google Cloud Service Account
+  - [ ] Implement Google Sheets API integration:
+    - Create/retrieve Master Google Sheet per organization
+    - Clear & Replace strategy implementation
+    - Error handling and retry logic
+  - [ ] Add backup trigger to health-check cron
+  - [ ] Test with multiple organizations simultaneously
 
 ### **Phase 7: Backup & Data Recovery** (Week 7)
 - [ ] Create user-facing backup management page
@@ -319,10 +355,18 @@ For Phase 1 the source of truth lives in `supabase/schema.sql` (run in the Supab
 Auth: Email or Google OAuth. Redirects: `${NEXT_PUBLIC_SUPABASE_URL}/auth/v1/callback` (prod) and `http://localhost:3000/auth/callback` (dev).
 
 ### Local Setup
-1) Copy `.env.example` to `.env.local` and fill Supabase + Google creds.
+1) Copy `.env.example` to `.env.local` and fill in required variables:
+   - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (from Supabase Dashboard)
+   - `SUPABASE_URL` and `SUPABASE_ANON_KEY` (same as above)
+   - `CRON_SECRET` (generate a strong random string for health-check endpoint security)
+   - Optional: `SUPABASE_SERVICE_ROLE_KEY` (for admin scripts and health-check logging)
+   - Optional: Google OAuth credentials if using Google sign-in
 2) Install deps: `npm install`
-3) Run dev server: `npm run dev`
-4) Apply schema: paste `supabase/schema.sql` into Supabase SQL editor and run.
+3) Apply database migrations:
+   - Run each migration file in `supabase/migrations/` in order (001 through 008)
+   - Use Supabase SQL Editor or CLI
+4) Run dev server: `npm run dev`
+5) Deploy to Vercel: Cron job will automatically run based on `vercel.json` configuration
 
 ### Creating Test Users
 
@@ -354,19 +398,22 @@ To test the authentication flow, you need to create test user accounts:
 - **Data Encryption**: All connections use HTTPS/TLS
 - **Audit Logging**: Track all financial transactions with timestamps and user attribution (who created, who funded, who edited)
 - **Balance Integrity**: On-demand calculation ensures accuracy without caching risks
-- **Rate Limiting**: Implement rate limits on API endpoints
-- **GDPR Compliance**: Data export and deletion capabilities
+- **Keep-Alive Security**: Health-check endpoint protected by `CRON_SECRET` environment variable
+- **Soft Delete**: Members can be deactivated without losing historical data
+- **OAuth Security**: Tokens securely stored in Supabase Auth
+- **GDPR Compliance**: Data export and member deactivation capabilities
 
 ---
 
 ## 📊 Key Metrics to Track
 
-- **Database Activity**: Transaction count, storage usage
-- **Edge Function Performance**: Execution time, success rate
-- **Backup Success Rate**: Failed syncs, data discrepancies
-- **User Adoption**: Sign-ups, organizations created, active users
-- **Financial Integrity**: Calculation accuracy, audit log completeness, reimbursement tracking
+- **Database Activity**: Transaction count, storage usage, keep-alive ping success rate
+- **Keep-Alive Performance**: Execution time, response time, success rate (logged in `keep_alive_logs`)
+- **User Adoption**: Sign-ups, organizations created, active members
+- **Financial Integrity**: Calculation accuracy, audit log completeness, balance tracking
 - **User Balance Accuracy**: Compare calculated vs expected balances for data integrity
+- **Invite Code Usage**: Tracking invite code usage and conversion rates
+- **Member Activity**: Active vs deactivated members, role distribution
 
 ---
 
@@ -387,4 +434,21 @@ This project is developed as part of a semester project. Contributions welcome v
 **Creator**: Kamish76  
 **Repository**: Financial-tracker-ProjectDec1025  
 **Status**: In Active Development  
-**Current Phase**: Foundation & Core Infrastructure
+**Current Phase**: Phase 5 Complete (Core Features Operational) | Phase 6 Keep-Alive Implemented  
+**Last Updated**: January 2026
+
+### Implementation Status Summary
+- ✅ **Phases 1-5**: Fully implemented and operational
+- ✅ **Phase 6 (Keep-Alive)**: Vercel Cron Job system implemented with audit logging
+- ⏳ **Phase 6 (Backup)**: Google Sheets integration planned for future
+- ⏳ **Phases 7-12**: Not yet started (testing, CI/CD, advanced features)
+
+### Database Migrations Applied
+1. `001_add_organization_description.sql` - Organization descriptions
+2. `002_add_user_accountability_system.sql` - Transaction accountability
+3. `003_fix_rls_recursion.sql` - RLS policy fixes
+4. `004_allow_org_search_for_join.sql` - Join organization permissions
+5. `005_add_initial_transactions.sql` - Initial/setup transactions
+6. `006_add_held_allocation_types.sql` - Held allocation system
+7. `007_add_member_soft_delete_and_invite_enhancements.sql` - Soft delete, invite improvements
+8. `008_add_keep_alive_logs.sql` - Keep-alive audit logging
