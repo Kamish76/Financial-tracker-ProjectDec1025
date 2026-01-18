@@ -56,7 +56,7 @@ export default async function MembersPage({ params }: PageProps) {
       created_at,
       is_active,
       deactivated_at,
-      profile:profiles!organization_members_user_id_fkey (
+      profiles (
         id,
         full_name,
         avatar_url,
@@ -71,6 +71,12 @@ export default async function MembersPage({ params }: PageProps) {
   if (activeMembersError) {
     console.error('Error fetching active members:', activeMembersError)
   }
+
+  // Transform activeMembers to handle profile array (Supabase returns as array)
+  const transformedActiveMembers = (activeMembers || []).map((member: any) => ({
+    ...member,
+    profile: member.profiles && member.profiles.length > 0 ? member.profiles[0] : { id: member.user_id, full_name: null, avatar_url: null, created_at: new Date().toISOString() }
+  }))
 
   // Fetch inactive members (only for admins/owners)
   let inactiveMembers: MemberWithProfile[] = []
@@ -87,7 +93,7 @@ export default async function MembersPage({ params }: PageProps) {
         created_at,
         is_active,
         deactivated_at,
-        profile:profiles!organization_members_user_id_fkey (
+        profiles (
           id,
           full_name,
           avatar_url,
@@ -102,7 +108,11 @@ export default async function MembersPage({ params }: PageProps) {
     if (inactiveMembersError) {
       console.error('Error fetching inactive members:', inactiveMembersError)
     } else {
-      inactiveMembers = (inactiveMembersData as MemberWithProfile[]) || []
+      // Transform inactiveMembers to handle profile array (Supabase returns as array)
+      inactiveMembers = (inactiveMembersData || []).map((member: any) => ({
+        ...member,
+        profile: member.profiles && member.profiles.length > 0 ? member.profiles[0] : { id: member.user_id, full_name: null, avatar_url: null, created_at: new Date().toISOString() }
+      }))
     }
   }
 
@@ -117,7 +127,7 @@ export default async function MembersPage({ params }: PageProps) {
         organizationId={id}
         currentUserId={user.id}
         currentUserRole={membership.role}
-        activeMembers={(activeMembers as MemberWithProfile[]) || []}
+        activeMembers={(transformedActiveMembers as MemberWithProfile[]) || []}
         inactiveMembers={inactiveMembers}
       />
     </div>

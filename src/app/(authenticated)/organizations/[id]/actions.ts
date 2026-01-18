@@ -637,12 +637,12 @@ export async function addExpenseForMember(input: AddExpenseForMemberInput) {
   const insertPayload = {
     organization_id: organizationId,
     user_id: user.id, // owner recording the transaction
-    type: transactionType as const,
+    type: transactionType,
     amount,
     description: description?.trim() || null,
     category: category?.trim() || null,
     occurred_at: occurredDate.toISOString(),
-    funded_by_type: fundedByType as const,
+    funded_by_type: fundedByType,
     funded_by_user_id: assignedToUserId || null,
     updated_by_user_id: user.id,
     is_initial: false,

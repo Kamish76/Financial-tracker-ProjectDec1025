@@ -18,26 +18,6 @@ export default function JoinOrganizationPage() {
   const [success, setSuccess] = useState<{ organizationName: string; organizationId: string } | null>(null)
   const [isPending, startTransition] = useTransition()
 
-'use client'
-
-import { useState, useTransition } from 'react'
-import { Ticket, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { joinWithInviteCode } from './actions'
-import { cleanInviteCode, formatInviteCode, isValidInviteCodeFormat } from '@/lib/types/invite'
-
-export default function JoinOrganizationPage() {
-  const router = useRouter()
-  const [inviteCode, setInviteCode] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<{ organizationName: string; organizationId: string } | null>(null)
-  const [isPending, startTransition] = useTransition()
-
   const handleJoinWithCode = () => {
     setError(null)
     setSuccess(null)
@@ -53,8 +33,8 @@ export default function JoinOrganizationPage() {
     startTransition(async () => {
       const result = await joinWithInviteCode({ code: cleanedCode })
 
-      if (result.error) {
-        setError(result.error)
+      if (!result.success && result.errorMessage) {
+        setError(result.errorMessage)
       } else if (result.success && result.organizationId && result.organizationName) {
         setSuccess({
           organizationName: result.organizationName,
