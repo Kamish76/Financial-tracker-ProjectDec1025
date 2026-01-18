@@ -1,13 +1,14 @@
 
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { ArrowLeftRight, History, ScrollText, Settings } from 'lucide-react'
+import { ArrowLeftRight, ScrollText, Settings } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { AddIncomeSheet } from './add-income-sheet'
 import { AddExpenseSheet } from './add-expense-sheet'
+import { RefundSheet } from './refund-sheet'
 import { getOrganizationStats } from '@/lib/finance'
 import { StatsCards } from '@/components/stats-cards'
 import { MemberBalancesTable } from '@/components/member-balances-table'
@@ -180,7 +181,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 						<div className="space-y-1">
 							<CardTitle>Quick actions</CardTitle>
 							<CardDescription>
-								Quick actions open sheets for fast entry. Add income now; expenses/back-track coming next.
+								Quick actions open sheets for fast entry. Add income, expenses, and refunds.
 							</CardDescription>
 						</div>
 						<div className="rounded-full bg-accent text-background p-2">
@@ -209,16 +210,19 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 							Add expense (insufficient permissions)
 						</Button>
 					)}
-					<Button
-						type="button"
-						variant="outline"
-						className="w-full justify-start gap-2"
-						data-intent="back-track"
-						aria-label="Open back track modal"
-					>
-						<History className="h-4 w-4" />
-						Back track entries (modal soon)
-					</Button>
+					{canManage ? (
+						<RefundSheet organizationId={id} />
+					) : (
+						<Button
+							type="button"
+							variant="outline"
+							className="w-full justify-start gap-2"
+							disabled
+							aria-disabled
+						>
+							Refund (insufficient permissions)
+						</Button>
+					)}
 					<Button
 						asChild
 						className="w-full justify-start gap-2"
@@ -245,7 +249,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 			<Card>
 				<CardHeader>
 					<CardTitle>Member balances</CardTitle>
-					<CardDescription>Personal contributions, reimbursements paid, and outstanding reimbursable.</CardDescription>
+					<CardDescription>Business funds held and outstanding personal contributions.</CardDescription>
 				</CardHeader>
 				<CardContent>
 					<MemberBalancesTable members={stats.members} />

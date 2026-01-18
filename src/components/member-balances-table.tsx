@@ -26,8 +26,6 @@ export function MemberBalancesTable({ members }: Props) {
           <tr>
             <th className="px-3 py-2 text-left font-medium text-muted-foreground">Member</th>
             <th className="px-3 py-2 text-right font-medium text-muted-foreground">Business Held</th>
-            <th className="px-3 py-2 text-right font-medium text-muted-foreground">Personal Contributed</th>
-            <th className="px-3 py-2 text-right font-medium text-muted-foreground">Reimbursed Paid</th>
             <th className="px-3 py-2 text-right font-medium text-muted-foreground">Outstanding</th>
           </tr>
         </thead>
@@ -46,8 +44,6 @@ export function MemberBalancesTable({ members }: Props) {
                 </div>
               </td>
               <td className="px-3 py-2 text-right">{formatter.format(m.businessHeld)}</td>
-              <td className="px-3 py-2 text-right">{formatter.format(m.contributedPersonal)}</td>
-              <td className="px-3 py-2 text-right">{formatter.format(m.reimbursementsPaid)}</td>
               <td className="px-3 py-2 text-right font-semibold">{formatter.format(m.outstandingReimbursable)}</td>
             </tr>
           ))}

@@ -826,3 +826,144 @@ export async function setMemberBaseline(input: SetMemberBaselineInput) {
 
   return { success: true }
 }
+
+interface CreateRefundInput {
+  organizationId: string
+  amount: number
+  description?: string
+}
+
+export async function createRefund(input: CreateRefundInput) {
+  const { organizationId, amount, description } = input
+
+  if (!organizationId) {
+    return { error: "Organization is required" }
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { error: "Amount must be greater than 0" }
+  }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    return { error: "You must be signed in" }
+  }
+
+  // Check role: only owner/admin can create refunds
+  const admin = createAdminClient()
+  const { data: membership, error: membershipError } = await admin
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", organizationId)
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (membershipError) {
+    console.error("[CREATE_REFUND] Membership lookup failed", membershipError.message)
+    return { error: "Unable to verify permissions" }
+  }
+
+  if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
+    return { error: "You don't have permission to create refunds" }
+  }
+
+  // Get current user's outstanding reimbursable amount
+  const { data: txRows, error: txError } = await admin
+    .from("transactions")
+    .select("type, amount, funded_by_type, funded_by_user_id")
+    .eq("organization_id", organizationId)
+
+  if (txError) {
+    console.error("[CREATE_REFUND] Transactions fetch error", txError.message)
+    return { error: "Unable to fetch transaction data" }
+  }
+
+  // Calculate current user's personal contributions
+  let contributedPersonal = 0
+  for (const r of txRows || []) {
+    const txAmount = Number(r.amount ?? 0)
+    const type = r.type as string
+    const isPersonalFunded = (r.funded_by_type as string | null) === 'personal'
+    const fundedByUserId = r.funded_by_user_id as string | null
+
+    if (isPersonalFunded && fundedByUserId === user.id && type === 'expense_personal') {
+      contributedPersonal += txAmount
+    }
+  }
+
+  // Get current user's reimbursements paid
+  const { data: reimbursementRows, error: reimbError } = await admin
+    .from("reimbursement_requests")
+    .select("amount, status")
+    .eq("organization_id", organizationId)
+    .eq("from_user_id", user.id)
+    .eq("status", "paid")
+
+  if (reimbError) {
+    console.error("[CREATE_REFUND] Reimbursements fetch error", reimbError.message)
+    return { error: "Unable to fetch reimbursement data" }
+  }
+
+  let reimbursementsPaid = 0
+  for (const r of reimbursementRows || []) {
+    reimbursementsPaid += Number(r.amount ?? 0)
+  }
+
+  const outstanding = Math.max(contributedPersonal - reimbursementsPaid, 0)
+
+  if (outstanding <= 0) {
+    return { error: "You have no outstanding balance to refund" }
+  }
+
+  if (amount > outstanding) {
+    return { error: `Amount exceeds outstanding balance of $${outstanding.toFixed(2)}` }
+  }
+
+  // Create reimbursement request with status = 'paid' (no approval needed)
+  const { error: insertError } = await admin
+    .from("reimbursement_requests")
+    .insert({
+      organization_id: organizationId,
+      from_user_id: user.id,
+      amount,
+      status: "paid",
+      approval_required: false,
+      notes: description?.trim() || null,
+    })
+
+  if (insertError) {
+    console.error("[CREATE_REFUND] Reimbursement insert failed", insertError.message)
+    return { error: "Unable to create refund right now" }
+  }
+
+  // Also create a held_return transaction to deduct from user's business held balance
+  const { error: txInsertError } = await admin
+    .from("transactions")
+    .insert({
+      organization_id: organizationId,
+      user_id: user.id,
+      type: "held_return",
+      amount,
+      description: `Refund withdrawal${description ? ': ' + description : ''}`,
+      category: "Refund",
+      occurred_at: new Date().toISOString(),
+      funded_by_type: "business" as const,
+      funded_by_user_id: user.id,
+      updated_by_user_id: user.id,
+      is_initial: false,
+    })
+
+  if (txInsertError) {
+    console.error("[CREATE_REFUND] Transaction insert failed", txInsertError.message)
+    return { error: "Unable to record refund transaction" }
+  }
+
+  revalidatePath(`/organizations/${organizationId}`)
+
+  return { success: true }
+}
