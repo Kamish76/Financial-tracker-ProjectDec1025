@@ -300,6 +300,130 @@ interface DeleteInitialTransactionInput {
   transactionId: string
 }
 
+interface UpdateInitialTransactionInput {
+  organizationId: string
+  transactionId: string
+  amount: number
+  description?: string
+  category?: string
+  occurredAt: string
+  assignedToUserId?: string | null
+}
+
+export async function updateInitialTransaction(input: UpdateInitialTransactionInput) {
+  const { organizationId, transactionId, amount, description, category, occurredAt, assignedToUserId } = input
+
+  if (!organizationId || !transactionId) {
+    return { error: "Organization and transaction are required" }
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { error: "Amount must be greater than 0" }
+  }
+
+  if (!occurredAt) {
+    return { error: "Date is required" }
+  }
+
+  const occurredDate = new Date(occurredAt)
+  if (Number.isNaN(occurredDate.getTime())) {
+    return { error: "Invalid date" }
+  }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    return { error: "You must be signed in" }
+  }
+
+  // Owner-only guard
+  const admin = createAdminClient()
+  const { data: membership, error: membershipError } = await admin
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", organizationId)
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (membershipError) {
+    console.error("[UPDATE_INITIAL_TRANSACTION] Membership lookup failed", membershipError.message)
+    return { error: "Unable to verify permissions" }
+  }
+
+  if (!membership || membership.role !== "owner") {
+    return { error: "Only organization owners can edit initial transactions" }
+  }
+
+  // Load existing transaction to enforce org match, initial flag, and immutable type
+  const { data: existingTx, error: txError } = await admin
+    .from("transactions")
+    .select("id, organization_id, type, is_initial")
+    .eq("id", transactionId)
+    .maybeSingle()
+
+  if (txError || !existingTx) {
+    return { error: "Transaction not found" }
+  }
+
+  if (existingTx.organization_id !== organizationId) {
+    return { error: "Transaction does not belong to this organization" }
+  }
+
+  if (!existingTx.is_initial) {
+    return { error: "Cannot edit non-initial transactions through this action" }
+  }
+
+  // Validate assigned member if provided
+  if (assignedToUserId) {
+    const { data: memberCheck, error: memberCheckError } = await admin
+      .from("organization_members")
+      .select("user_id")
+      .eq("organization_id", organizationId)
+      .eq("user_id", assignedToUserId)
+      .maybeSingle()
+
+    if (memberCheckError || !memberCheck) {
+      return { error: "Selected member is not part of this organization" }
+    }
+  }
+
+  // Determine funding details based on immutable type
+  let fundedByType: "business" | "personal" = "business"
+  if (existingTx.type === "expense_personal") {
+    fundedByType = "personal"
+  }
+
+  const updatePayload = {
+    amount,
+    description: description?.trim() || null,
+    category: category?.trim() || null,
+    occurred_at: occurredDate.toISOString(),
+    funded_by_type: fundedByType,
+    funded_by_user_id: assignedToUserId || null,
+    updated_by_user_id: user.id,
+  }
+
+  const { error: updateError } = await admin
+    .from("transactions")
+    .update(updatePayload)
+    .eq("id", transactionId)
+    .eq("organization_id", organizationId)
+
+  if (updateError) {
+    console.error("[UPDATE_INITIAL_TRANSACTION] Update failed", updateError.message)
+    return { error: "Unable to update transaction right now" }
+  }
+
+  revalidatePath(`/organizations/${organizationId}`)
+  revalidatePath(`/organizations/${organizationId}/settings`)
+
+  return { success: true }
+}
+
 export async function deleteInitialTransaction(input: DeleteInitialTransactionInput) {
   const { organizationId, transactionId } = input
 

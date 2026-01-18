@@ -37,6 +37,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { EditOrganizationDialog } from './edit-organization-dialog'
 import { AddInitialValueSheet } from './add-initial-value-sheet'
+import { EditInitialValueSheet } from './edit-initial-value-sheet'
 import { deleteInitialTransaction } from '../actions'
 
 type OrganizationRole = 'owner' | 'admin' | 'member'
@@ -69,6 +70,7 @@ type InitialTransaction = {
 	category: string | null
 	description: string | null
 	occurred_at: string
+	assigned_to_user_id: string | null
 	assigned_to_name: string | null
 	assigned_to_email: string | null
 }
@@ -172,6 +174,13 @@ export function OrganizationSettings({
 			full_name: m.user.name,
 		}))
 		.filter((m) => m.email && m.user_id) // Only include members with valid data
+
+	// Debug: log members for initial value sheets
+	if (typeof window !== 'undefined') {
+		console.log('[OrganizationSettings] Total members:', members.length)
+		console.log('[OrganizationSettings] Members for sheet:', membersForSheet)
+		console.log('[OrganizationSettings] Raw members:', members)
+	}
 
 	const handleDeleteOrganization = async () => {
 		const expectedPhrase = 'i confirm in deleting the organization'
@@ -436,16 +445,25 @@ export function OrganizationSettings({
 														<p className="text-sm text-muted-foreground">{tx.description}</p>
 													)}
 												</div>
-												<Button
-													variant="ghost"
-													size="sm"
-													onClick={() => {
-														setSelectedInitialTx(tx.id)
-														setDeleteInitialDialogOpen(true)
-													}}
-												>
-													<Trash2 className="h-4 w-4 text-destructive" />
-												</Button>
+												<div className="flex items-center gap-1">
+													<EditInitialValueSheet
+														organizationId={organization.id}
+														members={membersForSheet}
+														currentUserEmail={currentUserEmail}
+														currentUserId={currentUserId}
+														initialTransaction={tx}
+													/>
+													<Button
+														variant="ghost"
+														size="sm"
+														onClick={() => {
+															setSelectedInitialTx(tx.id)
+															setDeleteInitialDialogOpen(true)
+														}}
+													>
+														<Trash2 className="h-4 w-4 text-destructive" />
+													</Button>
+												</div>
 											</div>
 										)
 									})}

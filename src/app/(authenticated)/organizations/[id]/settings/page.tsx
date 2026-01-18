@@ -60,20 +60,57 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 		.eq('organization_id', id)
 
 	// Fetch all members for transfer ownership dropdown
-	const { data: members } = await adminClient
+	const { data: members, error: membersError } = await adminClient
 		.from('organization_members')
-		.select(`
-			user_id,
-			role,
-			joined_at,
-			profiles:user_id (
-				id,
-				full_name,
-				email
-			)
-		`)
+		.select('user_id, role, created_at')
 		.eq('organization_id', id)
-		.order('joined_at', { ascending: true })
+		.order('created_at', { ascending: true })
+
+	if (membersError) {
+		console.error('[SETTINGS_PAGE] Members query error:', membersError)
+	}
+
+	console.log('[SETTINGS_PAGE] Members fetched:', members?.length ?? 0, 'error:', membersError?.message)
+
+	// Fetch profiles separately for all members
+	let profilesMap: Record<string, { full_name: string | null; email: string | null }> = {}
+	if (members && members.length > 0) {
+		const userIds = (members as Array<{ user_id: string }>).map((m) => m.user_id)
+		const { data: profiles } = await adminClient
+			.from('profiles')
+			.select('id, full_name, email')
+			.in('id', userIds)
+
+		if (profiles) {
+			profilesMap = profiles.reduce(
+				(acc, p) => ({
+					...acc,
+					[p.id]: { full_name: p.full_name, email: p.email },
+				}),
+				{}
+			)
+		}
+
+		// Fallback: if any member has no email in profiles, try to fetch from auth
+		const missingEmails = userIds.filter((uid) => !profilesMap[uid]?.email)
+		if (missingEmails.length > 0) {
+			try {
+				const { data, error } = await adminClient.auth.admin.listUsers()
+				if (!error && data?.users) {
+					for (const authUser of data.users) {
+						if (missingEmails.includes(authUser.id) && authUser.email) {
+							profilesMap[authUser.id] = {
+								full_name: profilesMap[authUser.id]?.full_name || null,
+								email: authUser.email,
+							}
+						}
+					}
+				}
+			} catch (e) {
+				console.error('[SETTINGS_PAGE] Failed to fetch auth users:', e)
+			}
+		}
+	}
 
 	// Get owner info
 	const { data: owner } = await adminClient
@@ -89,13 +126,13 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 	}
 
 	const membersFormatted = (members || []).map((m) => {
-		const profile = m.profiles as unknown as { id: string; full_name: string; email: string } | null
+		const profile = profilesMap[m.user_id] || { full_name: null, email: null }
 		return {
 			user_id: m.user_id,
 			role: m.role,
-			joined_at: m.joined_at,
+			joined_at: m.created_at,
 			user: {
-				id: profile?.id || m.user_id,
+				id: m.user_id,
 				name: profile?.full_name || 'Unknown',
 				email: profile?.email || '',
 			},
@@ -110,6 +147,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 		category: string | null
 		description: string | null
 		occurred_at: string
+		assigned_to_user_id: string | null
 		assigned_to_name: string | null
 		assigned_to_email: string | null
 	}> = []
@@ -174,6 +212,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 					category: tx.category,
 					description: tx.description,
 					occurred_at: tx.occurred_at,
+					assigned_to_user_id: tx.funded_by_user_id,
 					assigned_to_name: profile?.full_name || null,
 					assigned_to_email: profile?.email || null,
 				}
