@@ -39,6 +39,8 @@ import { EditOrganizationDialog } from './edit-organization-dialog'
 import { AddInitialValueSheet } from './add-initial-value-sheet'
 import { EditInitialValueSheet } from './edit-initial-value-sheet'
 import { deleteInitialTransaction } from '../actions'
+import { AddRegularIncomeSheet } from './add-regular-income-sheet'
+import { AddRegularExpenseSheet } from './add-regular-expense-sheet'
 
 type OrganizationRole = 'owner' | 'admin' | 'member'
 
@@ -407,6 +409,46 @@ export function OrganizationSettings({
 							<p className="text-sm text-muted-foreground">
 								Set baseline business held for each member from the available cash on hand. 
 								Members&apos; business held will then update automatically as they receive income and create expenses.
+							</p>
+						</CardContent>
+					</Card>
+				)}
+
+				{/* Add Transactions for Members - Owner Only */}
+				{isOwner && (
+					<Card>
+						<CardHeader>
+							<div className="flex items-center justify-between">
+								<div className="flex items-center gap-3">
+									<div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
+										<Receipt className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+									</div>
+									<div>
+										<CardTitle>Add Transactions for Members</CardTitle>
+										<CardDescription>
+											Record regular income and expenses on behalf of members
+										</CardDescription>
+									</div>
+								</div>
+								<div className="flex items-center gap-2">
+									<AddRegularIncomeSheet
+										organizationId={organization.id}
+										members={membersForSheet}
+										currentUserEmail={currentUserEmail}
+										currentUserId={currentUserId}
+									/>
+									<AddRegularExpenseSheet
+										organizationId={organization.id}
+										members={membersForSheet}
+										currentUserEmail={currentUserEmail}
+										currentUserId={currentUserId}
+									/>
+								</div>
+							</div>
+						</CardHeader>
+						<CardContent>
+							<p className="text-sm text-muted-foreground">
+								As an owner, you can record transactions on behalf of any member. These are normal transactions and will affect balances as usual.
 							</p>
 						</CardContent>
 					</Card>
