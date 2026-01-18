@@ -115,38 +115,70 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 	}> = []
 
 	if (effectiveMembership.role === 'owner') {
-		const { data: initialTxData } = await adminClient
+		// Fetch initial transactions with cleaner approach
+		const { data: initialTxData, error: initialTxError } = await adminClient
 			.from('transactions')
-			.select(`
-				id,
-				type,
-				amount,
-				category,
-				description,
-				occurred_at,
-				funded_by_user_id,
-				profiles:funded_by_user_id (
-					full_name,
-					email
-				)
-			`)
+			.select('*')
 			.eq('organization_id', id)
 			.eq('is_initial', true)
 			.order('occurred_at', { ascending: false })
 
-		initialTransactions = (initialTxData || []).map((tx) => {
-			const profile = tx.profiles as unknown as { full_name: string | null; email: string | null } | null
-			return {
-				id: tx.id,
-				type: tx.type,
-				amount: tx.amount,
-				category: tx.category,
-				description: tx.description,
-				occurred_at: tx.occurred_at,
-				assigned_to_name: profile?.full_name || null,
-				assigned_to_email: profile?.email || null,
+		if (initialTxError) {
+			console.error('[SETTINGS_PAGE] Error fetching initial transactions:', initialTxError)
+		}
+
+		// If we have transactions, fetch the associated profile information
+		if (initialTxData && initialTxData.length > 0) {
+			// Get unique user IDs from funded_by_user_id
+			const userIds = Array.from(
+				new Set(
+					(initialTxData as Array<{ funded_by_user_id: string | null }>)
+						.map((tx) => tx.funded_by_user_id)
+						.filter(Boolean)
+				)
+			)
+
+			let profilesMap: Record<string, { full_name: string | null; email: string | null }> = {}
+			if (userIds.length > 0) {
+				const { data: profiles } = await adminClient
+					.from('profiles')
+					.select('id, full_name, email')
+					.in('id', userIds)
+
+				profilesMap = profiles?.reduce(
+					(acc, p) => ({
+						...acc,
+						[p.id]: { full_name: p.full_name, email: p.email },
+					}),
+					{}
+				) || {}
 			}
-		})
+
+			initialTransactions = (initialTxData as Array<{
+				id: string
+				type: string
+				amount: number
+				category: string | null
+				description: string | null
+				occurred_at: string
+				funded_by_user_id: string | null
+			}>).map((tx) => {
+				const profile =
+					tx.funded_by_user_id && profilesMap[tx.funded_by_user_id]
+						? profilesMap[tx.funded_by_user_id]
+						: null
+				return {
+					id: tx.id,
+					type: tx.type,
+					amount: tx.amount,
+					category: tx.category,
+					description: tx.description,
+					occurred_at: tx.occurred_at,
+					assigned_to_name: profile?.full_name || null,
+					assigned_to_email: profile?.email || null,
+				}
+			})
+		}
 	}
 
 	return (

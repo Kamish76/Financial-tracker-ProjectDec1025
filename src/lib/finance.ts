@@ -101,16 +101,18 @@ export async function getOrganizationStats(organizationId: string): Promise<Orga
   let emailByUserId: Record<string, string | null> = {}
   if (userIds.length > 0) {
     try {
-      // In Supabase, the service role can access auth.users
-      const { data: authUsers } = await admin
-        .from('auth.users' as any)
-        .select('id, email')
-        .in('id', userIds)
-      for (const u of authUsers || []) {
-        emailByUserId[u.id] = u.email ?? null
+      // Use the admin auth API to list users
+      const { data: { users }, error } = await admin.auth.admin.listUsers()
+      
+      if (!error && users) {
+        // Filter to only the users we care about
+        const relevantUsers = users.filter(u => userIds.includes(u.id))
+        for (const u of relevantUsers) {
+          emailByUserId[u.id] = u.email ?? null
+        }
       }
     } catch (e) {
-      // Ignore if not accessible in this environment
+      console.error('[finance] Failed to fetch user emails:', e)
       emailByUserId = {}
     }
   }

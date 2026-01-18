@@ -174,7 +174,74 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 
 			{/* Top-level stats */}
 			<StatsCards totals={stats.totals} />
-
+			<Card>
+				<CardHeader>
+					<div className="flex items-start justify-between gap-3">
+						<div className="space-y-1">
+							<CardTitle>Quick actions</CardTitle>
+							<CardDescription>
+								Quick actions open sheets for fast entry. Add income now; expenses/back-track coming next.
+							</CardDescription>
+						</div>
+						<div className="rounded-full bg-accent text-background p-2">
+							<ArrowLeftRight className="h-5 w-5" />
+						</div>
+					</div>
+				</CardHeader>
+				<CardContent className="grid gap-3 md:grid-cols-2">
+					{canManage ? (
+						<AddIncomeSheet organizationId={id} />
+					) : (
+						<Button type="button" className="w-full justify-start gap-2" disabled aria-disabled>
+							Add income (insufficient permissions)
+						</Button>
+					)}
+					{canManage ? (
+						<AddExpenseSheet organizationId={id} />
+					) : (
+						<Button
+							type="button"
+							variant="secondary"
+							className="w-full justify-start gap-2"
+							disabled
+							aria-disabled
+						>
+							Add expense (insufficient permissions)
+						</Button>
+					)}
+					<Button
+						type="button"
+						variant="outline"
+						className="w-full justify-start gap-2"
+						data-intent="back-track"
+						aria-label="Open back track modal"
+					>
+						<History className="h-4 w-4" />
+						Back track entries (modal soon)
+					</Button>
+					<Button
+						asChild
+						className="w-full justify-start gap-2"
+						aria-label="Go to full records"
+					>
+						<Link href={`/organizations/${id}/records`}>
+							<ScrollText className="h-4 w-4" />
+							View full records
+						</Link>
+					</Button>
+					<Button
+						asChild
+						variant="outline"
+						className="w-full justify-start gap-2 md:col-span-2"
+						aria-label="Manage organization settings"
+					>
+						<Link href={`/organizations/${id}/settings`}>
+							<Settings className="h-4 w-4" />
+							Manage Settings
+						</Link>
+					</Button>
+				</CardContent>
+			</Card>
 			<Card>
 				<CardHeader>
 					<CardTitle>Member balances</CardTitle>
@@ -244,75 +311,6 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 								})}
 							</div>
 						)}
-					</CardContent>
-				</Card>
-
-				<Card>
-					<CardHeader>
-						<div className="flex items-start justify-between gap-3">
-							<div className="space-y-1">
-								<CardTitle>Quick actions</CardTitle>
-								<CardDescription>
-									Quick actions open sheets for fast entry. Add income now; expenses/back-track coming next.
-								</CardDescription>
-							</div>
-							<div className="rounded-full bg-accent text-background p-2">
-								<ArrowLeftRight className="h-5 w-5" />
-							</div>
-						</div>
-					</CardHeader>
-					<CardContent className="grid gap-3 md:grid-cols-2">
-						{canManage ? (
-							<AddIncomeSheet organizationId={id} />
-						) : (
-							<Button type="button" className="w-full justify-start gap-2" disabled aria-disabled>
-								Add income (insufficient permissions)
-							</Button>
-						)}
-						{canManage ? (
-							<AddExpenseSheet organizationId={id} />
-						) : (
-							<Button
-								type="button"
-								variant="secondary"
-								className="w-full justify-start gap-2"
-								disabled
-								aria-disabled
-							>
-								Add expense (insufficient permissions)
-							</Button>
-						)}
-						<Button
-							type="button"
-							variant="outline"
-							className="w-full justify-start gap-2"
-							data-intent="back-track"
-							aria-label="Open back track modal"
-						>
-							<History className="h-4 w-4" />
-							Back track entries (modal soon)
-						</Button>
-						<Button
-							asChild
-							className="w-full justify-start gap-2"
-							aria-label="Go to full records"
-						>
-							<Link href={`/organizations/${id}/records`}>
-								<ScrollText className="h-4 w-4" />
-								View full records
-							</Link>
-						</Button>
-						<Button
-							asChild
-							variant="outline"
-							className="w-full justify-start gap-2 md:col-span-2"
-							aria-label="Manage organization settings"
-						>
-							<Link href={`/organizations/${id}/settings`}>
-								<Settings className="h-4 w-4" />
-								Manage Settings
-							</Link>
-						</Button>
 					</CardContent>
 				</Card>
 			</div>
