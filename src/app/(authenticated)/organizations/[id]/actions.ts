@@ -498,6 +498,167 @@ interface SetMemberBaselineInput {
   targetBaseline: number // desired baseline allocation amount
 }
 
+// New: Owner-only actions to add regular transactions on behalf of members
+interface AddIncomeForMemberInput {
+  organizationId: string
+  amount: number
+  description?: string
+  category?: string
+  occurredAt: string
+  assignedToUserId?: string | null
+}
+
+export async function addIncomeForMember(input: AddIncomeForMemberInput) {
+  const { organizationId, amount, description, category, occurredAt, assignedToUserId } = input
+
+  if (!organizationId) return { error: "Organization is required" }
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "Amount must be greater than 0" }
+  if (!occurredAt) return { error: "Date is required" }
+
+  const occurredDate = new Date(occurredAt)
+  if (Number.isNaN(occurredDate.getTime())) return { error: "Invalid date" }
+
+  const supabase = await createClient()
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user) return { error: "You must be signed in" }
+
+  const admin = createAdminClient()
+  const { data: membership, error: membershipError } = await admin
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", organizationId)
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (membershipError) {
+    console.error("[ADD_INCOME_FOR_MEMBER] Membership lookup failed", membershipError.message)
+    return { error: "Unable to verify permissions" }
+  }
+
+  if (!membership || membership.role !== "owner") {
+    return { error: "Only organization owners can add income for members" }
+  }
+
+  if (assignedToUserId) {
+    const { data: memberCheck, error: memberCheckError } = await admin
+      .from("organization_members")
+      .select("user_id")
+      .eq("organization_id", organizationId)
+      .eq("user_id", assignedToUserId)
+      .maybeSingle()
+
+    if (memberCheckError || !memberCheck) {
+      return { error: "Selected member is not part of this organization" }
+    }
+  }
+
+  const insertPayload = {
+    organization_id: organizationId,
+    user_id: user.id, // owner recording the transaction
+    type: "income" as const,
+    amount,
+    description: description?.trim() || null,
+    category: category?.trim() || null,
+    occurred_at: occurredDate.toISOString(),
+    funded_by_type: "business" as const,
+    funded_by_user_id: assignedToUserId || null,
+    updated_by_user_id: user.id,
+    is_initial: false,
+  }
+
+  const { error: insertError } = await admin.from("transactions").insert(insertPayload)
+  if (insertError) {
+    console.error("[ADD_INCOME_FOR_MEMBER] Insert failed", insertError.message)
+    return { error: "Unable to add income right now" }
+  }
+
+  revalidatePath(`/organizations/${organizationId}`)
+  revalidatePath(`/organizations/${organizationId}/settings`)
+  return { success: true }
+}
+
+interface AddExpenseForMemberInput {
+  organizationId: string
+  amount: number
+  description?: string
+  category?: string
+  occurredAt: string
+  expenseType: 'business' | 'personal'
+  assignedToUserId?: string | null
+}
+
+export async function addExpenseForMember(input: AddExpenseForMemberInput) {
+  const { organizationId, amount, description, category, occurredAt, expenseType, assignedToUserId } = input
+
+  if (!organizationId) return { error: "Organization is required" }
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "Amount must be greater than 0" }
+  if (!occurredAt) return { error: "Date is required" }
+
+  const occurredDate = new Date(occurredAt)
+  if (Number.isNaN(occurredDate.getTime())) return { error: "Invalid date" }
+
+  const supabase = await createClient()
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user) return { error: "You must be signed in" }
+
+  const admin = createAdminClient()
+  const { data: membership, error: membershipError } = await admin
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", organizationId)
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (membershipError) {
+    console.error("[ADD_EXPENSE_FOR_MEMBER] Membership lookup failed", membershipError.message)
+    return { error: "Unable to verify permissions" }
+  }
+
+  if (!membership || membership.role !== "owner") {
+    return { error: "Only organization owners can add expenses for members" }
+  }
+
+  if (assignedToUserId) {
+    const { data: memberCheck, error: memberCheckError } = await admin
+      .from("organization_members")
+      .select("user_id")
+      .eq("organization_id", organizationId)
+      .eq("user_id", assignedToUserId)
+      .maybeSingle()
+
+    if (memberCheckError || !memberCheck) {
+      return { error: "Selected member is not part of this organization" }
+    }
+  }
+
+  const transactionType = expenseType === 'personal' ? 'expense_personal' : 'expense_business'
+  const fundedByType = expenseType === 'personal' ? 'personal' : 'business'
+
+  const insertPayload = {
+    organization_id: organizationId,
+    user_id: user.id, // owner recording the transaction
+    type: transactionType as const,
+    amount,
+    description: description?.trim() || null,
+    category: category?.trim() || null,
+    occurred_at: occurredDate.toISOString(),
+    funded_by_type: fundedByType as const,
+    funded_by_user_id: assignedToUserId || null,
+    updated_by_user_id: user.id,
+    is_initial: false,
+  }
+
+  const { error: insertError } = await admin.from("transactions").insert(insertPayload)
+  if (insertError) {
+    console.error("[ADD_EXPENSE_FOR_MEMBER] Insert failed", insertError.message)
+    return { error: "Unable to add expense right now" }
+  }
+
+  revalidatePath(`/organizations/${organizationId}`)
+  revalidatePath(`/organizations/${organizationId}/settings`)
+  return { success: true }
+}
+
 export async function setMemberBaseline(input: SetMemberBaselineInput) {
   const { organizationId, userId, targetBaseline } = input
 
