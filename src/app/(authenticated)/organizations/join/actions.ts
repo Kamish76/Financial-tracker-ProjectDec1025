@@ -1,94 +1,83 @@
 "use server"
 
-import { createAdminClient, createClient } from "@/lib/supabase/server"
-import { redirect } from "next/navigation"
+import { createClient } from "@/lib/supabase/server"
+import type { JoinWithInviteInput, UseInviteResult } from "@/lib/types/invite"
 
-export async function searchOrganizations(query: string) {
-  if (!query.trim()) {
-    return { data: [], error: null }
-  }
+/**
+ * Join an organization using an invite code
+ * Uses the database function use_invite_code which handles:
+ * - Validating the code exists and is active
+ * - Checking max uses
+ * - Creating or reactivating membership
+ * - Incrementing usage counter
+ */
+export async function joinWithInviteCode(input: JoinWithInviteInput): Promise<UseInviteResult> {
+  try {
+    const supabase = await createClient()
 
-  console.log('[SEARCH_ORGS] Searching for:', query)
+    // Get current user
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
 
-  const adminClient = createAdminClient()
+    if (userError || !user) {
+      return {
+        success: false,
+        errorMessage: "You must be signed in to join an organization",
+      }
+    }
 
-  // Search organizations by name (accessible to all authenticated users who can join)
-  const { data, error } = await adminClient
-    .from('organizations')
-    .select('id, name, description')
-    .ilike('name', `%${query}%`)
-    .limit(10)
+    const { code } = input
 
-  if (error) {
-    console.error('[SEARCH_ORGS] Error searching organizations:', error.message, error)
-    return { data: [], error: error.message }
-  }
+    console.log('[JOIN_WITH_INVITE] User', user.id, 'attempting to join with code:', code)
 
-  console.log('[SEARCH_ORGS] Found', (data || []).length, 'organizations')
-  return { data: data || [], error: null }
-}
-
-export async function joinOrganization(organizationId: string) {
-  const supabase = await createClient()
-
-  // Get current user
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
-
-  if (userError || !user) {
-    return { error: "You must be signed in to join an organization" }
-  }
-
-  console.log('[JOIN_ORG] User', user.id, 'joining organization', organizationId)
-
-  // Use admin client to bypass RLS for adding member
-  const adminClient = createAdminClient()
-
-  // First, verify the organization exists
-  const { data: org, error: orgError } = await adminClient
-    .from('organizations')
-    .select('id, name')
-    .eq('id', organizationId)
-    .single()
-
-  if (orgError || !org) {
-    console.error('[JOIN_ORG] Organization not found:', organizationId)
-    return { error: "Organization not found" }
-  }
-
-  // Check if user is already a member
-  const { data: existingMember, error: checkError } = await adminClient
-    .from('organization_members')
-    .select('id')
-    .eq('organization_id', organizationId)
-    .eq('user_id', user.id)
-    .single()
-
-  if (!checkError && existingMember) {
-    console.log('[JOIN_ORG] User already a member of organization')
-    return { error: "You are already a member of this organization" }
-  }
-
-  // Add user as member
-  const { error: joinError } = await adminClient
-    .from('organization_members')
-    .insert({
-      organization_id: organizationId,
-      user_id: user.id,
-      role: 'member',
+    // Call the database function to use the invite code
+    // This function returns: organization_id, organization_name, success, error_message
+    const { data, error } = await supabase.rpc('use_invite_code', {
+      p_code: code,
+      p_user_id: user.id,
     })
 
-  if (joinError) {
-    console.error('[JOIN_ORG] Error joining organization:', joinError.message)
-    return { error: joinError.message || "Failed to join organization" }
+    if (error) {
+      console.error('[JOIN_WITH_INVITE] Database error:', error)
+      return {
+        success: false,
+        errorMessage: error.message || 'Failed to use invite code',
+      }
+    }
+
+    // The RPC returns a single row with the result
+    const result = Array.isArray(data) ? data[0] : data
+
+    if (!result) {
+      return {
+        success: false,
+        errorMessage: 'Invalid response from server',
+      }
+    }
+
+    if (!result.success) {
+      console.log('[JOIN_WITH_INVITE] Failed:', result.error_message)
+      return {
+        success: false,
+        errorMessage: result.error_message || 'Failed to join organization',
+      }
+    }
+
+    console.log('[JOIN_WITH_INVITE] Successfully joined organization:', result.organization_id)
+
+    return {
+      success: true,
+      organizationId: result.organization_id,
+      organizationName: result.organization_name,
+    }
+  } catch (error) {
+    console.error('[JOIN_WITH_INVITE] Unexpected error:', error)
+    return {
+      success: false,
+      errorMessage: 'An unexpected error occurred',
+    }
   }
-
-  console.log('[JOIN_ORG] Successfully joined organization:', organizationId)
-  
-  // Redirect to the organization page
-  redirect(`/organizations/${organizationId}`)
 }
-
 
