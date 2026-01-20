@@ -201,8 +201,8 @@ export function RecordsPageContent() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Transaction Records</h1>
-        <p className="text-gray-600 mt-1">View, search, and manage all transactions</p>
+        <h1 className="text-3xl font-bold text-foreground">Transaction Records</h1>
+        <p className="text-muted-foreground mt-1">View, search, and manage all transactions</p>
       </div>
 
       {/* Search Bar */}
@@ -219,14 +219,14 @@ export function RecordsPageContent() {
       {/* Filter Controls */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-gray-500" />
-          <span className="text-sm font-medium">Filters</span>
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium text-foreground">Filters</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Category Filter */}
           <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-2">Category</label>
+            <label className="text-xs font-semibold text-muted-foreground block mb-2">Category</label>
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
               <SelectTrigger>
                 <SelectValue placeholder="All categories" />
@@ -244,7 +244,7 @@ export function RecordsPageContent() {
 
           {/* Type Filter */}
           <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-2">Type</label>
+            <label className="text-xs font-semibold text-muted-foreground block mb-2">Type</label>
             <Select value={selectedType} onValueChange={setSelectedType}>
               <SelectTrigger>
                 <SelectValue placeholder="All types" />
@@ -262,7 +262,7 @@ export function RecordsPageContent() {
 
           {/* Member Filter */}
           <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-2">Member</label>
+            <label className="text-xs font-semibold text-muted-foreground block mb-2">Member</label>
             <Select value={selectedMember} onValueChange={setSelectedMember}>
               <SelectTrigger>
                 <SelectValue placeholder="All members" />
@@ -280,7 +280,7 @@ export function RecordsPageContent() {
 
           {/* Funded By Filter */}
           <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-2">Funded By</label>
+            <label className="text-xs font-semibold text-muted-foreground block mb-2">Funded By</label>
             <Select value={fundedByType} onValueChange={setFundedByType}>
               <SelectTrigger>
                 <SelectValue placeholder="All" />
@@ -295,7 +295,7 @@ export function RecordsPageContent() {
 
           {/* Start Date */}
           <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-2">From</label>
+            <label className="text-xs font-semibold text-muted-foreground block mb-2">From</label>
             <Input
               type="date"
               value={startDate}
@@ -305,7 +305,7 @@ export function RecordsPageContent() {
 
           {/* End Date */}
           <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-2">To</label>
+            <label className="text-xs font-semibold text-muted-foreground block mb-2">To</label>
             <Input
               type="date"
               value={endDate}

@@ -21,15 +21,8 @@ type TransactionsListProps = {
 }
 
 const getTransactionColor = (type: string) => {
-  switch (type) {
-    case "income":
-      return "bg-green-50"
-    case "expense_business":
-    case "expense_personal":
-      return "bg-red-50"
-    default:
-      return "bg-gray-50"
-  }
+  // Use CSS variables from shadcn for consistent theming
+  return "hover:bg-muted/30 transition-colors"
 }
 
 const getTransactionIcon = (type: string) => {
@@ -47,17 +40,17 @@ const getTransactionIcon = (type: string) => {
 const getTransactionBadge = (type: string) => {
   switch (type) {
     case "income":
-      return <Badge className="bg-green-100 text-green-800">Income</Badge>
+      return <Badge variant="outline" className="border-emerald-200 text-emerald-700 bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:bg-emerald-950/30">Income</Badge>
     case "expense_business":
-      return <Badge className="bg-orange-100 text-orange-800">Business Exp</Badge>
+      return <Badge variant="outline" className="border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:bg-amber-950/30">Business Exp</Badge>
     case "expense_personal":
-      return <Badge className="bg-red-100 text-red-800">Personal Exp</Badge>
+      return <Badge variant="outline" className="border-rose-200 text-rose-700 bg-rose-50 dark:border-rose-800 dark:text-rose-400 dark:bg-rose-950/30">Personal Exp</Badge>
     case "held_allocate":
-      return <Badge className="bg-blue-100 text-blue-800">Held</Badge>
+      return <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:bg-blue-950/30">Held</Badge>
     case "held_return":
-      return <Badge className="bg-purple-100 text-purple-800">Return</Badge>
+      return <Badge variant="outline" className="border-purple-200 text-purple-700 bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:bg-purple-950/30">Return</Badge>
     default:
-      return <Badge>{type}</Badge>
+      return <Badge variant="outline">{type}</Badge>
   }
 }
 
@@ -84,48 +77,46 @@ export function TransactionsList({
   }
 
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <div className="border border-border rounded-lg overflow-hidden bg-card">
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b bg-gray-50">
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Date</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Type</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Description</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Category</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Member</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Funded By</th>
-              <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600">Amount</th>
-              <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600">Actions</th>
+            <tr className="border-b border-border bg-muted/50">
+              <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Type</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Description</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Category</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Member</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Funded By</th>
+              <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Amount</th>
+              <th className="px-6 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className="divide-y divide-border">
             {transactions.map((tx) => (
               <tr
                 key={tx.id}
-                className={`${getTransactionColor(tx.type)} hover:bg-opacity-75 transition`}
+                className={`${getTransactionColor(tx.type)} transition-colors`}
               >
-                <td className="px-6 py-4 text-sm text-gray-900">
+                <td className="px-6 py-4 text-sm text-foreground">
                   {formatDate(tx.occurred_at)}
                 </td>
                 <td className="px-6 py-4 text-sm">
                   {getTransactionBadge(tx.type)}
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-900">
+                <td className="px-6 py-4 text-sm text-foreground">
                   {tx.description || "—"}
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-700">
+                <td className="px-6 py-4 text-sm text-muted-foreground">
                   {tx.category_ref?.normalized_name || tx.category || "—"}
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-700">
+                <td className="px-6 py-4 text-sm text-muted-foreground">
                   {tx.funded_by_user?.full_name || tx.funded_by_user?.email || "Organization"}
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-700">
-                  <Badge variant="outline" className="capitalize">
-                    {tx.funded_by_type}
-                  </Badge>
+                <td className="px-6 py-4 text-sm text-muted-foreground">
+                  <span className="capitalize">{tx.funded_by_type}</span>
                 </td>
-                <td className="px-6 py-4 text-sm font-semibold text-right text-gray-900">
+                <td className="px-6 py-4 text-sm font-semibold text-right text-foreground">
                   <div className="flex items-center justify-end gap-2">
                     {getTransactionIcon(tx.type)}
                     {formatCurrency(tx.amount)}
