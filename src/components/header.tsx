@@ -14,7 +14,6 @@ const navigationLinks = [
 ]
 
 export function Header() {
-  const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   return (
