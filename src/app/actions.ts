@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 
 export interface HeroStats {
   organizationCount: number;
@@ -12,10 +12,12 @@ export interface HeroStats {
 /**
  * Fetches hero statistics for the landing page
  * Returns aggregated data across all organizations
+ * Uses admin client since this is public aggregate data for unauthenticated users
  */
 export async function getHeroStatistics(): Promise<HeroStats> {
   try {
-    const supabase = await createClient();
+    // Use admin client to bypass RLS for public statistics
+    const supabase = createAdminClient();
 
     // Get total organization count
     const { count: orgCount, error: orgError } = await supabase
