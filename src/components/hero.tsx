@@ -1,15 +1,30 @@
 import Link from "next/link";
-import { ArrowRight, ShieldCheck, Signal } from "lucide-react";
+import { ArrowRight, ShieldCheck, Signal, TrendingUp, Users, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
+import { getHeroStatistics } from "@/app/actions";
 
-const quickStats = [
-  { label: "Active workspaces", value: "12", detail: "Split by client" },
-  { label: "Monthly burn", value: "$248k", detail: "Live from Supabase" },
-  { label: "Approvals this week", value: "18", detail: "Across teams" },
-];
+/**
+ * Formats a number with commas for thousands separator
+ */
+function formatNumber(num: number): string {
+  return new Intl.NumberFormat("en-US").format(num);
+}
 
-export function Hero() {
+/**
+ * Formats a currency value with dollar sign and commas
+ */
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+export async function Hero() {
+  const stats = await getHeroStatistics();
   return (
     <div className="grid gap-6 rounded-3xl border border-border/70 bg-card px-8 py-10 shadow-sm md:grid-cols-[1.3fr,1fr]">
       <div className="space-y-4">
@@ -18,10 +33,10 @@ export function Hero() {
           OrgFinance
         </div>
         <h1 className="text-3xl font-semibold leading-tight text-foreground sm:text-4xl">
-          Multi-tenant finances with Supabase auth baked in.
+          Track balances, contributions, and ensure every member stays accountable.
         </h1>
         <p className="text-lg text-muted-foreground">
-          Spin up workspaces, connect ledgers, and keep every approval in one place. Start by signing in to the new Shadcn-powered login.
+          Create workspaces for your student groups or small businesses. Distinguish between operational expenses and member contributions to understand your true profitability and who owes what.
         </p>
         <div className="flex flex-wrap gap-3">
           <Button className="gap-2" asChild>
@@ -39,18 +54,38 @@ export function Hero() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3">
-        {quickStats.map((item) => (
-          <Card key={item.label} className="bg-background/60">
-            <CardContent className="space-y-1 p-5">
-              <CardDescription className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
-                {item.label}
-                <Signal className="h-4 w-4 text-accent" aria-hidden />
-              </CardDescription>
-              <CardTitle className="text-xl">{item.value}</CardTitle>
-              <p className="text-sm text-muted-foreground">{item.detail}</p>
-            </CardContent>
-          </Card>
-        ))}
+        <Card className="bg-background/60">
+          <CardContent className="space-y-1 p-5">
+            <CardDescription className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
+              Organizations
+              <Users className="h-4 w-4 text-accent" aria-hidden />
+            </CardDescription>
+            <CardTitle className="text-xl">{formatNumber(stats.organizationCount)}</CardTitle>
+            <p className="text-sm text-muted-foreground">Tracking finances</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-background/60">
+          <CardContent className="space-y-1 p-5">
+            <CardDescription className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
+              Contributions
+              <TrendingUp className="h-4 w-4 text-accent" aria-hidden />
+            </CardDescription>
+            <CardTitle className="text-xl">{formatCurrency(stats.totalContributions)}</CardTitle>
+            <p className="text-sm text-muted-foreground">Member investments</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-background/60">
+          <CardContent className="space-y-1 p-5">
+            <CardDescription className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
+              Transactions
+              <Receipt className="h-4 w-4 text-accent" aria-hidden />
+            </CardDescription>
+            <CardTitle className="text-xl">{formatNumber(stats.transactionCount)}</CardTitle>
+            <p className="text-sm text-muted-foreground">Recorded & tracked</p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
