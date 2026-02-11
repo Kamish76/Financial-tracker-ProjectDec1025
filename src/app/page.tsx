@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { Header} from "@/components/header";
 import { Footer } from "@/components/footer";
+import { Features } from "@/components/features";
 
 const quickStats = [
   { label: "Active workspaces", value: "12", detail: "Split by client" },
@@ -58,6 +59,7 @@ export default function Home() {
             ))}
           </div>
         </div>
+        <Features />
       </div>
       <Footer />
     </>
