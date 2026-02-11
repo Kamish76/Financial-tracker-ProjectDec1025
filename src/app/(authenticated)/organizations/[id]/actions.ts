@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createClient, createAdminClient } from "@/lib/supabase/server"
+import { getOrCreateCategory } from "@/lib/categories"
 
 interface AddIncomeInput {
   organizationId: string
@@ -66,6 +67,9 @@ export async function addIncome(input: AddIncomeInput) {
     return { error: "You don’t have permission to add income" }
   }
 
+  // Normalize and get category ID
+  const categoryId = category ? await getOrCreateCategory(organizationId, category) : null
+
   const insertPayload = {
     organization_id: organizationId,
     user_id: user.id,
@@ -73,6 +77,7 @@ export async function addIncome(input: AddIncomeInput) {
     amount,
     description: description?.trim() || null,
     category: category?.trim() || null,
+    category_id: categoryId,
     occurred_at: occurredDate.toISOString(),
     funded_by_type: sourceType,
     funded_by_user_id: sourceUserId,
@@ -88,6 +93,173 @@ export async function addIncome(input: AddIncomeInput) {
   }
 
   revalidatePath(`/organizations/${organizationId}`)
+
+  return { success: true }
+}
+
+interface UpdateTransactionInput {
+  organizationId: string
+  transactionId: string
+  amount: number
+  description?: string
+  category?: string
+  occurredAt: string
+}
+
+export async function updateTransaction(input: UpdateTransactionInput) {
+  const { organizationId, transactionId, amount, description, category, occurredAt } = input
+
+  if (!organizationId || !transactionId) {
+    return { error: "Organization and transaction are required" }
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { error: "Amount must be greater than 0" }
+  }
+
+  if (!occurredAt) {
+    return { error: "Date is required" }
+  }
+
+  const occurredDate = new Date(occurredAt)
+  if (Number.isNaN(occurredDate.getTime())) {
+    return { error: "Invalid date" }
+  }
+
+  const supabase = await createClient()
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    return { error: "You must be signed in" }
+  }
+
+  const admin = createAdminClient()
+
+  // Verify user is owner or admin
+  const { data: membership, error: membershipError } = await admin
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", organizationId)
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (membershipError || !membership) {
+    console.error("[UPDATE_TRANSACTION] Membership lookup failed", membershipError?.message)
+    return { error: "Unable to verify permissions" }
+  }
+
+  if (membership.role !== "owner" && membership.role !== "admin") {
+    return { error: "You don't have permission to edit transactions" }
+  }
+
+  // Verify transaction belongs to organization
+  const { data: existingTx, error: txError } = await admin
+    .from("transactions")
+    .select("id, organization_id")
+    .eq("id", transactionId)
+    .maybeSingle()
+
+  if (txError || !existingTx) {
+    return { error: "Transaction not found" }
+  }
+
+  if (existingTx.organization_id !== organizationId) {
+    return { error: "Transaction does not belong to this organization" }
+  }
+
+  // Normalize category if provided
+  const categoryId = category ? await getOrCreateCategory(organizationId, category) : null
+
+  const updatePayload = {
+    amount,
+    description: description?.trim() || null,
+    category: category?.trim() || null,
+    category_id: categoryId,
+    occurred_at: occurredDate.toISOString(),
+    updated_by_user_id: user.id,
+  }
+
+  const { error: updateError } = await admin
+    .from("transactions")
+    .update(updatePayload)
+    .eq("id", transactionId)
+
+  if (updateError) {
+    console.error("[UPDATE_TRANSACTION] Update failed", updateError.message)
+    return { error: "Unable to update transaction" }
+  }
+
+  revalidatePath(`/organizations/${organizationId}`)
+  revalidatePath(`/organizations/${organizationId}/records`)
+
+  return { success: true }
+}
+
+interface DeleteTransactionInput {
+  organizationId: string
+  transactionId: string
+}
+
+export async function deleteTransaction(input: DeleteTransactionInput) {
+  const { organizationId, transactionId } = input
+
+  if (!organizationId || !transactionId) {
+    return { error: "Organization and transaction are required" }
+  }
+
+  const supabase = await createClient()
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    return { error: "You must be signed in" }
+  }
+
+  const admin = createAdminClient()
+
+  // Verify user is owner or admin
+  const { data: membership, error: membershipError } = await admin
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", organizationId)
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (membershipError || !membership) {
+    console.error("[DELETE_TRANSACTION] Membership lookup failed", membershipError?.message)
+    return { error: "Unable to verify permissions" }
+  }
+
+  if (membership.role !== "owner" && membership.role !== "admin") {
+    return { error: "You don't have permission to delete transactions" }
+  }
+
+  // Verify transaction belongs to organization
+  const { data: existingTx, error: txError } = await admin
+    .from("transactions")
+    .select("id, organization_id")
+    .eq("id", transactionId)
+    .maybeSingle()
+
+  if (txError || !existingTx) {
+    return { error: "Transaction not found" }
+  }
+
+  if (existingTx.organization_id !== organizationId) {
+    return { error: "Transaction does not belong to this organization" }
+  }
+
+  const { error: deleteError } = await admin
+    .from("transactions")
+    .delete()
+    .eq("id", transactionId)
+
+  if (deleteError) {
+    console.error("[DELETE_TRANSACTION] Delete failed", deleteError.message)
+    return { error: "Unable to delete transaction" }
+  }
+
+  revalidatePath(`/organizations/${organizationId}`)
+  revalidatePath(`/organizations/${organizationId}/records`)
 
   return { success: true }
 }
@@ -154,6 +326,9 @@ export async function addExpense(input: AddExpenseInput) {
   const fundedByType = expenseType === 'personal' ? 'personal' : 'business'
   const fundedByUserId = user.id // Current user is always the payer/holder
 
+  // Normalize and get category ID
+  const categoryId = category ? await getOrCreateCategory(organizationId, category) : null
+
   const insertPayload = {
     organization_id: organizationId,
     user_id: user.id,
@@ -161,6 +336,7 @@ export async function addExpense(input: AddExpenseInput) {
     amount,
     description: description?.trim() || null,
     category: category?.trim() || null,
+    category_id: categoryId,
     occurred_at: occurredDate.toISOString(),
     funded_by_type: fundedByType,
     funded_by_user_id: fundedByUserId,
@@ -267,6 +443,9 @@ export async function addInitialTransaction(input: AddInitialTransactionInput) {
     fundedByUserId = assignedToUserId || null
   }
 
+  // Normalize and get category ID
+  const categoryId = category ? await getOrCreateCategory(organizationId, category) : null
+
   const insertPayload = {
     organization_id: organizationId,
     user_id: user.id, // Owner who created this initial transaction (audit trail)
@@ -274,6 +453,7 @@ export async function addInitialTransaction(input: AddInitialTransactionInput) {
     amount,
     description: description?.trim() || null,
     category: category?.trim() || null,
+    category_id: categoryId,
     occurred_at: occurredDate.toISOString(),
     funded_by_type: fundedByType,
     funded_by_user_id: fundedByUserId,
@@ -397,10 +577,14 @@ export async function updateInitialTransaction(input: UpdateInitialTransactionIn
     fundedByType = "personal"
   }
 
+  // Normalize and get category ID
+  const categoryId = category ? await getOrCreateCategory(organizationId, category) : null
+
   const updatePayload = {
     amount,
     description: description?.trim() || null,
     category: category?.trim() || null,
+    category_id: categoryId,
     occurred_at: occurredDate.toISOString(),
     funded_by_type: fundedByType,
     funded_by_user_id: assignedToUserId || null,
@@ -559,6 +743,7 @@ export async function addIncomeForMember(input: AddIncomeForMemberInput) {
     amount,
     description: description?.trim() || null,
     category: category?.trim() || null,
+    category_id: category ? await getOrCreateCategory(organizationId, category) : null,
     occurred_at: occurredDate.toISOString(),
     funded_by_type: "business" as const,
     funded_by_user_id: assignedToUserId || null,
@@ -641,6 +826,7 @@ export async function addExpenseForMember(input: AddExpenseForMemberInput) {
     amount,
     description: description?.trim() || null,
     category: category?.trim() || null,
+    category_id: category ? await getOrCreateCategory(organizationId, category) : null,
     occurred_at: occurredDate.toISOString(),
     funded_by_type: fundedByType,
     funded_by_user_id: assignedToUserId || null,
