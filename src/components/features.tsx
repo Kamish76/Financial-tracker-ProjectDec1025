@@ -78,7 +78,7 @@ export function Features() {
         </p>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 p-5">
         {features.map((feature) => {
           const Icon = feature.icon;
           return (
