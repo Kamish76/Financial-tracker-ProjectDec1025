@@ -38,12 +38,11 @@ export async function getHeroStatistics(): Promise<HeroStats> {
     }
 
     // Get member contributions (personal expenses)
-    // funded_by_type = 'user' represents out-of-pocket member contributions
+    // expense_personal represents out-of-pocket member contributions
     const { data: contributionsData, error: contributionsError } = await supabase
       .from("transactions")
       .select("amount")
-      .eq("transaction_type", "expense")
-      .eq("funded_by_type", "user");
+      .eq("type", "expense_personal");
 
     if (contributionsError) {
       console.error("Error fetching contributions:", contributionsError);
@@ -55,37 +54,36 @@ export async function getHeroStatistics(): Promise<HeroStats> {
     ) || 0;
 
     // Calculate cash on hand across all organizations
-    // Cash on hand = income - business expenses - refunds
+    // Cash on hand = income - business expenses - held returns (reimbursements)
     const { data: incomeData, error: incomeError } = await supabase
       .from("transactions")
       .select("amount")
-      .eq("transaction_type", "income");
+      .eq("type", "income");
 
     const { data: businessExpensesData, error: businessExpError } = await supabase
       .from("transactions")
       .select("amount")
-      .eq("transaction_type", "expense")
-      .eq("funded_by_type", "business");
+      .eq("type", "expense_business");
 
-    const { data: refundsData, error: refundsError } = await supabase
+    const { data: heldReturnsData, error: heldReturnsError } = await supabase
       .from("transactions")
       .select("amount")
-      .eq("transaction_type", "refund");
+      .eq("type", "held_return");
 
-    if (incomeError || businessExpError || refundsError) {
+    if (incomeError || businessExpError || heldReturnsError) {
       console.error("Error fetching cash on hand data:", {
         incomeError,
         businessExpError,
-        refundsError,
+        heldReturnsError,
       });
     }
 
     const totalIncome = incomeData?.reduce((sum, tx) => sum + (tx.amount || 0), 0) || 0;
     const totalBusinessExpenses =
       businessExpensesData?.reduce((sum, tx) => sum + (tx.amount || 0), 0) || 0;
-    const totalRefunds = refundsData?.reduce((sum, tx) => sum + (tx.amount || 0), 0) || 0;
+    const totalHeldReturns = heldReturnsData?.reduce((sum, tx) => sum + (tx.amount || 0), 0) || 0;
 
-    const cashOnHand = totalIncome - totalBusinessExpenses - totalRefunds;
+    const cashOnHand = totalIncome - totalBusinessExpenses - totalHeldReturns;
 
     return {
       organizationCount: orgCount || 0,
