@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, ShieldCheck, Signal, TrendingUp, Users, Receipt } from "lucide-react";
+import { ArrowRight, ShieldCheck, TrendingUp, Users, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { getHeroStatistics } from "@/app/actions";
