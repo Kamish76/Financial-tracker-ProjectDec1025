@@ -24,7 +24,27 @@ function formatCurrency(amount: number): string {
 }
 
 export async function Hero() {
-  const stats = await getHeroStatistics();
+  // Fetch statistics with error handling
+  let stats;
+  try {
+    stats = await getHeroStatistics();
+  } catch (error) {
+    console.error("Failed to load hero statistics:", error);
+    // Use fallback values if fetch fails
+    stats = {
+      organizationCount: 0,
+      totalContributions: 0,
+      transactionCount: 0,
+      cashOnHand: 0,
+    };
+  }
+
+  // Display helpful text when database is empty
+  const isEmpty = stats.organizationCount === 0 && stats.transactionCount === 0;
+  const orgDetailText = isEmpty ? "Ready to start" : "Tracking finances";
+  const contributionsDetailText = isEmpty ? "Waiting for first contribution" : "Member investments";
+  const transactionsDetailText = isEmpty ? "Get started now" : "Recorded & tracked";
+
   return (
     <div className="grid gap-6 rounded-3xl border border-border/70 bg-card px-8 py-10 shadow-sm md:grid-cols-[1.3fr,1fr]">
       <div className="space-y-4">
@@ -61,7 +81,7 @@ export async function Hero() {
               <Users className="h-4 w-4 text-accent" aria-hidden />
             </CardDescription>
             <CardTitle className="text-xl">{formatNumber(stats.organizationCount)}</CardTitle>
-            <p className="text-sm text-muted-foreground">Tracking finances</p>
+            <p className="text-sm text-muted-foreground">{orgDetailText}</p>
           </CardContent>
         </Card>
 
@@ -72,7 +92,7 @@ export async function Hero() {
               <TrendingUp className="h-4 w-4 text-accent" aria-hidden />
             </CardDescription>
             <CardTitle className="text-xl">{formatCurrency(stats.totalContributions)}</CardTitle>
-            <p className="text-sm text-muted-foreground">Member investments</p>
+            <p className="text-sm text-muted-foreground">{contributionsDetailText}</p>
           </CardContent>
         </Card>
 
@@ -83,7 +103,7 @@ export async function Hero() {
               <Receipt className="h-4 w-4 text-accent" aria-hidden />
             </CardDescription>
             <CardTitle className="text-xl">{formatNumber(stats.transactionCount)}</CardTitle>
-            <p className="text-sm text-muted-foreground">Recorded & tracked</p>
+            <p className="text-sm text-muted-foreground">{transactionsDetailText}</p>
           </CardContent>
         </Card>
       </div>
