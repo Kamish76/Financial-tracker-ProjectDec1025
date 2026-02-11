@@ -91,7 +91,7 @@ export function RecordsPageContent() {
         fundedByType: fundedByType === 'all' ? undefined : (fundedByType as any),
         startDate,
         endDate,
-        cursor: append ? nextCursor : undefined,
+        cursor: append ? (nextCursor ?? undefined) : undefined,
         limit: 20,
       })
 
@@ -160,7 +160,7 @@ export function RecordsPageContent() {
     fundedByType && fundedByType !== 'all' && { label: `Funded: ${fundedByType}`, key: "fundedBy" },
     startDate && { label: `From: ${startDate}`, key: "startDate" },
     endDate && { label: `To: ${endDate}`, key: "endDate" },
-  ].filter(Boolean)
+  ].filter(Boolean) as Array<{ label: string; key: string }>
 
   const clearFilter = (key: string) => {
     switch (key) {
@@ -319,12 +319,12 @@ export function RecordsPageContent() {
           <div className="flex flex-wrap gap-2 items-center">
             {activeFilters.map((filter) => (
               <Badge
-                key={filter!.key}
+                key={filter.key}
                 variant="secondary"
                 className="flex items-center gap-2 cursor-pointer hover:bg-gray-300"
-                onClick={() => clearFilter(filter!.key)}
+                onClick={() => clearFilter(filter.key)}
               >
-                {filter!.label}
+                {filter.label}
                 <X className="h-3 w-3" />
               </Badge>
             ))}

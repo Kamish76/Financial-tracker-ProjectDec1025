@@ -108,7 +108,7 @@ export async function fetchTransactionsWithFilters(
   if (transactions.length > limit) {
     hasMore = true
     transactions.pop() // Remove the extra item
-    nextCursor = transactions[transactions.length - 1]?.occurred_at || null
+    nextCursor = (transactions[transactions.length - 1] as any)?.occurred_at || null
   }
 
   return { transactions, nextCursor, hasMore }
