@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
+import { assertOrgRoleForAction } from '@/lib/auth/guards'
 
 type RouteContext = {
 	params: Promise<{
@@ -15,16 +16,16 @@ type RouteContext = {
 export async function POST(request: NextRequest, { params }: RouteContext) {
 	try {
 		const { id } = await params
-		const supabase = await createClient()
 		const adminClient = createAdminClient()
-
-		const {
-			data: { user },
-		} = await supabase.auth.getUser()
-
-		if (!user) {
-			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+		const auth = await assertOrgRoleForAction(id, ['owner'])
+		if (!auth.ok) {
+			return NextResponse.json(
+				{ error: auth.error },
+				{ status: auth.error === 'You must be signed in' ? 401 : 403 }
+			)
 		}
+
+		const { user } = auth
 
 		// Check if user is the owner
 		const { data: org } = await adminClient
