@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+import { cache } from 'react'
 
 export async function createClient() {
   const cookieStore = await cookies()
@@ -28,6 +29,20 @@ export async function createClient() {
     }
   )
 }
+
+export const getCachedClient = cache(async () => {
+  return createClient()
+})
+
+export const getCachedUser = cache(async () => {
+  const supabase = await createClient()
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
+
+  return { user, error }
+})
 
 /**
  * Creates a Supabase admin client with the service role key.
