@@ -1,8 +1,23 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { createClient, createAdminClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/server"
 import { getOrCreateCategory } from "@/lib/categories"
+import { assertOrgRoleForAction } from "@/lib/auth/guards"
+
+async function authorizeOrgAction(
+  organizationId: string,
+  roles: Array<'owner' | 'admin'> | Array<'owner'>,
+  errorMessage: string
+) {
+  const auth = await assertOrgRoleForAction(organizationId, roles)
+
+  if (!auth.ok) {
+    return { error: auth.error === 'You must be signed in' ? auth.error : errorMessage }
+  }
+
+  return auth
+}
 
 interface AddIncomeInput {
   organizationId: string
@@ -34,38 +49,24 @@ export async function addIncome(input: AddIncomeInput) {
     return { error: "Invalid date" }
   }
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
+  const auth = await authorizeOrgAction(
+    organizationId,
+    ['owner', 'admin'],
+    "You don't have permission to add income"
+  )
 
-  if (userError || !user) {
-    return { error: "You must be signed in" }
+  if ('error' in auth) {
+    return auth
   }
+
+  const { user } = auth
 
   // Validate source
   // For income, we model revenue as business funds held by the recorder (user)
-  const sourceType = 'business'
-  const sourceUserId = user.id
+  const sourceType = fundedByType
+  const sourceUserId = fundedByUserId || user.id
 
-  // Check role: only owner/admin can insert
   const admin = createAdminClient()
-  const { data: membership, error: membershipError } = await admin
-    .from("organization_members")
-    .select("role")
-    .eq("organization_id", organizationId)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (membershipError) {
-    console.error("[ADD_INCOME] Membership lookup failed", membershipError.message)
-    return { error: "Unable to verify permissions" }
-  }
-
-  if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
-    return { error: "You don’t have permission to add income" }
-  }
 
   // Normalize and get category ID
   const categoryId = category ? await getOrCreateCategory(organizationId, category) : null
@@ -126,31 +127,18 @@ export async function updateTransaction(input: UpdateTransactionInput) {
     return { error: "Invalid date" }
   }
 
-  const supabase = await createClient()
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  const auth = await authorizeOrgAction(
+    organizationId,
+    ['owner', 'admin'],
+    "You don't have permission to edit transactions"
+  )
 
-  if (userError || !user) {
-    return { error: "You must be signed in" }
+  if ('error' in auth) {
+    return auth
   }
 
+  const { user } = auth
   const admin = createAdminClient()
-
-  // Verify user is owner or admin
-  const { data: membership, error: membershipError } = await admin
-    .from("organization_members")
-    .select("role")
-    .eq("organization_id", organizationId)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (membershipError || !membership) {
-    console.error("[UPDATE_TRANSACTION] Membership lookup failed", membershipError?.message)
-    return { error: "Unable to verify permissions" }
-  }
-
-  if (membership.role !== "owner" && membership.role !== "admin") {
-    return { error: "You don't have permission to edit transactions" }
-  }
 
   // Verify transaction belongs to organization
   const { data: existingTx, error: txError } = await admin
@@ -207,31 +195,17 @@ export async function deleteTransaction(input: DeleteTransactionInput) {
     return { error: "Organization and transaction are required" }
   }
 
-  const supabase = await createClient()
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  const auth = await authorizeOrgAction(
+    organizationId,
+    ['owner', 'admin'],
+    "You don't have permission to delete transactions"
+  )
 
-  if (userError || !user) {
-    return { error: "You must be signed in" }
+  if ('error' in auth) {
+    return auth
   }
 
   const admin = createAdminClient()
-
-  // Verify user is owner or admin
-  const { data: membership, error: membershipError } = await admin
-    .from("organization_members")
-    .select("role")
-    .eq("organization_id", organizationId)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (membershipError || !membership) {
-    console.error("[DELETE_TRANSACTION] Membership lookup failed", membershipError?.message)
-    return { error: "Unable to verify permissions" }
-  }
-
-  if (membership.role !== "owner" && membership.role !== "admin") {
-    return { error: "You don't have permission to delete transactions" }
-  }
 
   // Verify transaction belongs to organization
   const { data: existingTx, error: txError } = await admin
@@ -293,33 +267,18 @@ export async function addExpense(input: AddExpenseInput) {
     return { error: "Invalid date" }
   }
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
+  const auth = await authorizeOrgAction(
+    organizationId,
+    ['owner', 'admin'],
+    "You don't have permission to add expenses"
+  )
 
-  if (userError || !user) {
-    return { error: "You must be signed in" }
+  if ('error' in auth) {
+    return auth
   }
 
-  // Check role: only owner/admin can insert
+  const { user } = auth
   const admin = createAdminClient()
-  const { data: membership, error: membershipError } = await admin
-    .from("organization_members")
-    .select("role")
-    .eq("organization_id", organizationId)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (membershipError) {
-    console.error("[ADD_EXPENSE] Membership lookup failed", membershipError.message)
-    return { error: "Unable to verify permissions" }
-  }
-
-  if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
-    return { error: "You don't have permission to add expenses" }
-  }
 
   // Determine funding details based on expense type
   const transactionType = expenseType === 'personal' ? 'expense_personal' : 'expense_business'
@@ -386,33 +345,14 @@ export async function addInitialTransaction(input: AddInitialTransactionInput) {
     return { error: "Invalid date" }
   }
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
+  const auth = await authorizeOrgAction(organizationId, ['owner'], "Only organization owners can add initial transactions")
 
-  if (userError || !user) {
-    return { error: "You must be signed in" }
+  if ('error' in auth) {
+    return auth
   }
 
-  // Check role: only owner can add initial transactions
+  const { user } = auth
   const admin = createAdminClient()
-  const { data: membership, error: membershipError } = await admin
-    .from("organization_members")
-    .select("role")
-    .eq("organization_id", organizationId)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (membershipError) {
-    console.error("[ADD_INITIAL_TRANSACTION] Membership lookup failed", membershipError.message)
-    return { error: "Unable to verify permissions" }
-  }
-
-  if (!membership || membership.role !== "owner") {
-    return { error: "Only organization owners can add initial transactions" }
-  }
 
   // Validate assigned member if provided
   if (assignedToUserId) {
@@ -510,33 +450,14 @@ export async function updateInitialTransaction(input: UpdateInitialTransactionIn
     return { error: "Invalid date" }
   }
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
+  const auth = await authorizeOrgAction(organizationId, ['owner'], "Only organization owners can edit initial transactions")
 
-  if (userError || !user) {
-    return { error: "You must be signed in" }
+  if ('error' in auth) {
+    return auth
   }
 
-  // Owner-only guard
+  const { user } = auth
   const admin = createAdminClient()
-  const { data: membership, error: membershipError } = await admin
-    .from("organization_members")
-    .select("role")
-    .eq("organization_id", organizationId)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (membershipError) {
-    console.error("[UPDATE_INITIAL_TRANSACTION] Membership lookup failed", membershipError.message)
-    return { error: "Unable to verify permissions" }
-  }
-
-  if (!membership || membership.role !== "owner") {
-    return { error: "Only organization owners can edit initial transactions" }
-  }
 
   // Load existing transaction to enforce org match, initial flag, and immutable type
   const { data: existingTx, error: txError } = await admin
@@ -615,33 +536,13 @@ export async function deleteInitialTransaction(input: DeleteInitialTransactionIn
     return { error: "Organization and transaction are required" }
   }
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
+  const auth = await authorizeOrgAction(organizationId, ['owner'], "Only organization owners can delete initial transactions")
 
-  if (userError || !user) {
-    return { error: "You must be signed in" }
+  if ('error' in auth) {
+    return auth
   }
 
-  // Check role: only owner can delete initial transactions
   const admin = createAdminClient()
-  const { data: membership, error: membershipError } = await admin
-    .from("organization_members")
-    .select("role")
-    .eq("organization_id", organizationId)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (membershipError) {
-    console.error("[DELETE_INITIAL_TRANSACTION] Membership lookup failed", membershipError.message)
-    return { error: "Unable to verify permissions" }
-  }
-
-  if (!membership || membership.role !== "owner") {
-    return { error: "Only organization owners can delete initial transactions" }
-  }
 
   // Verify transaction exists, belongs to org, and is initial
   const { data: transaction, error: txError } = await admin
@@ -702,26 +603,14 @@ export async function addIncomeForMember(input: AddIncomeForMemberInput) {
   const occurredDate = new Date(occurredAt)
   if (Number.isNaN(occurredDate.getTime())) return { error: "Invalid date" }
 
-  const supabase = await createClient()
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-  if (userError || !user) return { error: "You must be signed in" }
+  const auth = await authorizeOrgAction(organizationId, ['owner'], "Only organization owners can add income for members")
 
+  if ('error' in auth) {
+    return auth
+  }
+
+  const { user } = auth
   const admin = createAdminClient()
-  const { data: membership, error: membershipError } = await admin
-    .from("organization_members")
-    .select("role")
-    .eq("organization_id", organizationId)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (membershipError) {
-    console.error("[ADD_INCOME_FOR_MEMBER] Membership lookup failed", membershipError.message)
-    return { error: "Unable to verify permissions" }
-  }
-
-  if (!membership || membership.role !== "owner") {
-    return { error: "Only organization owners can add income for members" }
-  }
 
   if (assignedToUserId) {
     const { data: memberCheck, error: memberCheckError } = await admin
@@ -782,26 +671,14 @@ export async function addExpenseForMember(input: AddExpenseForMemberInput) {
   const occurredDate = new Date(occurredAt)
   if (Number.isNaN(occurredDate.getTime())) return { error: "Invalid date" }
 
-  const supabase = await createClient()
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-  if (userError || !user) return { error: "You must be signed in" }
+  const auth = await authorizeOrgAction(organizationId, ['owner'], "Only organization owners can add expenses for members")
 
+  if ('error' in auth) {
+    return auth
+  }
+
+  const { user } = auth
   const admin = createAdminClient()
-  const { data: membership, error: membershipError } = await admin
-    .from("organization_members")
-    .select("role")
-    .eq("organization_id", organizationId)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (membershipError) {
-    console.error("[ADD_EXPENSE_FOR_MEMBER] Membership lookup failed", membershipError.message)
-    return { error: "Unable to verify permissions" }
-  }
-
-  if (!membership || membership.role !== "owner") {
-    return { error: "Only organization owners can add expenses for members" }
-  }
 
   if (assignedToUserId) {
     const { data: memberCheck, error: memberCheckError } = await admin
@@ -856,33 +733,14 @@ export async function setMemberBaseline(input: SetMemberBaselineInput) {
     return { error: "Target baseline must be a non-negative number" }
   }
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
+  const auth = await authorizeOrgAction(organizationId, ['owner'], "Only organization owners can set baseline allocations")
 
-  if (userError || !user) {
-    return { error: "You must be signed in" }
+  if ('error' in auth) {
+    return auth
   }
 
-  // Check role: only owner can set baseline allocations
+  const { user } = auth
   const admin = createAdminClient()
-  const { data: membership, error: membershipError } = await admin
-    .from("organization_members")
-    .select("role")
-    .eq("organization_id", organizationId)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (membershipError) {
-    console.error("[SET_MEMBER_BASELINE] Membership lookup failed", membershipError.message)
-    return { error: "Unable to verify permissions" }
-  }
-
-  if (!membership || membership.role !== "owner") {
-    return { error: "Only organization owners can set baseline allocations" }
-  }
 
   // Verify target member exists in organization
   const { data: targetMember, error: targetMemberError } = await admin
@@ -1030,33 +888,18 @@ export async function createRefund(input: CreateRefundInput) {
     return { error: "Amount must be greater than 0" }
   }
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
+  const auth = await authorizeOrgAction(
+    organizationId,
+    ['owner', 'admin'],
+    "You don't have permission to create refunds"
+  )
 
-  if (userError || !user) {
-    return { error: "You must be signed in" }
+  if ('error' in auth) {
+    return auth
   }
 
-  // Check role: only owner/admin can create refunds
+  const { user } = auth
   const admin = createAdminClient()
-  const { data: membership, error: membershipError } = await admin
-    .from("organization_members")
-    .select("role")
-    .eq("organization_id", organizationId)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (membershipError) {
-    console.error("[CREATE_REFUND] Membership lookup failed", membershipError.message)
-    return { error: "Unable to verify permissions" }
-  }
-
-  if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
-    return { error: "You don't have permission to create refunds" }
-  }
 
   // Get current user's outstanding reimbursable amount
   const { data: txRows, error: txError } = await admin
