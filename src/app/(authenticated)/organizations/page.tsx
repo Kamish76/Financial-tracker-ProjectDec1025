@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/auth/guards'
 import Link from 'next/link'
 import { Plus, Building2, Users, Crown, Shield, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -25,15 +25,7 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 export default async function OrganizationsPage() {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/auth')
-  }
+  const user = await requireUser()
 
   // Fetch user's organizations through organization_members
   // Using admin client to bypass RLS issues
@@ -57,15 +49,17 @@ export default async function OrganizationsPage() {
     console.error('[ORGS_PAGE] Failed to fetch organizations:', error.message)
   }
 
-  // Transform the data and get member counts
   const organizations = await Promise.all(
     (memberships || [])
-      .filter((m) => m.organizations) // Filter out any null organizations
+      .filter((m) => m.organizations)
       .map(async (m) => {
-        // Supabase returns single object for singular relation name
-        const org = m.organizations as unknown as { id: string; name: string; description: string | null; created_at: string }
-        
-        // Get member count for this organization
+        const org = m.organizations as {
+          id: string
+          name: string
+          description: string | null
+          created_at: string
+        }
+
         const { count } = await adminClient
           .from('organization_members')
           .select('*', { count: 'exact', head: true })

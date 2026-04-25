@@ -1,20 +1,11 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/auth/guards'
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card'
 import { Settings as SettingsIcon } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
 export default async function SettingsPage() {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/auth')
-  }
+  await requireUser()
 
   return (
     <div className="min-h-screen">
