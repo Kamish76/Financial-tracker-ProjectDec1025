@@ -1,6 +1,7 @@
-import { redirect, notFound } from 'next/navigation'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { notFound } from 'next/navigation'
+import { createAdminClient } from '@/lib/supabase/server'
 import { OrganizationSettings } from './organization-settings'
+import { requireOrgMembership } from '@/lib/auth/guards'
 
 type SettingsPageProps = {
 	params: Promise<{
@@ -10,37 +11,8 @@ type SettingsPageProps = {
 
 export default async function SettingsPage({ params }: SettingsPageProps) {
 	const { id } = await params
-	const supabase = await createClient()
 	const adminClient = createAdminClient()
-
-	const {
-		data: { user },
-	} = await supabase.auth.getUser()
-
-	if (!user) {
-		redirect('/auth')
-	}
-
-	// Check if user is a member of this organization
-	const { data: membership } = await supabase
-		.from('organization_members')
-		.select('organization_id, role')
-		.eq('organization_id', id)
-		.eq('user_id', user.id)
-		.maybeSingle()
-
-	const { data: membershipAdmin } = await adminClient
-		.from('organization_members')
-		.select('organization_id, role, user_id')
-		.eq('organization_id', id)
-		.eq('user_id', user.id)
-		.maybeSingle()
-
-	const effectiveMembership = membership || membershipAdmin
-
-	if (!effectiveMembership) {
-		redirect('/organizations')
-	}
+	const { user, membership: effectiveMembership } = await requireOrgMembership(id)
 
 	// Fetch organization details
 	const { data: organization } = await adminClient
