@@ -1,7 +1,6 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/server'
-import { revalidatePath } from 'next/cache'
 import type {
   UpdateMemberRoleInput,
   DeactivateMemberInput,
@@ -13,6 +12,9 @@ import type {
   InviteCodeWithCreator,
 } from '@/lib/types/invite'
 import { generateInviteCode } from '@/lib/types/invite'
+import {
+  revalidateOrganizationMembers,
+} from '@/lib/revalidation'
 import { authorizeOrgAction } from '@/lib/auth/guards'
 
 // ============================================================================
@@ -83,8 +85,7 @@ export async function updateMemberRole(input: UpdateMemberRoleInput) {
       return { error: 'Failed to update member role' }
     }
 
-    revalidatePath(`/organizations/${organizationId}/members`)
-    revalidatePath(`/organizations/${organizationId}`)
+    revalidateOrganizationMembers(organizationId)
 
     return { success: true }
   } catch (error) {
@@ -160,8 +161,7 @@ export async function deactivateMember(input: DeactivateMemberInput) {
       return { error: 'Failed to deactivate member' }
     }
 
-    revalidatePath(`/organizations/${organizationId}/members`)
-    revalidatePath(`/organizations/${organizationId}`)
+    revalidateOrganizationMembers(organizationId)
 
     return { success: true }
   } catch (error) {
@@ -224,8 +224,7 @@ export async function reactivateMember(input: ReactivateMemberInput) {
       return { error: 'Failed to reactivate member' }
     }
 
-    revalidatePath(`/organizations/${organizationId}/members`)
-    revalidatePath(`/organizations/${organizationId}`)
+    revalidateOrganizationMembers(organizationId)
 
     return { success: true }
   } catch (error) {
@@ -304,7 +303,7 @@ export async function createInviteCode(input: CreateInviteInput) {
       return { error: 'Failed to create invite code' }
     }
 
-    revalidatePath(`/organizations/${organizationId}/members`)
+    revalidateOrganizationMembers(organizationId)
 
     return { success: true, inviteCode }
   } catch (error) {
@@ -346,7 +345,7 @@ export async function revokeInviteCode(input: RevokeInviteInput) {
       return { error: 'Failed to revoke invite code' }
     }
 
-    revalidatePath(`/organizations/${organizationId}/members`)
+    revalidateOrganizationMembers(organizationId)
 
     return { success: true }
   } catch (error) {
