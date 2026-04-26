@@ -52,7 +52,7 @@ export function HoldingsManager({ organizationId, members, cashOnHand, totalAllo
 
     setLoading(null)
 
-    if (result.error) {
+    if ('error' in result) {
       setError(result.error)
     } else {
       // Clear edit value after success

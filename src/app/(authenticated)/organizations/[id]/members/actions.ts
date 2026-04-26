@@ -207,6 +207,8 @@ export async function reactivateMember(input: ReactivateMemberInput) {
       return auth
     }
 
+    const { user } = auth
+
     const adminClient = createAdminClient()
 
     // Check target member exists and is inactive
@@ -269,6 +271,8 @@ export async function createInviteCode(input: CreateInviteInput) {
     if ('error' in auth) {
       return auth
     }
+
+    const { user } = auth
 
     const adminClient = createAdminClient()
 

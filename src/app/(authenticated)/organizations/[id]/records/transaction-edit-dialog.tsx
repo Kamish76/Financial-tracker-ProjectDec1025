@@ -70,7 +70,7 @@ export function TransactionEditDialog({
         occurredAt,
       })
 
-      if (result.error) {
+      if ('error' in result) {
         setError(result.error)
       } else {
         onSave()
@@ -89,7 +89,7 @@ export function TransactionEditDialog({
         transactionId: transaction.id,
       })
 
-      if (result.error) {
+      if ('error' in result) {
         setError(result.error)
       } else {
         onSave()

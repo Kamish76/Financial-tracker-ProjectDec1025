@@ -53,7 +53,15 @@ export default async function OrganizationsPage() {
     (memberships || [])
       .filter((m) => m.organizations)
       .map(async (m) => {
-        const org = m.organizations as {
+        const organizationData = Array.isArray(m.organizations)
+          ? m.organizations[0]
+          : m.organizations
+
+        if (!organizationData) {
+          return null
+        }
+
+        const org = organizationData as unknown as {
           id: string
           name: string
           description: string | null
@@ -74,6 +82,10 @@ export default async function OrganizationsPage() {
           member_count: count || 0,
         }
       })
+  )
+
+  const validOrganizations = organizations.filter(
+    (org): org is NonNullable<typeof org> => org !== null
   )
 
   return (
@@ -102,7 +114,7 @@ export default async function OrganizationsPage() {
           </div>
         </div>
 
-        {organizations.length === 0 ? (
+        {validOrganizations.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-16">
               <div className="rounded-full bg-muted p-6 mb-4">
@@ -129,7 +141,7 @@ export default async function OrganizationsPage() {
           </Card>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {organizations.map((org) => (
+            {validOrganizations.map((org) => (
               <Card key={org.id} className="hover:shadow-md transition-shadow">
                 <CardHeader>
                   <div className="flex items-start justify-between">

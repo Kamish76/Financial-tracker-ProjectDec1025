@@ -1,3 +1,5 @@
+import 'server-only'
+
 import { createAdminClient } from '@/lib/supabase/server'
 
 export interface TransactionFilters {
@@ -132,7 +134,7 @@ export async function fetchTransactionsWithFilters(
     return { transactions: [], nextCursor: null, hasMore: false }
   }
 
-  const transactions = (data || []) as TransactionRecord[]
+  const transactions = (data || []) as unknown as TransactionRecord[]
   let hasMore = false
   let nextCursor: string | null = null
 
@@ -167,7 +169,7 @@ export async function fetchOrganizationMembers(organizationId: string) {
     return []
   }
 
-  return ((data || []) as MemberRecord[]).map((member) => ({
+  return ((data || []) as unknown as MemberRecord[]).map((member) => ({
     id: member.user_id,
     name: member.user?.full_name || member.user?.email || 'Unknown',
     role: member.role,
