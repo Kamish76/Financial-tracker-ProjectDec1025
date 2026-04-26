@@ -48,7 +48,7 @@ export function DeactivateMemberDialog({
         targetUserId: member.user_id,
       })
 
-      if (result.error) {
+      if ('error' in result) {
         alert(result.error)
       } else {
         setConfirmation('')

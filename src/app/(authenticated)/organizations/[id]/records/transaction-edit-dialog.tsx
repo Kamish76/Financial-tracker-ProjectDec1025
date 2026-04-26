@@ -70,8 +70,8 @@ export function TransactionEditDialog({
         occurredAt,
       })
 
-      if (result.error) {
-        setError(result.error)
+      if ('error' in result) {
+        setError(result.error ?? "Unable to update transaction")
       } else {
         onSave()
         onOpenChange(false)
@@ -89,8 +89,8 @@ export function TransactionEditDialog({
         transactionId: transaction.id,
       })
 
-      if (result.error) {
-        setError(result.error)
+      if ('error' in result) {
+        setError(result.error ?? "Unable to delete transaction")
       } else {
         onSave()
         onOpenChange(false)

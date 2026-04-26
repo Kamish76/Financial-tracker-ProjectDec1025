@@ -60,7 +60,7 @@ export function InviteCodeManager({ organizationId }: InviteCodeManagerProps) {
         maxUses: maxUsesNumber,
       })
 
-      if (result.error) {
+      if ('error' in result) {
         alert(result.error)
       } else {
         setIsCreateDialogOpen(false)
@@ -81,7 +81,7 @@ export function InviteCodeManager({ organizationId }: InviteCodeManagerProps) {
         organizationId,
       })
 
-      if (result.error) {
+      if ('error' in result) {
         alert(result.error)
       } else {
         fetchInviteCodes()

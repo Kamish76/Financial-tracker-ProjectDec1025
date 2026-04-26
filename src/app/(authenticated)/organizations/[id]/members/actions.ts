@@ -1,13 +1,10 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import type {
   UpdateMemberRoleInput,
   DeactivateMemberInput,
   ReactivateMemberInput,
-  MemberWithProfile,
-  OrganizationRole,
 } from '@/lib/types/member'
 import type {
   CreateInviteInput,
@@ -18,6 +15,7 @@ import { generateInviteCode } from '@/lib/types/invite'
 import {
   revalidateOrganizationMembers,
 } from '@/lib/revalidation'
+import { authorizeOrgAction } from '@/lib/auth/guards'
 
 // ============================================================================
 // MEMBER ROLE MANAGEMENT
@@ -31,15 +29,6 @@ import {
  */
 export async function updateMemberRole(input: UpdateMemberRoleInput) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: 'Unauthorized' }
-    }
-
     const { organizationId, targetUserId, newRole } = input
 
     // Validate: cannot change to/from owner role
@@ -47,30 +36,24 @@ export async function updateMemberRole(input: UpdateMemberRoleInput) {
       return { error: 'Cannot change role to owner. Use transfer ownership instead.' }
     }
 
+    const auth = await authorizeOrgAction(
+      organizationId,
+      ['owner', 'admin'],
+      'Insufficient permissions. Only admins and owners can change roles.'
+    )
+
+    if ('error' in auth) {
+      return auth
+    }
+
+    const { user } = auth
+
     // Validate: cannot change own role
     if (targetUserId === user.id) {
       return { error: 'You cannot change your own role.' }
     }
 
     const adminClient = createAdminClient()
-
-    // Check current user's role (must be admin or owner)
-    const { data: currentUserMembership, error: membershipError } =
-      await adminClient
-        .from('organization_members')
-        .select('role')
-        .eq('organization_id', organizationId)
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .single()
-
-    if (membershipError || !currentUserMembership) {
-      return { error: 'You are not a member of this organization' }
-    }
-
-    if (!['owner', 'admin'].includes(currentUserMembership.role)) {
-      return { error: 'Insufficient permissions. Only admins and owners can change roles.' }
-    }
 
     // Check target member's current role
     const { data: targetMembership, error: targetError } = await adminClient
@@ -124,16 +107,19 @@ export async function updateMemberRole(input: UpdateMemberRoleInput) {
  */
 export async function deactivateMember(input: DeactivateMemberInput) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const { organizationId, targetUserId } = input
 
-    if (!user) {
-      return { error: 'Unauthorized' }
+    const auth = await authorizeOrgAction(
+      organizationId,
+      ['owner', 'admin'],
+      'Insufficient permissions. Only admins and owners can deactivate members.'
+    )
+
+    if ('error' in auth) {
+      return auth
     }
 
-    const { organizationId, targetUserId } = input
+    const { user } = auth
 
     // Validate: cannot deactivate yourself
     if (targetUserId === user.id) {
@@ -141,24 +127,6 @@ export async function deactivateMember(input: DeactivateMemberInput) {
     }
 
     const adminClient = createAdminClient()
-
-    // Check current user's role (must be admin or owner)
-    const { data: currentUserMembership, error: membershipError } =
-      await adminClient
-        .from('organization_members')
-        .select('role')
-        .eq('organization_id', organizationId)
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .single()
-
-    if (membershipError || !currentUserMembership) {
-      return { error: 'You are not a member of this organization' }
-    }
-
-    if (!['owner', 'admin'].includes(currentUserMembership.role)) {
-      return { error: 'Insufficient permissions. Only admins and owners can deactivate members.' }
-    }
 
     // Check target member's current role
     const { data: targetMembership, error: targetError } = await adminClient
@@ -213,36 +181,21 @@ export async function deactivateMember(input: DeactivateMemberInput) {
  */
 export async function reactivateMember(input: ReactivateMemberInput) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: 'Unauthorized' }
-    }
-
     const { organizationId, targetUserId } = input
 
+    const auth = await authorizeOrgAction(
+      organizationId,
+      ['owner', 'admin'],
+      'Insufficient permissions. Only admins and owners can reactivate members.'
+    )
+
+    if ('error' in auth) {
+      return auth
+    }
+
+    const { user } = auth
+
     const adminClient = createAdminClient()
-
-    // Check current user's role (must be admin or owner)
-    const { data: currentUserMembership, error: membershipError } =
-      await adminClient
-        .from('organization_members')
-        .select('role')
-        .eq('organization_id', organizationId)
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .single()
-
-    if (membershipError || !currentUserMembership) {
-      return { error: 'You are not a member of this organization' }
-    }
-
-    if (!['owner', 'admin'].includes(currentUserMembership.role)) {
-      return { error: 'Insufficient permissions. Only admins and owners can reactivate members.' }
-    }
 
     // Check target member exists and is inactive
     const { data: targetMembership, error: targetError } = await adminClient
@@ -292,35 +245,21 @@ export async function reactivateMember(input: ReactivateMemberInput) {
  */
 export async function createInviteCode(input: CreateInviteInput) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: 'Unauthorized' }
-    }
-
     const { organizationId, maxUses } = input
 
+    const auth = await authorizeOrgAction(
+      organizationId,
+      ['owner', 'admin'],
+      'Insufficient permissions. Only admins and owners can create invite codes.'
+    )
+
+    if ('error' in auth) {
+      return auth
+    }
+
+    const { user } = auth
+
     const adminClient = createAdminClient()
-
-    // Check current user's role (must be admin or owner)
-    const { data: membership, error: membershipError } = await adminClient
-      .from('organization_members')
-      .select('role')
-      .eq('organization_id', organizationId)
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .single()
-
-    if (membershipError || !membership) {
-      return { error: 'You are not a member of this organization' }
-    }
-
-    if (!['owner', 'admin'].includes(membership.role)) {
-      return { error: 'Insufficient permissions. Only admins and owners can create invite codes.' }
-    }
 
     // Generate unique code
     let code = generateInviteCode()
@@ -380,35 +319,19 @@ export async function createInviteCode(input: CreateInviteInput) {
  */
 export async function revokeInviteCode(input: RevokeInviteInput) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: 'Unauthorized' }
-    }
-
     const { inviteId, organizationId } = input
 
+    const auth = await authorizeOrgAction(
+      organizationId,
+      ['owner', 'admin'],
+      'Insufficient permissions. Only admins and owners can revoke invite codes.'
+    )
+
+    if ('error' in auth) {
+      return auth
+    }
+
     const adminClient = createAdminClient()
-
-    // Check current user's role (must be admin or owner)
-    const { data: membership, error: membershipError } = await adminClient
-      .from('organization_members')
-      .select('role')
-      .eq('organization_id', organizationId)
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .single()
-
-    if (membershipError || !membership) {
-      return { error: 'You are not a member of this organization' }
-    }
-
-    if (!['owner', 'admin'].includes(membership.role)) {
-      return { error: 'Insufficient permissions. Only admins and owners can revoke invite codes.' }
-    }
 
     // Revoke the invite code
     const { error: revokeError } = await adminClient
@@ -439,33 +362,16 @@ export async function getInviteCodes(
   organizationId: string
 ): Promise<{ inviteCodes?: InviteCodeWithCreator[]; error?: string }> {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const auth = await authorizeOrgAction(
+      organizationId,
+      ['owner', 'admin'],
+      'Insufficient permissions. Only admins and owners can view invite codes.'
+    )
 
-    if (!user) {
-      return { error: 'Unauthorized' }
+    if ('error' in auth) {
+      return auth
     }
-
     const adminClient = createAdminClient()
-
-    // Check current user's role (must be admin or owner)
-    const { data: membership, error: membershipError } = await adminClient
-      .from('organization_members')
-      .select('role')
-      .eq('organization_id', organizationId)
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .single()
-
-    if (membershipError || !membership) {
-      return { error: 'You are not a member of this organization' }
-    }
-
-    if (!['owner', 'admin'].includes(membership.role)) {
-      return { error: 'Insufficient permissions. Only admins and owners can view invite codes.' }
-    }
 
     // Fetch invite codes with creator details
     const { data: inviteCodes, error: fetchError } = await adminClient

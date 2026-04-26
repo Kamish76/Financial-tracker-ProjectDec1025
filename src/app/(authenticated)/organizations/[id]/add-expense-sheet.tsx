@@ -78,8 +78,8 @@ export function AddExpenseSheet({ organizationId }: AddExpenseSheetProps) {
         expenseType,
       })
 
-      if (result?.error) {
-        setError(result.error)
+      if (result && 'error' in result) {
+        setError(result.error ?? "Unable to save expense")
         return
       }
 
