@@ -1,7 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/server'
-import { getAuthContext } from '@/lib/auth/server-context'
+import { requireUser } from '@/lib/auth/guards'
 
 export async function createOrganization(
   name: string,
@@ -19,11 +19,7 @@ export async function createOrganization(
     return { error: 'Organization name must be less than 100 characters' }
   }
 
-  const { user } = await getAuthContext()
-
-  if (!user) {
-    return { error: 'You must be logged in to create an organization' }
-  }
+  const user = await requireUser()
 
   console.log('[CREATE_ORG] Creating organization:', { name: trimmedName, userId: user.id })
 

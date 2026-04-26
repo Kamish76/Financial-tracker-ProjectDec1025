@@ -13,21 +13,7 @@ import type {
   InviteCodeWithCreator,
 } from '@/lib/types/invite'
 import { generateInviteCode } from '@/lib/types/invite'
-import { assertOrgRoleForAction } from '@/lib/auth/guards'
-
-async function authorizeOrgAction(
-  organizationId: string,
-  roles: Array<'owner' | 'admin'> | Array<'owner'>,
-  errorMessage: string
-) {
-  const auth = await assertOrgRoleForAction(organizationId, roles)
-
-  if (!auth.ok) {
-    return { error: auth.error === 'You must be signed in' ? auth.error : errorMessage }
-  }
-
-  return auth
-}
+import { authorizeOrgAction } from '@/lib/auth/guards'
 
 // ============================================================================
 // MEMBER ROLE MANAGEMENT

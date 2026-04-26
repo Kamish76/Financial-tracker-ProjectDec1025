@@ -71,7 +71,7 @@ export function TransactionEditDialog({
       })
 
       if ('error' in result) {
-        setError(result.error)
+        setError(result.error ?? "Unable to update transaction")
       } else {
         onSave()
         onOpenChange(false)
@@ -90,7 +90,7 @@ export function TransactionEditDialog({
       })
 
       if ('error' in result) {
-        setError(result.error)
+        setError(result.error ?? "Unable to delete transaction")
       } else {
         onSave()
         onOpenChange(false)

@@ -92,3 +92,20 @@ export async function assertOrgRoleForAction(
     membership,
   }
 }
+
+export async function authorizeOrgAction(
+  organizationId: string,
+  roles: OrganizationRole[],
+  errorMessage: string
+): Promise<ActionAuthResult> {
+  const auth = await assertOrgRoleForAction(organizationId, roles)
+
+  if (!auth.ok) {
+    return {
+      ok: false,
+      error: auth.error === 'You must be signed in' ? auth.error : errorMessage,
+    }
+  }
+
+  return auth
+}
