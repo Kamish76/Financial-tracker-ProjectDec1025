@@ -1,11 +1,11 @@
 
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 import { ArrowLeftRight, ScrollText, Settings } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
+import { requireOrgMembership } from '@/lib/auth/guards'
 import { AddIncomeSheet } from './add-income-sheet'
 import { AddExpenseSheet } from './add-expense-sheet'
 import { RefundSheet } from './refund-sheet'
@@ -62,56 +62,17 @@ function typeBadge(type: string) {
 
 export default async function OrganizationFinancePage({ params }: PageProps) {
 	const { id } = await params
-	const supabase = await createClient()
 	const adminClient = createAdminClient()
 
 	const debugInfo: { label: string; value: string }[] = []
-
-	const {
-		data: { user },
-	} = await supabase.auth.getUser()
+	const { user, membership: effectiveMembership } = await requireOrgMembership(id)
 
 	debugInfo.push({ label: 'orgId', value: id })
 	debugInfo.push({ label: 'userId', value: user?.id ?? 'none' })
 	debugInfo.push({ label: 'userEmail', value: user?.email ?? 'none' })
+	debugInfo.push({ label: 'membershipRole', value: effectiveMembership.role })
 
-	if (!user) {
-		console.log('[ORG_PAGE] No user session for org', id)
-		redirect('/auth')
-	}
-
-	const { data: membership } = await supabase
-		.from('organization_members')
-		.select('organization_id, role')
-		.eq('organization_id', id)
-		.eq('user_id', user.id)
-		.maybeSingle()
-
-	const { data: membershipAdmin, error: membershipAdminError } = await adminClient
-		.from('organization_members')
-		.select('organization_id, role, user_id')
-		.eq('organization_id', id)
-		.eq('user_id', user.id)
-		.maybeSingle()
-
-	debugInfo.push({ label: 'membershipRole', value: membership?.role ?? 'none' })
-	debugInfo.push({ label: 'adminMembershipRole', value: membershipAdmin?.role ?? 'none' })
-	if (membershipAdminError) {
-		console.error('[ORG_PAGE] Admin membership lookup error', {
-			orgId: id,
-			userId: user.id,
-			error: membershipAdminError.message,
-		})
-	}
-
-	const effectiveMembership = membership || membershipAdmin
-
-	if (!effectiveMembership) {
-		console.log('[ORG_PAGE] No membership found (user/admin)', { orgId: id, userId: user.id })
-		redirect('/organizations')
-	}
-
-	const { data: organization } = await supabase
+	const { data: organization } = await adminClient
 		.from('organizations')
 		.select('id, name, description')
 		.eq('id', id)

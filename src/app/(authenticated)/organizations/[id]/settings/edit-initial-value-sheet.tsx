@@ -127,8 +127,8 @@ export function EditInitialValueSheet({
             : assignedToUserId || null,
       })
 
-      if (result?.error) {
-        setError(result.error)
+      if (result && 'error' in result) {
+        setError(result.error ?? "Unable to update initial transaction")
         return
       }
 

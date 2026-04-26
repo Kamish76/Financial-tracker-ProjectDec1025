@@ -26,6 +26,30 @@ export type OrganizationStats = {
   members: MemberBalance[]
 }
 
+type TransactionRow = {
+  type: string
+  amount: number | string | null
+  category: string | null
+  funded_by_type: string | null
+  funded_by_user_id: string | null
+}
+
+type MemberRow = {
+  user_id: string
+  role: string | null
+  is_active: boolean | null
+}
+
+type ReimbursementRow = {
+  from_user_id: string
+  amount: number | string | null
+}
+
+type AuthUserRow = {
+  id: string
+  email: string | null
+}
+
 /**
  * Computes organization-level totals and per-member balances.
  * Uses the admin client after membership verification upstream.
@@ -33,26 +57,43 @@ export type OrganizationStats = {
 export async function getOrganizationStats(organizationId: string): Promise<OrganizationStats> {
   const admin = createAdminClient()
 
-  // Aggregate income and expenses
-  const { data: txRows, error: txError } = await admin
-    .from('transactions')
-    .select('type, amount, category, funded_by_type, funded_by_user_id, user_id')
-    .eq('organization_id', organizationId)
+  const [transactionsResult, membersResult, reimbursementsResult] = await Promise.all([
+    admin
+      .from('transactions')
+      .select('type, amount, category, funded_by_type, funded_by_user_id')
+      .eq('organization_id', organizationId),
+    admin
+      .from('organization_members')
+      .select('user_id, role, is_active')
+      .eq('organization_id', organizationId),
+    admin
+      .from('reimbursement_requests')
+      .select('from_user_id, amount')
+      .eq('organization_id', organizationId)
+      .eq('status', 'paid'),
+  ])
 
-  if (txError) {
-    console.error('[finance] transactions aggregate error', { organizationId, error: txError.message })
+  if (transactionsResult.error) {
+    console.error('[finance] transactions aggregate error', {
+      organizationId,
+      error: transactionsResult.error.message,
+    })
   }
 
-  const rows = txRows || []
-  console.log('[finance] Loaded transactions:', {
-    count: rows.length,
-    sample: rows.slice(0, 3).map((r: any) => ({
-      type: r.type,
-      amount: r.amount,
-      funded_by_type: r.funded_by_type,
-      funded_by_user_id: r.funded_by_user_id
-    }))
-  })
+  if (membersResult.error) {
+    console.error('[finance] members error', { organizationId, error: membersResult.error.message })
+  }
+
+  if (reimbursementsResult.error) {
+    console.error('[finance] reimbursements error', {
+      organizationId,
+      error: reimbursementsResult.error.message,
+    })
+  }
+
+  const transactions = (transactionsResult.data || []) as TransactionRow[]
+  const members = (membersResult.data || []) as MemberRow[]
+  const reimbursementRows = (reimbursementsResult.data || []) as ReimbursementRow[]
 
   let totalIncome = 0
   let totalExpensesBusiness = 0
@@ -60,13 +101,11 @@ export async function getOrganizationStats(organizationId: string): Promise<Orga
   let expensesCapital = 0
   let totalRefundWithdrawals = 0
 
-  for (const r of rows as any[]) {
-    const amount = Number(r.amount ?? 0)
-    const type = r.type as string
-    const category = (r.category ?? '') as string
+  for (const transaction of transactions) {
+    const amount = Number(transaction.amount ?? 0)
+    const type = transaction.type
+    const category = transaction.category ?? ''
 
-    // Exclude held_allocate from org totals (only affects member balances)
-    // held_return with category "Refund" represents cash leaving the org
     if (type === 'income') totalIncome += amount
     if (type === 'expense_business') totalExpensesBusiness += amount
     if (type === 'expense_personal') totalExpensesPersonal += amount
@@ -74,7 +113,8 @@ export async function getOrganizationStats(organizationId: string): Promise<Orga
     if (category && category.toLowerCase() === 'capital') expensesCapital += amount
   }
 
-  const actualExpensesWithoutCapital = totalExpensesBusiness + Math.max(totalExpensesPersonal - expensesCapital, 0)
+  const actualExpensesWithoutCapital =
+    totalExpensesBusiness + Math.max(totalExpensesPersonal - expensesCapital, 0)
   const cashOnHand = totalIncome - totalExpensesBusiness - totalRefundWithdrawals
   const actualExpensesVsIncome = totalIncome - actualExpensesWithoutCapital
 
@@ -88,118 +128,79 @@ export async function getOrganizationStats(organizationId: string): Promise<Orga
     actualExpensesVsIncome,
   }
 
-  // Members
-  const { data: members, error: membersError } = await admin
-    .from('organization_members')
-    .select('user_id, role, is_active')
-    .eq('organization_id', organizationId)
+  const userIds = members.map((member) => member.user_id)
+  const emailByUserId: Record<string, string | null> = {}
 
-  if (membersError) {
-    console.error('[finance] members error', { organizationId, error: membersError.message })
-  }
-
-  // Try to attach emails for display if accessible
-  const memberBalances: MemberBalance[] = []
-  const userIds = (members || []).map((m) => m.user_id)
-
-  let emailByUserId: Record<string, string | null> = {}
   if (userIds.length > 0) {
     try {
-      // Use the admin auth API to list users
-      const { data: { users }, error } = await admin.auth.admin.listUsers()
-      
-      if (!error && users) {
-        // Filter to only the users we care about
-        const relevantUsers = users.filter(u => userIds.includes(u.id))
-        for (const u of relevantUsers) {
-          emailByUserId[u.id] = u.email ?? null
+      const { data, error } = await admin.auth.admin.listUsers()
+
+      if (!error && data?.users) {
+        for (const user of data.users as AuthUserRow[]) {
+          if (userIds.includes(user.id)) {
+            emailByUserId[user.id] = user.email
+          }
         }
       }
-    } catch (e) {
-      console.error('[finance] Failed to fetch user emails:', e)
-      emailByUserId = {}
+    } catch (error) {
+      console.error('[finance] Failed to fetch user emails:', error)
     }
   }
 
-  // Precompute per-user personal contributions (only personal-funded expenses)
   const contributionsByUser: Record<string, number> = {}
-  for (const r of rows as any[]) {
-    const amount = Number(r.amount ?? 0)
-    const type = r.type as string
-    const isPersonalFunded = (r.funded_by_type as string | null) === 'personal'
-    const hasContributor = typeof r.funded_by_user_id === 'string'
-    // Count only expenses that were personally funded
-    if (isPersonalFunded && hasContributor && (type === 'expense_personal')) {
-      const uid = r.funded_by_user_id as string
-      contributionsByUser[uid] = (contributionsByUser[uid] ?? 0) + amount
+  for (const transaction of transactions) {
+    const amount = Number(transaction.amount ?? 0)
+    if (
+      transaction.funded_by_type === 'personal' &&
+      typeof transaction.funded_by_user_id === 'string' &&
+      transaction.type === 'expense_personal'
+    ) {
+      contributionsByUser[transaction.funded_by_user_id] =
+        (contributionsByUser[transaction.funded_by_user_id] ?? 0) + amount
     }
   }
 
-  // Compute per-user business held: baseline allocation + income held - business expenses paid from held
   const businessHeldByUser: Record<string, number> = {}
-  for (const r of rows as any[]) {
-    const amount = Number(r.amount ?? 0)
-    const type = r.type as string
-    const isBusinessFunded = (r.funded_by_type as string | null) === 'business'
-    const hasHolder = typeof r.funded_by_user_id === 'string'
-    // No fallback for income - only explicitly assigned holders
-    const holder = r.funded_by_user_id
+  for (const transaction of transactions) {
+    const holder = transaction.funded_by_user_id
     if (!holder) continue
-    const uid = holder as string
-    
-    // Baseline allocations (always counted, regardless of funded_by_type)
-    if (type === 'held_allocate') {
-      businessHeldByUser[uid] = (businessHeldByUser[uid] ?? 0) + amount
-      console.log('[finance] Allocation to:', { uid, amount, total: businessHeldByUser[uid] })
-    } else if (type === 'held_return') {
-      businessHeldByUser[uid] = (businessHeldByUser[uid] ?? 0) - amount
-      console.log('[finance] Return from:', { uid, amount, total: businessHeldByUser[uid] })
-    } else if (isBusinessFunded) {
-      // Dynamic updates from business-funded transactions
-      if (type === 'income') {
-        businessHeldByUser[uid] = (businessHeldByUser[uid] ?? 0) + amount
-        console.log('[finance] Income held by:', { uid, amount, total: businessHeldByUser[uid] })
-      } else if (type === 'expense_business') {
-        businessHeldByUser[uid] = (businessHeldByUser[uid] ?? 0) - amount
+
+    const amount = Number(transaction.amount ?? 0)
+
+    if (transaction.type === 'held_allocate') {
+      businessHeldByUser[holder] = (businessHeldByUser[holder] ?? 0) + amount
+    } else if (transaction.type === 'held_return') {
+      businessHeldByUser[holder] = (businessHeldByUser[holder] ?? 0) - amount
+    } else if (transaction.funded_by_type === 'business') {
+      if (transaction.type === 'income') {
+        businessHeldByUser[holder] = (businessHeldByUser[holder] ?? 0) + amount
+      } else if (transaction.type === 'expense_business') {
+        businessHeldByUser[holder] = (businessHeldByUser[holder] ?? 0) - amount
       }
     }
-  }
-  console.log('[finance] Final businessHeldByUser:', businessHeldByUser)
-
-  // Sum reimbursements with status = 'paid'
-  const { data: reimbursementRows, error: reimbError } = await admin
-    .from('reimbursement_requests')
-    .select('from_user_id, amount, status')
-    .eq('organization_id', organizationId)
-    .eq('status', 'paid')
-
-  if (reimbError) {
-    console.error('[finance] reimbursements error', { organizationId, error: reimbError.message })
   }
 
   const reimbByUser: Record<string, number> = {}
-  for (const r of reimbursementRows || []) {
-    const uid = r.from_user_id as string
-    reimbByUser[uid] = (reimbByUser[uid] ?? 0) + Number(r.amount ?? 0)
+  for (const reimbursement of reimbursementRows) {
+    reimbByUser[reimbursement.from_user_id] =
+      (reimbByUser[reimbursement.from_user_id] ?? 0) + Number(reimbursement.amount ?? 0)
   }
 
-  for (const m of members || []) {
-    const uid = m.user_id as string
-    const contributedPersonal = contributionsByUser[uid] ?? 0
-    const reimbursementsPaid = reimbByUser[uid] ?? 0
-    const outstandingReimbursable = Math.max(contributedPersonal - reimbursementsPaid, 0)
-    const businessHeld = businessHeldByUser[uid] ?? 0
-    memberBalances.push({
-      user_id: uid,
-      email: emailByUserId[uid] ?? null,
-      role: m.role ?? null,
-      is_active: m.is_active ?? true,
-      businessHeld,
+  const memberBalances = members.map((member) => {
+    const contributedPersonal = contributionsByUser[member.user_id] ?? 0
+    const reimbursementsPaid = reimbByUser[member.user_id] ?? 0
+
+    return {
+      user_id: member.user_id,
+      email: emailByUserId[member.user_id] ?? null,
+      role: member.role ?? null,
+      is_active: member.is_active ?? true,
+      businessHeld: businessHeldByUser[member.user_id] ?? 0,
       contributedPersonal,
       reimbursementsPaid,
-      outstandingReimbursable,
-    })
-  }
+      outstandingReimbursable: Math.max(contributedPersonal - reimbursementsPaid, 0),
+    }
+  })
 
   return {
     totals,
