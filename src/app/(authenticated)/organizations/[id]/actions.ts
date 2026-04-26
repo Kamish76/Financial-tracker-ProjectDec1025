@@ -1,8 +1,11 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
 import { createClient, createAdminClient } from "@/lib/supabase/server"
 import { getOrCreateCategory } from "@/lib/categories"
+import {
+  revalidateOrganizationOverview,
+  revalidateOrganizationSections,
+} from "@/lib/revalidation"
 
 interface AddIncomeInput {
   organizationId: string
@@ -92,7 +95,7 @@ export async function addIncome(input: AddIncomeInput) {
     return { error: "Unable to add income right now" }
   }
 
-  revalidatePath(`/organizations/${organizationId}`)
+  revalidateOrganizationOverview(organizationId)
 
   return { success: true }
 }
@@ -189,8 +192,7 @@ export async function updateTransaction(input: UpdateTransactionInput) {
     return { error: "Unable to update transaction" }
   }
 
-  revalidatePath(`/organizations/${organizationId}`)
-  revalidatePath(`/organizations/${organizationId}/records`)
+  revalidateOrganizationSections(organizationId, ['records'])
 
   return { success: true }
 }
@@ -258,8 +260,7 @@ export async function deleteTransaction(input: DeleteTransactionInput) {
     return { error: "Unable to delete transaction" }
   }
 
-  revalidatePath(`/organizations/${organizationId}`)
-  revalidatePath(`/organizations/${organizationId}/records`)
+  revalidateOrganizationSections(organizationId, ['records'])
 
   return { success: true }
 }
@@ -351,7 +352,7 @@ export async function addExpense(input: AddExpenseInput) {
     return { error: "Unable to add expense right now" }
   }
 
-  revalidatePath(`/organizations/${organizationId}`)
+  revalidateOrganizationOverview(organizationId)
 
   return { success: true }
 }
@@ -469,8 +470,7 @@ export async function addInitialTransaction(input: AddInitialTransactionInput) {
     return { error: "Unable to add initial transaction right now" }
   }
 
-  revalidatePath(`/organizations/${organizationId}`)
-  revalidatePath(`/organizations/${organizationId}/settings`)
+  revalidateOrganizationSections(organizationId, ['settings'])
 
   return { success: true }
 }
@@ -602,8 +602,7 @@ export async function updateInitialTransaction(input: UpdateInitialTransactionIn
     return { error: "Unable to update transaction right now" }
   }
 
-  revalidatePath(`/organizations/${organizationId}`)
-  revalidatePath(`/organizations/${organizationId}/settings`)
+  revalidateOrganizationSections(organizationId, ['settings'])
 
   return { success: true }
 }
@@ -670,8 +669,7 @@ export async function deleteInitialTransaction(input: DeleteInitialTransactionIn
     return { error: "Unable to delete transaction right now" }
   }
 
-  revalidatePath(`/organizations/${organizationId}`)
-  revalidatePath(`/organizations/${organizationId}/settings`)
+  revalidateOrganizationSections(organizationId, ['settings'])
 
   return { success: true }
 }
@@ -757,8 +755,7 @@ export async function addIncomeForMember(input: AddIncomeForMemberInput) {
     return { error: "Unable to add income right now" }
   }
 
-  revalidatePath(`/organizations/${organizationId}`)
-  revalidatePath(`/organizations/${organizationId}/settings`)
+  revalidateOrganizationSections(organizationId, ['settings'])
   return { success: true }
 }
 
@@ -840,8 +837,7 @@ export async function addExpenseForMember(input: AddExpenseForMemberInput) {
     return { error: "Unable to add expense right now" }
   }
 
-  revalidatePath(`/organizations/${organizationId}`)
-  revalidatePath(`/organizations/${organizationId}/settings`)
+  revalidateOrganizationSections(organizationId, ['settings'])
   return { success: true }
 }
 
@@ -1006,9 +1002,7 @@ export async function setMemberBaseline(input: SetMemberBaselineInput) {
     return { error: "Unable to set baseline allocation right now" }
   }
 
-  revalidatePath(`/organizations/${organizationId}`)
-  revalidatePath(`/organizations/${organizationId}/settings`)
-  revalidatePath(`/organizations/${organizationId}/settings/holdings`)
+  revalidateOrganizationSections(organizationId, ['settings', 'settings/holdings'])
 
   return { success: true }
 }
@@ -1149,7 +1143,7 @@ export async function createRefund(input: CreateRefundInput) {
     return { error: "Unable to record refund transaction" }
   }
 
-  revalidatePath(`/organizations/${organizationId}`)
+  revalidateOrganizationOverview(organizationId)
 
   return { success: true }
 }
