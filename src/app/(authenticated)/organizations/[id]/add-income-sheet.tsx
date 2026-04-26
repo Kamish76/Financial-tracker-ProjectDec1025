@@ -98,8 +98,8 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
         fundedByUserId: fundedByUserId || undefined,
       })
 
-      if (result?.error) {
-        setError(result.error)
+      if (result && 'error' in result) {
+        setError(result.error ?? "Unable to save income")
         return
       }
 

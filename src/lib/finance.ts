@@ -133,10 +133,10 @@ export async function getOrganizationStats(organizationId: string): Promise<Orga
 
   if (userIds.length > 0) {
     try {
-      const { data: users, error } = await admin.auth.admin.listUsers()
+      const { data, error } = await admin.auth.admin.listUsers()
 
-      if (!error && users) {
-        for (const user of users as AuthUserRow[]) {
+      if (!error && data?.users) {
+        for (const user of data.users as AuthUserRow[]) {
           if (userIds.includes(user.id)) {
             emailByUserId[user.id] = user.email
           }
