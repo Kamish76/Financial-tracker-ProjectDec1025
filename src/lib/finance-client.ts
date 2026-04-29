@@ -95,8 +95,20 @@ export function calculatePeriodStats(transactions: any[], periodType: "weekly" |
   let expenses = 0
   let count = 0
 
+  function getTransactionDate(tx: any): Date | null {
+    const rawDate = tx.occurred_at ?? tx.created_at
+    if (!rawDate) return null
+
+    const parsedDate = new Date(rawDate)
+    return Number.isNaN(parsedDate.getTime()) ? null : parsedDate
+  }
+
   for (const tx of transactions) {
-    const txDate = new Date(tx.occurred_at)
+    const txDate = getTransactionDate(tx)
+
+    if (!txDate) {
+      continue
+    }
 
     // Check if transaction is within the period
     if (txDate >= startDate && txDate <= endDate) {
