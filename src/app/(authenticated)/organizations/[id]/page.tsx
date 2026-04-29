@@ -12,7 +12,6 @@ import { RefundSheet } from './refund-sheet'
 import { getOrganizationStats } from '@/lib/finance'
 import { StatsCards } from '@/components/stats-cards'
 import { MemberBalancesTable } from '@/components/member-balances-table'
-import { calculatePeriodStats } from '@/lib/finance'
 import { DashboardClientWrapper } from './dashboard-client-wrapper'
 
 type PageProps = {

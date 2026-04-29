@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import type { PeriodStats } from "@/lib/finance"
+import type { PeriodStats } from "@/lib/finance-client"
 
 const formatter = new Intl.NumberFormat("en-US", {
   style: "currency",
