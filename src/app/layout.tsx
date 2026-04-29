@@ -25,8 +25,10 @@ const initialThemeScript = `(() => {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const theme = stored === 'light' || stored === 'dark' ? stored : prefersDark ? 'dark' : 'light';
     document.documentElement.dataset.theme = theme;
+    document.documentElement.classList.toggle('dark', theme === 'dark');
   } catch (e) {
     document.documentElement.dataset.theme = 'light';
+    document.documentElement.classList.remove('dark');
   }
 })();`;
 

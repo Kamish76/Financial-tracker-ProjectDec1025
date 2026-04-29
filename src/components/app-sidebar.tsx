@@ -31,6 +31,11 @@ const navigationItems = [
   },
 ]
 
+function applyTheme(theme: 'light' | 'dark') {
+  document.documentElement.dataset.theme = theme
+  document.documentElement.classList.toggle('dark', theme === 'dark')
+}
+
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
@@ -41,7 +46,8 @@ export function AppSidebar() {
     setMounted(true)
     const stored = window.localStorage.getItem('orgfinance-theme') as 'light' | 'dark' | null
     const current = document.documentElement.dataset.theme as 'light' | 'dark' | undefined
-    setTheme(stored || current || 'light')
+    const fallback = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+    setTheme(stored || current || fallback)
   }, [])
 
   const handleLogout = async () => {
@@ -55,7 +61,7 @@ export function AppSidebar() {
 
   const handleThemeToggle = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light'
-    document.documentElement.dataset.theme = newTheme
+    applyTheme(newTheme)
     window.localStorage.setItem('orgfinance-theme', newTheme)
     setTheme(newTheme)
   }
