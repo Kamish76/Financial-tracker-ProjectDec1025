@@ -17,7 +17,7 @@ import {
 import { TransactionsList } from "./transactions-list"
 import { TransactionEditDialog } from "./transaction-edit-dialog"
 import { FilteredStatsCard } from "./filtered-stats-card"
-import { calculateFilteredStats } from "@/lib/finance"
+import { calculateFilteredStats } from "@/lib/finance-client"
 
 type Transaction = any
 type Member = {

@@ -4,7 +4,7 @@ import { useState } from "react"
 import { ChevronDown, ChevronUp } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import type { FilteredStats } from "@/lib/finance"
+import type { FilteredStats } from "@/lib/finance-client"
 
 const formatter = new Intl.NumberFormat("en-US", {
   style: "currency",
