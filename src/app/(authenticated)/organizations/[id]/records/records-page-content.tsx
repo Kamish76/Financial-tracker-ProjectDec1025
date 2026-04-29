@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/select"
 import { TransactionsList } from "./transactions-list"
 import { TransactionEditDialog } from "./transaction-edit-dialog"
+import { FilteredStatsCard } from "./filtered-stats-card"
+import { calculateFilteredStats } from "@/lib/finance-client"
 
 type Transaction = any
 type Member = {
@@ -204,6 +206,12 @@ export function RecordsPageContent() {
         <h1 className="text-3xl font-bold text-foreground">Transaction Records</h1>
         <p className="text-muted-foreground mt-1">View, search, and manage all transactions</p>
       </div>
+
+      {/* Filtered Stats Card */}
+      <FilteredStatsCard
+        stats={calculateFilteredStats(transactions)}
+        isLoading={isLoading && transactions.length === 0}
+      />
 
       {/* Search Bar */}
       <div className="relative">
