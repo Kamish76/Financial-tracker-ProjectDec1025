@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { PeriodStats } from "@/lib/finance"
 
 const formatter = new Intl.NumberFormat("en-US", {
@@ -47,21 +46,20 @@ export function PeriodStatsCard({ allTransactions, calculatePeriodStats }: Perio
             <p className="text-xs text-muted-foreground mt-2">{periodLabel}</p>
           </div>
           <div className="flex items-center gap-2">
-            <ToggleGroup
-              type="single"
-              value={periodType}
-              onValueChange={(v) => {
-                if (v) setPeriodType(v as "weekly" | "monthly")
-              }}
-              className="border"
+            <Button
+              variant={periodType === "weekly" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPeriodType("weekly")}
             >
-              <ToggleGroupItem value="weekly" aria-label="Weekly" className="text-xs">
-                Weekly
-              </ToggleGroupItem>
-              <ToggleGroupItem value="monthly" aria-label="Monthly" className="text-xs">
-                Monthly
-              </ToggleGroupItem>
-            </ToggleGroup>
+              Weekly
+            </Button>
+            <Button
+              variant={periodType === "monthly" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPeriodType("monthly")}
+            >
+              Monthly
+            </Button>
           </div>
         </div>
       </CardHeader>
