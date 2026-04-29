@@ -12,6 +12,7 @@ import { RefundSheet } from './refund-sheet'
 import { getOrganizationStats } from '@/lib/finance'
 import { StatsCards } from '@/components/stats-cards'
 import { MemberBalancesTable } from '@/components/member-balances-table'
+import { DashboardClientWrapper } from './dashboard-client-wrapper'
 
 type PageProps = {
 	params: Promise<{
@@ -122,7 +123,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		.select('id, type, amount, category, description, created_at, is_initial')
 		.eq('organization_id', id)
 		.order('created_at', { ascending: false })
-		.limit(10)
+		.limit(365)
 
 	if (transactionsError) {
 		console.error('[ORG_PAGE] Transactions error', { orgId: id, error: transactionsError.message })
@@ -175,6 +176,9 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 
 			{/* Top-level stats */}
 			<StatsCards totals={stats.totals} />
+
+		{/* Period Summary Stats */}
+		<DashboardClientWrapper allTransactions={transactions} />
 			<Card>
 				<CardHeader>
 					<div className="flex items-start justify-between gap-3">
