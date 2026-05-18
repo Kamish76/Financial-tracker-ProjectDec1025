@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
+import { assertOrgRoleForAction } from '@/lib/auth/guards'
 
 type RouteContext = {
 	params: Promise<{
@@ -14,27 +15,14 @@ type RouteContext = {
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
 	try {
 		const { id } = await params
-		const supabase = await createClient()
 		const adminClient = createAdminClient()
+		const auth = await assertOrgRoleForAction(id, ['owner', 'admin'])
 
-		const {
-			data: { user },
-		} = await supabase.auth.getUser()
-
-		if (!user) {
-			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-		}
-
-		// Check if user is owner or admin
-		const { data: membership } = await adminClient
-			.from('organization_members')
-			.select('role')
-			.eq('organization_id', id)
-			.eq('user_id', user.id)
-			.single()
-
-		if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
-			return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
+		if (!auth.ok) {
+			return NextResponse.json(
+				{ error: auth.error },
+				{ status: auth.error === 'You must be signed in' ? 401 : 403 }
+			)
 		}
 
 		const body = await request.json()
@@ -75,29 +63,13 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
 	try {
 		const { id } = await params
-		const supabase = await createClient()
 		const adminClient = createAdminClient()
+		const auth = await assertOrgRoleForAction(id, ['owner'])
 
-		const {
-			data: { user },
-		} = await supabase.auth.getUser()
-
-		if (!user) {
-			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-		}
-
-		// Check if user is owner (only owner can delete)
-		const { data: membership } = await adminClient
-			.from('organization_members')
-			.select('role')
-			.eq('organization_id', id)
-			.eq('user_id', user.id)
-			.single()
-
-		if (!membership || membership.role !== 'owner') {
+		if (!auth.ok) {
 			return NextResponse.json(
-				{ error: 'Only the organization owner can delete the organization' },
-				{ status: 403 }
+				{ error: auth.error },
+				{ status: auth.error === 'You must be signed in' ? 401 : 403 }
 			)
 		}
 
@@ -108,7 +80,7 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
 			.eq('id', id)
 			.single()
 
-		if (!org || org.owner_id !== user.id) {
+		if (!org || org.owner_id !== auth.user.id) {
 			return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
 		}
 

@@ -91,8 +91,8 @@ export function RefundSheet({ organizationId }: RefundSheetProps) {
         description: description.trim() || undefined,
       })
 
-      if (result?.error) {
-        setError(result.error)
+      if (result && 'error' in result) {
+        setError(result.error ?? "Unable to process refund")
         setConfirmationAmount(null)
         return
       }
