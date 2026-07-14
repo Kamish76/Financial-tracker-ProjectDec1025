@@ -14,7 +14,7 @@ const authRoutes = [
 ]
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
+  const supabaseResponse = NextResponse.next({
     request,
   })
 
@@ -44,14 +44,25 @@ export async function updateSession(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
 
-    const isPublicRoute = publicRoutes.some(
-      (route) => pathname === route || pathname.startsWith(route)
-    )
+    const isPublicRoute = publicRoutes.some((route) => {
+      if (route === '/') {
+        return pathname === '/'
+      }
+
+      return pathname === route || pathname.startsWith(`${route}/`)
+    })
     const isAuthRoute = authRoutes.some((route) => pathname === route)
 
     // Debug logging
     if (process.env.NODE_ENV === 'development') {
       console.log(`[PROXY] ${pathname} - User: ${user?.email || 'none'}, isAuth: ${isAuthRoute}`)
+    }
+
+    // If user is authenticated and trying to access the public homepage or auth pages, redirect to organizations
+    if (user && pathname === '/') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/organizations'
+      return NextResponse.redirect(url)
     }
 
     // If user is authenticated and trying to access auth pages, redirect to organizations
