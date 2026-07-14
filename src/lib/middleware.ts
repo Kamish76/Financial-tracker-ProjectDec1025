@@ -20,6 +20,11 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
 
+  // Allow framework assets and public files through without auth checks.
+  if (pathname.startsWith('/_next/') || pathname.includes('.')) {
+    return supabaseResponse
+  }
+
   try {
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
