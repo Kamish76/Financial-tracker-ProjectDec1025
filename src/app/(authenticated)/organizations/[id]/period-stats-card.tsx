@@ -17,9 +17,9 @@ function formatDateRange(startDate: Date, endDate: Date, periodType: "weekly" | 
   if (periodType === "weekly") {
     const start = startDate.toLocaleDateString("en-US", options)
     const end = endDate.toLocaleDateString("en-US", options)
-    return `Week of ${start} - ${end}`
+    return `Current week: ${start} - ${end}`
   } else {
-    return startDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    return `Current month: ${startDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}`
   }
 }
 
@@ -29,7 +29,7 @@ type PeriodStatsCardProps = {
 }
 
 export function PeriodStatsCard({ allTransactions, calculatePeriodStats }: PeriodStatsCardProps) {
-  const [periodType, setPeriodType] = useState<"weekly" | "monthly">("weekly")
+  const [periodType, setPeriodType] = useState<"weekly" | "monthly">("monthly")
   const stats = calculatePeriodStats(allTransactions, periodType)
 
   const netColor =

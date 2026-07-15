@@ -111,8 +111,8 @@ export function AddInitialValueSheet({
         assignedToUserId: assignedToUserId === 'none' ? null : (assignedToUserId === 'current' ? currentUserId : assignedToUserId) || null,
       })
 
-      if (result?.error) {
-        setError(result.error)
+      if (result && 'error' in result) {
+        setError(result.error ?? "Unable to add initial transaction")
         return
       }
 

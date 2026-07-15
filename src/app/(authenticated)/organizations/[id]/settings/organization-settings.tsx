@@ -154,7 +154,7 @@ export function OrganizationSettings({
 				transactionId: selectedInitialTx,
 			})
 
-			if (result?.error) {
+			if (result && 'error' in result) {
 				alert(result.error)
 			} else {
 				setDeleteInitialDialogOpen(false)

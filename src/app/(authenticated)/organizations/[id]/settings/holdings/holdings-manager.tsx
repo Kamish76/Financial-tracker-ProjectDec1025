@@ -52,8 +52,8 @@ export function HoldingsManager({ organizationId, members, cashOnHand, totalAllo
 
     setLoading(null)
 
-    if (result.error) {
-      setError(result.error)
+    if ('error' in result) {
+      setError(result.error ?? "Unable to update baseline")
     } else {
       // Clear edit value after success
       setEditValues((prev) => {

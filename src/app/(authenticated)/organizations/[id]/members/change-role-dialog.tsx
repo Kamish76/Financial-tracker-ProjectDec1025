@@ -50,7 +50,7 @@ export function ChangeRoleDialog({
         newRole,
       })
 
-      if (result.error) {
+      if ('error' in result) {
         alert(result.error)
       } else {
         onOpenChange(false)

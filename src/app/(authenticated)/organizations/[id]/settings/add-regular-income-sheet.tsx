@@ -104,8 +104,8 @@ export function AddRegularIncomeSheet({
             : assignedToUserId || null,
       })
 
-      if (result?.error) {
-        setError(result.error)
+      if (result && 'error' in result) {
+        setError(result.error ?? "Unable to add income")
         return
       }
 

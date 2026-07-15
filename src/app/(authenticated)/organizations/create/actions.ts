@@ -1,7 +1,7 @@
 'use server'
 
-import { redirect } from 'next/navigation'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/auth/guards'
 
 export async function createOrganization(
   name: string,
@@ -19,16 +19,7 @@ export async function createOrganization(
     return { error: 'Organization name must be less than 100 characters' }
   }
 
-  // Use regular client to verify authentication
-  const supabase = await createClient()
-
-  // Get authenticated user
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    console.error('[CREATE_ORG] Auth error:', authError?.message)
-    return { error: 'You must be logged in to create an organization' }
-  }
+  const user = await requireUser()
 
   console.log('[CREATE_ORG] Creating organization:', { name: trimmedName, userId: user.id })
 
@@ -97,7 +88,4 @@ export async function createOrganization(
   }
 
   console.log('[CREATE_ORG] Owner added to organization_members')
-
-  // Redirect to organizations list
-  redirect('/organizations')
 }

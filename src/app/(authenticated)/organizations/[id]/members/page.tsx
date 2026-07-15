@@ -1,8 +1,8 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { MemberList } from './member-list'
 import type { MemberWithProfile } from '@/lib/types/member'
+import { requireOrgMembership } from '@/lib/auth/guards'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -10,28 +10,9 @@ type PageProps = {
 
 export default async function MembersPage({ params }: PageProps) {
   const { id } = await params
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/auth')
-  }
+  const { user, membership } = await requireOrgMembership(id)
 
   const adminClient = createAdminClient()
-
-  // Check if user is a member of this organization
-  const { data: membership, error: membershipError } = await adminClient
-    .from('organization_members')
-    .select('role, is_active')
-    .eq('organization_id', id)
-    .eq('user_id', user.id)
-    .single()
-
-  if (membershipError || !membership || !membership.is_active) {
-    redirect('/organizations')
-  }
 
   // Fetch organization details
   const { data: organization, error: orgError } = await adminClient
@@ -42,6 +23,10 @@ export default async function MembersPage({ params }: PageProps) {
 
   if (orgError || !organization) {
     redirect('/organizations')
+  }
+
+  type MemberRow = Omit<MemberWithProfile, 'profile'> & {
+    profiles?: Array<MemberWithProfile['profile']>
   }
 
   // Fetch all active members with profiles
@@ -73,9 +58,12 @@ export default async function MembersPage({ params }: PageProps) {
   }
 
   // Transform activeMembers to handle profile array (Supabase returns as array)
-  const transformedActiveMembers = (activeMembers || []).map((member: any) => ({
+  const transformedActiveMembers: MemberWithProfile[] = (activeMembers || []).map((member: MemberRow) => ({
     ...member,
-    profile: member.profiles && member.profiles.length > 0 ? member.profiles[0] : { id: member.user_id, full_name: null, avatar_url: null, created_at: new Date().toISOString() }
+    profile:
+      member.profiles && member.profiles.length > 0
+        ? member.profiles[0]
+        : { id: member.user_id, full_name: null, avatar_url: null, created_at: new Date().toISOString() },
   }))
 
   // Fetch inactive members (only for admins/owners)
@@ -109,9 +97,12 @@ export default async function MembersPage({ params }: PageProps) {
       console.error('Error fetching inactive members:', inactiveMembersError)
     } else {
       // Transform inactiveMembers to handle profile array (Supabase returns as array)
-      inactiveMembers = (inactiveMembersData || []).map((member: any) => ({
+      inactiveMembers = (inactiveMembersData || []).map((member: MemberRow) => ({
         ...member,
-        profile: member.profiles && member.profiles.length > 0 ? member.profiles[0] : { id: member.user_id, full_name: null, avatar_url: null, created_at: new Date().toISOString() }
+        profile:
+          member.profiles && member.profiles.length > 0
+            ? member.profiles[0]
+            : { id: member.user_id, full_name: null, avatar_url: null, created_at: new Date().toISOString() },
       }))
     }
   }
