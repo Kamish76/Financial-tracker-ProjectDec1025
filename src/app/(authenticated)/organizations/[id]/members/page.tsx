@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { MemberList } from './member-list'
 import type { MemberWithProfile } from '@/lib/types/member'
 import { requireOrgMembership } from '@/lib/auth/guards'
+import { isWalletOrganization } from '@/lib/wallet'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -24,6 +25,8 @@ export default async function MembersPage({ params }: PageProps) {
   if (orgError || !organization) {
     redirect('/organizations')
   }
+
+  const isWallet = isWalletOrganization(organization.description)
 
   type MemberRow = Omit<MemberWithProfile, 'profile'> & {
     profiles?: Array<MemberWithProfile['profile']>
@@ -111,16 +114,23 @@ export default async function MembersPage({ params }: PageProps) {
     <div className="container mx-auto py-8 px-4">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">{organization.name}</h1>
-        <p className="text-muted-foreground">Manage organization members and invite codes</p>
+        <p className="text-muted-foreground">
+          {isWallet
+            ? 'Wallets do not support members or invite codes.'
+            : 'Manage organization members and invite codes'}
+        </p>
       </div>
 
+      {isWallet ? null : (
       <MemberList
         organizationId={id}
         currentUserId={user.id}
         currentUserRole={membership.role}
         activeMembers={(transformedActiveMembers as MemberWithProfile[]) || []}
         inactiveMembers={inactiveMembers}
+        organizationDescription={organization.description}
       />
+      )}
     </div>
   )
 }

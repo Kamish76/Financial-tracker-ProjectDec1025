@@ -1,13 +1,14 @@
-"use client"
+'use client'
 
-import { useMemo, useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
-import { ReceiptText } from "lucide-react"
+import { useMemo, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
+import { ReceiptText } from 'lucide-react'
 
-import { addExpense } from "./actions"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { addExpense } from './actions'
+import { isWalletOrganization } from '@/lib/wallet'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Sheet,
   SheetContent,
@@ -16,39 +17,41 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "@/components/ui/sheet"
+} from '@/components/ui/sheet'
 
 type AddExpenseSheetProps = {
   organizationId: string
+  organizationDescription?: string | null
 }
 
-export function AddExpenseSheet({ organizationId }: AddExpenseSheetProps) {
+export function AddExpenseSheet({ organizationId, organizationDescription }: AddExpenseSheetProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [amount, setAmount] = useState("")
-  const [category, setCategory] = useState("")
-  const [description, setDescription] = useState("")
-  const [occurredAt, setOccurredAt] = useState<string>("")
+  const [amount, setAmount] = useState('')
+  const [category, setCategory] = useState('')
+  const [description, setDescription] = useState('')
+  const [occurredAt, setOccurredAt] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [expenseType, setExpenseType] = useState<'business' | 'personal'>('business')
+  const isWallet = isWalletOrganization(organizationDescription)
 
   const defaultDate = useMemo(() => new Date().toISOString().slice(0, 10), [])
+
+  const resetForm = () => {
+    setAmount('')
+    setCategory('')
+    setDescription('')
+    setOccurredAt('')
+    setError(null)
+    setExpenseType(isWallet ? 'personal' : 'business')
+  }
 
   const onOpenChange = (next: boolean) => {
     setOpen(next)
     if (!next) {
       resetForm()
     }
-  }
-
-  const resetForm = () => {
-    setAmount("")
-    setCategory("")
-    setDescription("")
-    setOccurredAt("")
-    setError(null)
-    setExpenseType('business')
   }
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -59,12 +62,12 @@ export function AddExpenseSheet({ organizationId }: AddExpenseSheetProps) {
     const dateValue = occurredAt || defaultDate
 
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      setError("Amount must be greater than 0")
+      setError('Amount must be greater than 0')
       return
     }
 
     if (!dateValue) {
-      setError("Date is required")
+      setError('Date is required')
       return
     }
 
@@ -75,11 +78,11 @@ export function AddExpenseSheet({ organizationId }: AddExpenseSheetProps) {
         category: category.trim() || undefined,
         description: description.trim() || undefined,
         occurredAt: dateValue,
-        expenseType,
+        expenseType: isWallet ? 'personal' : expenseType,
       })
 
       if (result && 'error' in result) {
-        setError(result.error ?? "Unable to save expense")
+        setError(result.error ?? 'Unable to save expense')
         return
       }
 
@@ -100,13 +103,18 @@ export function AddExpenseSheet({ organizationId }: AddExpenseSheetProps) {
           aria-label="Open add expense modal"
         >
           <ReceiptText className="h-4 w-4" />
-          Add expense
+          {isWallet ? 'Add wallet expense' : 'Add expense'}
         </Button>
       </SheetTrigger>
+
       <SheetContent side="right">
         <SheetHeader>
-          <SheetTitle>Add expense</SheetTitle>
-          <SheetDescription>Log a business or personal expense paid by you.</SheetDescription>
+          <SheetTitle>{isWallet ? 'Add wallet expense' : 'Add expense'}</SheetTitle>
+          <SheetDescription>
+            {isWallet
+              ? 'Log a personal expense in your private wallet.'
+              : 'Log a business or personal expense paid by you.'}
+          </SheetDescription>
         </SheetHeader>
 
         <div className="mt-4 space-y-2">
@@ -115,7 +123,8 @@ export function AddExpenseSheet({ organizationId }: AddExpenseSheetProps) {
             <Button
               type="button"
               variant={expenseType === 'business' ? 'default' : 'outline'}
-              onClick={() => setExpenseType('business')}
+              onClick={() => !isWallet && setExpenseType('business')}
+              disabled={isWallet}
             >
               Business
             </Button>
@@ -128,9 +137,9 @@ export function AddExpenseSheet({ organizationId }: AddExpenseSheetProps) {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            {expenseType === 'business' 
-              ? 'Paid from business funds you hold' 
-              : 'Paid out-of-pocket (eligible for reimbursement)'}
+            {isWallet || expenseType === 'personal'
+              ? 'Paid out-of-pocket from your wallet'
+              : 'Paid from business funds you hold'}
           </p>
         </div>
 
@@ -146,7 +155,7 @@ export function AddExpenseSheet({ organizationId }: AddExpenseSheetProps) {
               inputMode="decimal"
               required
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(event) => setAmount(event.target.value)}
             />
           </div>
 
@@ -158,7 +167,7 @@ export function AddExpenseSheet({ organizationId }: AddExpenseSheetProps) {
               type="date"
               required
               value={occurredAt || defaultDate}
-              onChange={(e) => setOccurredAt(e.target.value)}
+              onChange={(event) => setOccurredAt(event.target.value)}
             />
           </div>
 
@@ -169,7 +178,7 @@ export function AddExpenseSheet({ organizationId }: AddExpenseSheetProps) {
               name="category"
               placeholder="e.g. Supplies, Equipment, Capital"
               value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              onChange={(event) => setCategory(event.target.value)}
             />
           </div>
 
@@ -180,7 +189,7 @@ export function AddExpenseSheet({ organizationId }: AddExpenseSheetProps) {
               name="description"
               placeholder="Optional note"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(event) => setDescription(event.target.value)}
             />
           </div>
 
@@ -192,20 +201,11 @@ export function AddExpenseSheet({ organizationId }: AddExpenseSheetProps) {
 
           <SheetFooter className="pt-2">
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-end sm:space-x-2">
-              <Button
-                type="button"
-                variant="ghost"
-                className="sm:w-auto"
-                onClick={() => onOpenChange(false)}
-              >
+              <Button type="button" variant="ghost" className="sm:w-auto" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                disabled={isPending}
-                className="sm:w-auto"
-              >
-                {isPending ? "Saving..." : "Save expense"}
+              <Button type="submit" disabled={isPending} className="sm:w-auto">
+                {isPending ? 'Saving...' : 'Save expense'}
               </Button>
             </div>
           </SheetFooter>

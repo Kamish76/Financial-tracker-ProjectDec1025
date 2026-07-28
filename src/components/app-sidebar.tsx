@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Building2, User, LogOut, Settings, Moon, Sun } from 'lucide-react'
+import { Building2, User, LogOut, Settings, Moon, Sun, WalletCards } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -16,13 +16,18 @@ import {
 } from '@/components/ui/sidebar'
 import { usePathname, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 const navigationItems = [
   {
     title: 'Organizations',
     url: '/organizations',
     icon: Building2,
+  },
+  {
+    title: 'Personal Wallet',
+    url: '/organizations?mode=wallet',
+    icon: WalletCards,
   },
   {
     title: 'Profile',
@@ -34,15 +39,15 @@ const navigationItems = [
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const [mounted, setMounted] = useState(false)
-  const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window === 'undefined') {
+      return 'light'
+    }
 
-  useEffect(() => {
-    setMounted(true)
     const stored = window.localStorage.getItem('orgfinance-theme') as 'light' | 'dark' | null
     const current = document.documentElement.dataset.theme as 'light' | 'dark' | undefined
-    setTheme(stored || current || 'light')
-  }, [])
+    return stored || current || 'light'
+  })
 
   const handleLogout = async () => {
     try {
@@ -86,7 +91,9 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {navigationItems.map((item) => {
-                const isActive = pathname === item.url || pathname.startsWith(item.url + '/')
+                const isActive = item.url.includes('?')
+                  ? pathname === '/organizations'
+                  : pathname === item.url || pathname.startsWith(item.url + '/')
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive}>
@@ -117,7 +124,7 @@ export function AppSidebar() {
               
               <SidebarMenuItem>
                 <SidebarMenuButton onClick={handleThemeToggle} className="w-full cursor-pointer">
-                  {mounted && theme === 'dark' ? <Sun /> : <Moon />}
+                    {theme === 'dark' ? <Sun /> : <Moon />}
                   <span>Theme</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>

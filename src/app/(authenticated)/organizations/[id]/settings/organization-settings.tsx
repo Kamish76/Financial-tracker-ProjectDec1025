@@ -52,6 +52,7 @@ type OrganizationWithRole = {
 	created_at: string
 	user_role: OrganizationRole
 	member_count: number
+	is_wallet?: boolean
 }
 
 type MemberWithUser = {
@@ -99,6 +100,7 @@ export function OrganizationSettings({
 	const router = useRouter()
 	const isOwner = organization.user_role === 'owner'
 	const canEdit = organization.user_role === 'owner' || organization.user_role === 'admin'
+	const isWallet = Boolean(organization.is_wallet)
 
 	// Edit organization state
 	const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -345,7 +347,7 @@ export function OrganizationSettings({
 				</Card>
 
 				{/* Manage Members Card - Admin and Owner */}
-				{canEdit && (
+				{canEdit && !isWallet && (
 					<Card>
 						<CardHeader>
 							<div className="flex items-center justify-between">
@@ -383,7 +385,7 @@ export function OrganizationSettings({
 				)}
 
 				{/* Business Held Allocations - Owner Only */}
-				{isOwner && (
+				{isOwner && !isWallet && (
 					<Card>
 						<CardHeader>
 							<div className="flex items-center justify-between">
@@ -415,7 +417,7 @@ export function OrganizationSettings({
 				)}
 
 				{/* Add Transactions for Members - Owner Only */}
-				{isOwner && (
+				{isOwner && !isWallet && (
 					<Card>
 						<CardHeader>
 							<div className="flex items-center justify-between">
@@ -455,7 +457,7 @@ export function OrganizationSettings({
 				)}
 
 				{/* Initial Values Section - Owner Only */}
-				{isOwner && (
+				{isOwner && !isWallet && (
 					<Card>
 						<CardHeader>
 							<div className="flex items-center justify-between">

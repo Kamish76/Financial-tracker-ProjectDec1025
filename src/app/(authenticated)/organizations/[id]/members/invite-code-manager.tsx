@@ -25,32 +25,42 @@ import {
   isInviteCodeUsable,
 } from '@/lib/types/invite'
 import { createInviteCode, revokeInviteCode, getInviteCodes } from './actions'
+import { isWalletOrganization } from '@/lib/wallet'
 
 type InviteCodeManagerProps = {
   organizationId: string
+  organizationDescription?: string | null
 }
 
-export function InviteCodeManager({ organizationId }: InviteCodeManagerProps) {
+export function InviteCodeManager({ organizationId, organizationDescription }: InviteCodeManagerProps) {
   const [inviteCodes, setInviteCodes] = useState<InviteCodeWithCreator[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [maxUses, setMaxUses] = useState<string>('')
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
-
-  // Fetch invite codes
-  const fetchInviteCodes = async () => {
-    setIsLoading(true)
-    const result = await getInviteCodes(organizationId)
-    if (result.inviteCodes) {
-      setInviteCodes(result.inviteCodes)
-    }
-    setIsLoading(false)
-  }
+  const isWallet = isWalletOrganization(organizationDescription)
 
   useEffect(() => {
-    fetchInviteCodes()
-  }, [organizationId])
+    if (isWallet) {
+      return
+    }
+
+    const fetchInviteCodes = async () => {
+      setIsLoading(true)
+      const result = await getInviteCodes(organizationId)
+      if (result.inviteCodes) {
+        setInviteCodes(result.inviteCodes)
+      }
+      setIsLoading(false)
+    }
+
+    void fetchInviteCodes()
+  }, [organizationId, isWallet])
+
+  if (isWallet) {
+    return null
+  }
 
   const handleCreateCode = () => {
     startTransition(async () => {

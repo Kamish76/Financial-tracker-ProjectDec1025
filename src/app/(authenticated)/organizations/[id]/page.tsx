@@ -13,6 +13,7 @@ import { getOrganizationStats } from '@/lib/finance'
 import { StatsCards } from '@/components/stats-cards'
 import { MemberBalancesTable } from '@/components/member-balances-table'
 import { DashboardClientWrapper } from './dashboard-client-wrapper'
+import { isWalletOrganization } from '@/lib/wallet'
 
 type PageProps = {
 	params: Promise<{
@@ -79,6 +80,8 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		.eq('id', id)
 		.maybeSingle()
 
+	const isWallet = isWalletOrganization(organization?.description)
+
 	const { data: transactionRows, error: transactionsError } = await adminClient
 		.from('transactions')
 		.select('id, type, amount, category, description, created_at, is_initial')
@@ -127,11 +130,19 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 					</Link>
 					<span>/</span>
 					<span className="text-foreground font-medium">{organization?.name ?? 'Organization'}</span>
+					{isWallet && (
+						<span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+							Wallet
+						</span>
+					)}
 				</div>
-				<h1 className="text-3xl font-semibold text-foreground">Finance hub</h1>
+				<h1 className="text-3xl font-semibold text-foreground">
+					{isWallet ? 'Personal Wallet' : 'Finance hub'}
+				</h1>
 				<p className="text-muted-foreground max-w-2xl">
-					Manage income and expenses for this organization. Use the quick actions below to open modals
-					for adding entries or back tracking. View the full ledger in the dedicated records page.
+					{isWallet
+						? 'Manage your personal finances in a private wallet UI. Collaboration and invite features are hidden here.'
+						: 'Manage income and expenses for this organization. Use the quick actions below to open modals for adding entries or back tracking. View the full ledger in the dedicated records page.'}
 				</p>
 			</div>
 
@@ -144,9 +155,11 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 				<CardHeader>
 					<div className="flex items-start justify-between gap-3">
 						<div className="space-y-1">
-							<CardTitle>Quick actions</CardTitle>
+							<CardTitle>{isWallet ? 'Wallet actions' : 'Quick actions'}</CardTitle>
 							<CardDescription>
-								Quick actions open sheets for fast entry. Add income, expenses, and refunds.
+								{isWallet
+									? 'Wallet actions focus on private expense tracking and balance updates.'
+									: 'Quick actions open sheets for fast entry. Add income, expenses, and refunds.'}
 							</CardDescription>
 						</div>
 						<div className="rounded-full bg-accent text-background p-2">
@@ -163,7 +176,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 						</Button>
 					)}
 					{canManage ? (
-						<AddExpenseSheet organizationId={id} />
+						<AddExpenseSheet organizationId={id} organizationDescription={organization?.description} />
 					) : (
 						<Button
 							type="button"
@@ -206,7 +219,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 					>
 						<Link href={`/organizations/${id}/settings`}>
 							<Settings className="h-4 w-4" />
-							Manage Settings
+							{isWallet ? 'Wallet Settings' : 'Manage Settings'}
 						</Link>
 					</Button>
 				</CardContent>

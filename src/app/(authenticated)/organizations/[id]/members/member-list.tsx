@@ -11,6 +11,7 @@ import type { MemberWithProfile, OrganizationRole } from '@/lib/types/member'
 import { ROLE_INFO, getMemberDisplayName, formatJoinedDate, formatDeactivatedDate } from '@/lib/types/member'
 import { MemberCard } from './member-card'
 import { InviteCodeManager } from './invite-code-manager'
+import { isWalletOrganization } from '@/lib/wallet'
 
 type MemberListProps = {
   organizationId: string
@@ -18,6 +19,7 @@ type MemberListProps = {
   currentUserRole: OrganizationRole
   activeMembers: MemberWithProfile[]
   inactiveMembers: MemberWithProfile[]
+  organizationDescription?: string | null
 }
 
 export function MemberList({
@@ -26,6 +28,7 @@ export function MemberList({
   currentUserRole,
   activeMembers: initialActiveMembers,
   inactiveMembers: initialInactiveMembers,
+  organizationDescription,
 }: MemberListProps) {
   const [activeMembers, setActiveMembers] = useState(initialActiveMembers)
   const [inactiveMembers, setInactiveMembers] = useState(initialInactiveMembers)
@@ -33,6 +36,7 @@ export function MemberList({
   const [roleFilter, setRoleFilter] = useState<OrganizationRole | 'all'>('all')
 
   const canManage = ['owner', 'admin'].includes(currentUserRole)
+  const isWallet = isWalletOrganization(organizationDescription)
 
   // Filter members based on search and role
   const filterMembers = (members: MemberWithProfile[]) => {
@@ -171,8 +175,8 @@ export function MemberList({
       </Card>
 
       {/* Invite Codes Section */}
-      {canManage && (
-        <InviteCodeManager organizationId={organizationId} />
+      {canManage && !isWallet && (
+        <InviteCodeManager organizationId={organizationId} organizationDescription={organizationDescription} />
       )}
     </div>
   )

@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/server'
 import { OrganizationSettings } from './organization-settings'
 import { requireOrgMembership } from '@/lib/auth/guards'
+import { isWalletOrganization } from '@/lib/wallet'
 
 type SettingsPageProps = {
 	params: Promise<{
@@ -95,6 +96,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 		...organization,
 		user_role: effectiveMembership.role,
 		member_count: memberCount || 0,
+		is_wallet: isWalletOrganization(organization.description),
 	}
 
 	const membersFormatted = (members || []).map((m) => {
