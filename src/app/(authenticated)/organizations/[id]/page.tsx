@@ -14,6 +14,8 @@ import { StatsCards } from '@/components/stats-cards'
 import { MemberBalancesTable } from '@/components/member-balances-table'
 import { DashboardClientWrapper } from './dashboard-client-wrapper'
 import { isWalletOrganization } from '@/lib/wallet'
+import { getAccountsWithBalances } from '@/lib/wallet-accounts'
+import { WalletFab } from '@/components/wallet/wallet-fab'
 
 type PageProps = {
 	params: Promise<{
@@ -82,6 +84,8 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 
 	const isWallet = isWalletOrganization(organization?.description)
 	debugInfo.push({ label: 'isWallet', value: isWallet ? 'yes' : 'no' })
+
+	const accounts = isWallet ? await getAccountsWithBalances(id, false) : []
 
 	const { data: transactionRows, error: transactionsError } = await adminClient
 		.from('transactions')
@@ -348,6 +352,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 					</CardContent>
 				</Card>
 			</div>
+			{isWallet && <WalletFab organizationId={id} accounts={accounts} />}
 		</div>
 	)
 }

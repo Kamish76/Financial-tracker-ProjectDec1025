@@ -89,9 +89,9 @@ export async function getAccountsWithBalances(
   const adminClient = createAdminClient()
   const { data: transactions, error } = await adminClient
     .from('transactions')
-    .select('id, account_id, type, amount')
+    .select('id, account_id, transfer_to_account_id, type, amount')
     .eq('organization_id', organizationId)
-    .not('account_id', 'is', null)
+    .or('account_id.not.is.null,transfer_to_account_id.not.is.null')
 
   if (error) {
     console.error('[getAccountsWithBalances] Error fetching transactions:', error.message)
@@ -104,13 +104,19 @@ export async function getAccountsWithBalances(
     let transaction_count = 0
 
     for (const tx of txList) {
+      const amt = Number(tx.amount ?? 0)
       if (tx.account_id === acc.id) {
         transaction_count++
-        const amt = Number(tx.amount ?? 0)
         if (tx.type === 'income') {
           current_balance += amt
-        } else if (tx.type === 'expense_business' || tx.type === 'expense_personal') {
+        } else if (tx.type === 'expense_business' || tx.type === 'expense_personal' || tx.type === 'transfer') {
           current_balance -= amt
+        }
+      }
+      if (tx.transfer_to_account_id === acc.id) {
+        transaction_count++
+        if (tx.type === 'transfer') {
+          current_balance += amt
         }
       }
     }
@@ -295,7 +301,7 @@ export async function deleteWalletAccount(
     const { count, error: txError } = await adminClient
       .from('transactions')
       .select('id', { count: 'exact', head: true })
-      .eq('account_id', accountId)
+      .or(`account_id.eq.${accountId},transfer_to_account_id.eq.${accountId}`)
 
     if (txError) {
       return { error: 'Failed to verify transaction references' }
