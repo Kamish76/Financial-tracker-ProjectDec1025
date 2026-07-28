@@ -2,7 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireUser } from '@/lib/auth/guards'
-import { encodeWalletDescription } from '@/lib/wallet'
+import { encodeWalletDescription, isWalletOrganization } from '@/lib/wallet'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 
@@ -91,6 +91,20 @@ export async function createOrganization(
   }
 
   console.log('[CREATE_ORG] Owner added to organization_members')
+
+  if (isWalletOrganization(description)) {
+    const { error: accError } = await adminClient.from('wallet_accounts').insert({
+      organization_id: org.id,
+      name: 'Cash',
+      starting_value: 0,
+      is_active: true,
+    })
+    if (accError) {
+      console.error('[CREATE_ORG] Failed to spawn default Cash account:', accError.message)
+    } else {
+      console.log('[CREATE_ORG] Default Cash account created for wallet:', org.id)
+    }
+  }
 
   revalidatePath('/', 'layout')
   redirect(`/organizations/${org.id}`)

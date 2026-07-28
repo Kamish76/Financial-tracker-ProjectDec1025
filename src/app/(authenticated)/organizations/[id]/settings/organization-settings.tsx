@@ -346,6 +346,30 @@ export function OrganizationSettings({
 					</CardContent>
 				</Card>
 
+				{/* Personal Wallet Sub Accounts Card */}
+				{isWallet && (
+					<Card>
+						<CardHeader>
+							<div className="flex items-center justify-between">
+								<div className="flex items-center gap-3">
+									<div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg flex items-center justify-center">
+										<Receipt className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+									</div>
+									<div>
+										<CardTitle>Sub Accounts</CardTitle>
+										<CardDescription>
+											Manage custom accounts and starting balances for your personal wallet
+										</CardDescription>
+									</div>
+								</div>
+								<Button onClick={() => router.push(`/organizations/${organization.id}/accounts`)}>
+									Manage Accounts
+								</Button>
+							</div>
+						</CardHeader>
+					</Card>
+				)}
+
 				{/* Manage Members Card - Admin and Owner */}
 				{canEdit && !isWallet && (
 					<Card>
