@@ -14,40 +14,74 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
-const navigationItems = [
-  {
-    title: 'Organizations',
-    url: '/organizations',
-    icon: Building2,
-  },
-  {
-    title: 'Personal Wallet',
-    url: '/organizations?mode=wallet',
-    icon: WalletCards,
-  },
-  {
-    title: 'Profile',
-    url: '/profile',
-    icon: User,
-  },
-]
-
-export function AppSidebar() {
+export function AppSidebar({ walletId }: { walletId?: string | null } = {}) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const router = useRouter()
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    if (typeof window === 'undefined') {
-      return 'light'
-    }
+  const [theme, setTheme] = useState<'light' | 'dark'>('light')
 
+  const walletUrl = walletId
+    ? `/organizations/${walletId}`
+    : '/organizations/create?mode=wallet'
+
+  const navigationItems = [
+    {
+      title: 'Organizations',
+      url: '/organizations',
+      icon: Building2,
+    },
+    {
+      title: 'Personal Wallet',
+      url: walletUrl,
+      icon: WalletCards,
+    },
+    {
+      title: 'Profile',
+      url: '/profile',
+      icon: User,
+    },
+  ]
+
+  const isWalletActive = walletId
+    ? pathname === `/organizations/${walletId}` ||
+      pathname.startsWith(`/organizations/${walletId}/`)
+    : pathname === '/organizations/create' &&
+      searchParams?.get('mode') === 'wallet'
+
+  const isItemActive = (itemTitle: string, itemUrl: string) => {
+    if (itemTitle === 'Personal Wallet') {
+      return isWalletActive
+    }
+    if (itemTitle === 'Organizations') {
+      if (isWalletActive) {
+        return false
+      }
+      return pathname === '/organizations' || pathname.startsWith('/organizations/')
+    }
+    return pathname === itemUrl || pathname.startsWith(`${itemUrl}/`)
+  }
+
+  useEffect(() => {
     const stored = window.localStorage.getItem('orgfinance-theme') as 'light' | 'dark' | null
     const current = document.documentElement.dataset.theme as 'light' | 'dark' | undefined
-    return stored || current || 'light'
-  })
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    const initialTheme =
+      stored === 'light' || stored === 'dark'
+        ? stored
+        : current === 'light' || current === 'dark'
+        ? current
+        : prefersDark
+        ? 'dark'
+        : 'light'
+    requestAnimationFrame(() => {
+      setTheme(initialTheme)
+      document.documentElement.dataset.theme = initialTheme
+    })
+  }, [])
 
   const handleLogout = async () => {
     try {
@@ -91,9 +125,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {navigationItems.map((item) => {
-                const isActive = item.url.includes('?')
-                  ? pathname === '/organizations'
-                  : pathname === item.url || pathname.startsWith(item.url + '/')
+                const isActive = isItemActive(item.title, item.url)
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive}>

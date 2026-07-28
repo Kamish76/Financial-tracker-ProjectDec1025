@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useTransition } from 'react'
+import { useState, useEffect, useTransition, useCallback } from 'react'
 import { Ticket, Plus, Copy, X, Check } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -41,22 +41,21 @@ export function InviteCodeManager({ organizationId, organizationDescription }: I
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
   const isWallet = isWalletOrganization(organizationDescription)
 
+  const fetchInviteCodes = useCallback(async () => {
+    setIsLoading(true)
+    const result = await getInviteCodes(organizationId)
+    if (result.inviteCodes) {
+      setInviteCodes(result.inviteCodes)
+    }
+    setIsLoading(false)
+  }, [organizationId])
+
   useEffect(() => {
     if (isWallet) {
       return
     }
-
-    const fetchInviteCodes = async () => {
-      setIsLoading(true)
-      const result = await getInviteCodes(organizationId)
-      if (result.inviteCodes) {
-        setInviteCodes(result.inviteCodes)
-      }
-      setIsLoading(false)
-    }
-
     void fetchInviteCodes()
-  }, [organizationId, isWallet])
+  }, [isWallet, fetchInviteCodes])
 
   if (isWallet) {
     return null

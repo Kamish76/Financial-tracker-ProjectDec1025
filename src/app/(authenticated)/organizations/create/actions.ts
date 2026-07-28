@@ -3,6 +3,8 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireUser } from '@/lib/auth/guards'
 import { encodeWalletDescription } from '@/lib/wallet'
+import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 
 export async function createOrganization(
   name: string,
@@ -89,6 +91,9 @@ export async function createOrganization(
   }
 
   console.log('[CREATE_ORG] Owner added to organization_members')
+
+  revalidatePath('/', 'layout')
+  redirect(`/organizations/${org.id}`)
 }
 
 export async function createWallet(
