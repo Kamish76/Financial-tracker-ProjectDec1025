@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Wallet, ArrowUpRight } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import type { AccountWithBalance } from '@/lib/wallet-accounts'
+import type { AccountWithBalance } from '@/lib/wallet-types'
 
 type Props = {
   organizationId: string
