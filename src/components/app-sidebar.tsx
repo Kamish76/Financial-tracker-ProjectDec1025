@@ -94,7 +94,7 @@ export function AppSidebar({ walletId }: { walletId?: string | null } = {}) {
 
   const handleThemeToggle = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light'
-    document.documentElement.dataset.theme = newTheme
+    applyTheme(newTheme)
     window.localStorage.setItem('orgfinance-theme', newTheme)
     setTheme(newTheme)
   }
