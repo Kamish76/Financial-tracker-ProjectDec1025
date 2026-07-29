@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { ReceiptText } from 'lucide-react'
 
@@ -35,6 +35,14 @@ export function AddExpenseSheet({ organizationId, organizationDescription }: Add
   const [isPending, startTransition] = useTransition()
   const [expenseType, setExpenseType] = useState<'business' | 'personal'>('business')
   const isWallet = isWalletOrganization(organizationDescription)
+
+  useEffect(() => {
+    if (!error) return
+    const timer = setTimeout(() => {
+      setError(null)
+    }, 30000)
+    return () => clearTimeout(timer)
+  }, [error])
 
   const defaultDate = useMemo(() => new Date().toISOString().slice(0, 10), [])
 

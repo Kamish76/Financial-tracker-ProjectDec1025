@@ -179,6 +179,14 @@ export function AddTransactionModal({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    if (!error) return
+    const timer = setTimeout(() => {
+      setError(null)
+    }, 30000)
+    return () => clearTimeout(timer)
+  }, [error])
+
   // Date/time state
   const [txDate, setTxDate] = useState<string>(
     new Date().toISOString().split('T')[0]

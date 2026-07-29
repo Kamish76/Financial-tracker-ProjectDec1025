@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Pencil } from "lucide-react"
 
@@ -73,6 +73,14 @@ export function EditInitialValueSheet({
   const [assignedToUserId, setAssignedToUserId] = useState<string>("")
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  useEffect(() => {
+    if (!error) return
+    const timer = setTimeout(() => {
+      setError(null)
+    }, 30000)
+    return () => clearTimeout(timer)
+  }, [error])
 
   const defaultDate = useMemo(() => initialTransaction.occurred_at.slice(0, 10), [initialTransaction.occurred_at])
 

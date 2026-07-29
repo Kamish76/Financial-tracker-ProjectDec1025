@@ -53,6 +53,14 @@ export function ManageCategoriesDialog({
   const [isLoading, setIsLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
 
+  useEffect(() => {
+    if (!error) return
+    const timer = setTimeout(() => {
+      setError(null)
+    }, 30000)
+    return () => clearTimeout(timer)
+  }, [error])
+
   const loadCategories = async () => {
     setIsLoading(true)
     setError(null)

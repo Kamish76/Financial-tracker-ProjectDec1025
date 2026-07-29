@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import {
@@ -43,6 +43,14 @@ export function EditOrganizationDialog({
 	const [error, setError] = useState<string | null>(null)
 	const [isPending, startTransition] = useTransition()
 	const isWallet = Boolean(organization.is_wallet)
+
+	useEffect(() => {
+		if (!error) return
+		const timer = setTimeout(() => {
+			setError(null)
+		}, 30000)
+		return () => clearTimeout(timer)
+	}, [error])
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()

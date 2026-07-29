@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { Archive, ArchiveRestore, Trash2, Wallet, AlertCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
@@ -31,6 +31,14 @@ export function AccountsClient({ organizationId, accounts }: AccountsClientProps
   const [showArchived, setShowArchived] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  useEffect(() => {
+    if (!errorMsg) return
+    const timer = setTimeout(() => {
+      setErrorMsg(null)
+    }, 30000)
+    return () => clearTimeout(timer)
+  }, [errorMsg])
 
   const activeAccounts = accounts.filter((a) => a.is_active)
   const archivedAccounts = accounts.filter((a) => !a.is_active)

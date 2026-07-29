@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { Ticket, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -17,6 +17,14 @@ export default function JoinOrganizationPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<{ organizationName: string; organizationId: string } | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  useEffect(() => {
+    if (!error) return
+    const timer = setTimeout(() => {
+      setError(null)
+    }, 30000)
+    return () => clearTimeout(timer)
+  }, [error])
 
   const handleJoinWithCode = () => {
     setError(null)
