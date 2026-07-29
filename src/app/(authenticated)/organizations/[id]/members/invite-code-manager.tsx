@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useTransition } from 'react'
+import { useState, useEffect, useTransition, useCallback } from 'react'
 import { Ticket, Plus, Copy, X, Check } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -25,32 +25,41 @@ import {
   isInviteCodeUsable,
 } from '@/lib/types/invite'
 import { createInviteCode, revokeInviteCode, getInviteCodes } from './actions'
+import { isWalletOrganization } from '@/lib/wallet'
 
 type InviteCodeManagerProps = {
   organizationId: string
+  organizationDescription?: string | null
 }
 
-export function InviteCodeManager({ organizationId }: InviteCodeManagerProps) {
+export function InviteCodeManager({ organizationId, organizationDescription }: InviteCodeManagerProps) {
   const [inviteCodes, setInviteCodes] = useState<InviteCodeWithCreator[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [maxUses, setMaxUses] = useState<string>('')
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
+  const isWallet = isWalletOrganization(organizationDescription)
 
-  // Fetch invite codes
-  const fetchInviteCodes = async () => {
+  const fetchInviteCodes = useCallback(async () => {
     setIsLoading(true)
     const result = await getInviteCodes(organizationId)
     if (result.inviteCodes) {
       setInviteCodes(result.inviteCodes)
     }
     setIsLoading(false)
-  }
+  }, [organizationId])
 
   useEffect(() => {
-    fetchInviteCodes()
-  }, [organizationId])
+    if (isWallet) {
+      return
+    }
+    void fetchInviteCodes()
+  }, [isWallet, fetchInviteCodes])
+
+  if (isWallet) {
+    return null
+  }
 
   const handleCreateCode = () => {
     startTransition(async () => {

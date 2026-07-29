@@ -13,6 +13,10 @@ import { getOrganizationStats } from '@/lib/finance'
 import { StatsCards } from '@/components/stats-cards'
 import { MemberBalancesTable } from '@/components/member-balances-table'
 import { DashboardClientWrapper } from './dashboard-client-wrapper'
+import { isWalletOrganization } from '@/lib/wallet'
+import { getAccountsWithBalances } from '@/lib/wallet-accounts'
+import { WalletFab } from '@/components/wallet/wallet-fab'
+import { WalletTotalBalanceCard } from '@/components/wallet/wallet-total-balance-card'
 
 type PageProps = {
 	params: Promise<{
@@ -79,6 +83,11 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		.eq('id', id)
 		.maybeSingle()
 
+	const isWallet = isWalletOrganization(organization?.description)
+	debugInfo.push({ label: 'isWallet', value: isWallet ? 'yes' : 'no' })
+
+	const accounts = isWallet ? await getAccountsWithBalances(id, false) : []
+
 	const { data: transactionRows, error: transactionsError } = await adminClient
 		.from('transactions')
 		.select('id, type, amount, category, description, created_at, is_initial')
@@ -127,99 +136,167 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 					</Link>
 					<span>/</span>
 					<span className="text-foreground font-medium">{organization?.name ?? 'Organization'}</span>
+					{isWallet && (
+						<span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+							Wallet
+						</span>
+					)}
 				</div>
-				<h1 className="text-3xl font-semibold text-foreground">Finance hub</h1>
+				<h1 className="text-3xl font-semibold text-foreground">
+					{isWallet ? 'Personal Wallet' : 'Finance hub'}
+				</h1>
 				<p className="text-muted-foreground max-w-2xl">
-					Manage income and expenses for this organization. Use the quick actions below to open modals
-					for adding entries or back tracking. View the full ledger in the dedicated records page.
+					{isWallet
+						? 'Manage your personal finances in a private wallet UI. Collaboration and invite features are hidden here.'
+						: 'Manage income and expenses for this organization. Use the quick actions below to open modals for adding entries or back tracking. View the full ledger in the dedicated records page.'}
 				</p>
 			</div>
 
 			{/* Top-level stats */}
-			<StatsCards totals={stats.totals} />
+			{!isWallet && <StatsCards totals={stats.totals} />}
+			{isWallet && <WalletTotalBalanceCard organizationId={id} accounts={accounts} />}
 
 		{/* Period Summary Stats */}
 		<DashboardClientWrapper allTransactions={transactions} />
-			<Card>
-				<CardHeader>
-					<div className="flex items-start justify-between gap-3">
-						<div className="space-y-1">
-							<CardTitle>Quick actions</CardTitle>
-							<CardDescription>
-								Quick actions open sheets for fast entry. Add income, expenses, and refunds.
-							</CardDescription>
+			{!isWallet && (
+				<Card>
+					<CardHeader>
+						<div className="flex items-start justify-between gap-3">
+							<div className="space-y-1">
+								<CardTitle>{isWallet ? 'Wallet actions' : 'Quick actions'}</CardTitle>
+								<CardDescription>
+									{isWallet
+										? 'Wallet actions focus on private expense tracking and balance updates.'
+										: 'Quick actions open sheets for fast entry. Add income, expenses, and refunds.'}
+								</CardDescription>
+							</div>
+							<div className="rounded-full bg-accent text-background p-2">
+								<ArrowLeftRight className="h-5 w-5" />
+							</div>
 						</div>
-						<div className="rounded-full bg-accent text-background p-2">
-							<ArrowLeftRight className="h-5 w-5" />
+					</CardHeader>
+					<CardContent className="grid gap-3 md:grid-cols-2">
+						{canManage ? (
+							<AddIncomeSheet organizationId={id} />
+						) : (
+							<Button type="button" className="w-full justify-start gap-2" disabled aria-disabled>
+								Add income (insufficient permissions)
+							</Button>
+						)}
+						{canManage ? (
+							<AddExpenseSheet organizationId={id} organizationDescription={organization?.description} />
+						) : (
+							<Button
+								type="button"
+								variant="secondary"
+								className="w-full justify-start gap-2"
+								disabled
+								aria-disabled
+							>
+								Add expense (insufficient permissions)
+							</Button>
+						)}
+						{!isWallet && (
+							canManage ? (
+								<RefundSheet organizationId={id} />
+							) : (
+								<Button
+									type="button"
+									variant="outline"
+									className="w-full justify-start gap-2"
+									disabled
+									aria-disabled
+								>
+									Refund (insufficient permissions)
+								</Button>
+							)
+						)}
+						{isWallet && (
+							<Button
+								asChild
+								variant="outline"
+								className="w-full justify-start gap-2"
+								aria-label="Manage wallet settings"
+							>
+								<Link href={`/organizations/${id}/settings`}>
+									<Settings className="h-4 w-4" />
+									Wallet Settings
+								</Link>
+							</Button>
+						)}
+						<Button
+							asChild
+							className="w-full justify-start gap-2"
+							aria-label="Go to full records"
+						>
+							<Link href={`/organizations/${id}/records`}>
+								<ScrollText className="h-4 w-4" />
+								View full records
+							</Link>
+						</Button>
+						{!isWallet && (
+							<Button
+								asChild
+								variant="outline"
+								className="w-full justify-start gap-2 md:col-span-2"
+								aria-label="Manage organization settings"
+							>
+								<Link href={`/organizations/${id}/settings`}>
+									<Settings className="h-4 w-4" />
+									Manage Settings
+								</Link>
+							</Button>
+						)}
+					</CardContent>
+				</Card>
+			)}
+			{!isWallet && (
+				<Card>
+					<CardHeader>
+						<CardTitle>Member balances</CardTitle>
+						<CardDescription>Business funds held and outstanding personal contributions.</CardDescription>
+					</CardHeader>
+					<CardContent>
+						<MemberBalancesTable members={stats.members} />
+					</CardContent>
+				</Card>
+			)}
+			{isWallet && (
+				<Card>
+					<CardHeader>
+						<div className="flex items-start justify-between gap-3">
+							<div className="space-y-1">
+								<CardTitle>Wallet Sub Accounts</CardTitle>
+								<CardDescription>
+									Organize your personal funds across custom cash, checking, and savings accounts.
+								</CardDescription>
+							</div>
+							<div className="rounded-full bg-accent text-background p-2">
+								<ArrowLeftRight className="h-5 w-5" />
+							</div>
 						</div>
-					</div>
-				</CardHeader>
-				<CardContent className="grid gap-3 md:grid-cols-2">
-					{canManage ? (
-						<AddIncomeSheet organizationId={id} />
-					) : (
-						<Button type="button" className="w-full justify-start gap-2" disabled aria-disabled>
-							Add income (insufficient permissions)
+					</CardHeader>
+					<CardContent className="flex flex-col sm:flex-row flex-wrap gap-3">
+						<Button asChild className="w-full sm:w-auto">
+							<Link href={`/organizations/${id}/accounts`}>
+								Manage Sub Accounts
+							</Link>
 						</Button>
-					)}
-					{canManage ? (
-						<AddExpenseSheet organizationId={id} />
-					) : (
-						<Button
-							type="button"
-							variant="secondary"
-							className="w-full justify-start gap-2"
-							disabled
-							aria-disabled
-						>
-							Add expense (insufficient permissions)
+						<Button asChild variant="outline" className="w-full sm:w-auto">
+							<Link href={`/organizations/${id}/records`}>
+								<ScrollText className="h-4 w-4 mr-2" />
+								View full records
+							</Link>
 						</Button>
-					)}
-					{canManage ? (
-						<RefundSheet organizationId={id} />
-					) : (
-						<Button
-							type="button"
-							variant="outline"
-							className="w-full justify-start gap-2"
-							disabled
-							aria-disabled
-						>
-							Refund (insufficient permissions)
+						<Button asChild variant="outline" className="w-full sm:w-auto">
+							<Link href={`/organizations/${id}/settings`}>
+								<Settings className="h-4 w-4 mr-2" />
+								Wallet Settings
+							</Link>
 						</Button>
-					)}
-					<Button
-						asChild
-						className="w-full justify-start gap-2"
-						aria-label="Go to full records"
-					>
-						<Link href={`/organizations/${id}/records`}>
-							<ScrollText className="h-4 w-4" />
-							View full records
-						</Link>
-					</Button>
-					<Button
-						asChild
-						variant="outline"
-						className="w-full justify-start gap-2 md:col-span-2"
-						aria-label="Manage organization settings"
-					>
-						<Link href={`/organizations/${id}/settings`}>
-							<Settings className="h-4 w-4" />
-							Manage Settings
-						</Link>
-					</Button>
-				</CardContent>
-			</Card>
-			<Card>
-				<CardHeader>
-					<CardTitle>Member balances</CardTitle>
-					<CardDescription>Business funds held and outstanding personal contributions.</CardDescription>
-				</CardHeader>
-				<CardContent>
-					<MemberBalancesTable members={stats.members} />
-				</CardContent>
-			</Card>
+					</CardContent>
+				</Card>
+			)}
 
 			<div className="grid gap-4 lg:grid-cols-[1.1fr,1.2fr]">
 				<Card>
@@ -280,9 +357,19 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 								})}
 							</div>
 						)}
+						{transactions.length > 0 && (
+							<div className="pt-2 border-t mt-4">
+								<Button asChild variant="ghost" className="w-full text-muted-foreground hover:text-foreground">
+									<Link href={`/organizations/${id}/records`}>
+										View all transactions &rarr;
+									</Link>
+								</Button>
+							</div>
+						)}
 					</CardContent>
 				</Card>
 			</div>
+			{isWallet && <WalletFab organizationId={id} accounts={accounts} />}
 		</div>
 	)
 }

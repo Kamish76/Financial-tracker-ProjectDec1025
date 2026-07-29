@@ -13,6 +13,8 @@ import {
 	ArrowLeft,
 	Pencil,
 	Receipt,
+	Wallet,
+	Tag,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -41,6 +43,7 @@ import { EditInitialValueSheet } from './edit-initial-value-sheet'
 import { deleteInitialTransaction } from '../actions'
 import { AddRegularIncomeSheet } from './add-regular-income-sheet'
 import { AddRegularExpenseSheet } from './add-regular-expense-sheet'
+import { ManageCategoriesDialog } from './manage-categories-dialog'
 
 type OrganizationRole = 'owner' | 'admin' | 'member'
 
@@ -52,6 +55,7 @@ type OrganizationWithRole = {
 	created_at: string
 	user_role: OrganizationRole
 	member_count: number
+	is_wallet?: boolean
 }
 
 type MemberWithUser = {
@@ -99,9 +103,11 @@ export function OrganizationSettings({
 	const router = useRouter()
 	const isOwner = organization.user_role === 'owner'
 	const canEdit = organization.user_role === 'owner' || organization.user_role === 'admin'
+	const isWallet = Boolean(organization.is_wallet)
 
 	// Edit organization state
 	const [editDialogOpen, setEditDialogOpen] = useState(false)
+	const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false)
 
 	// Delete organization state
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -239,9 +245,13 @@ export function OrganizationSettings({
 
 	const selectedMember = transferableMembers.find((m) => m.user_id === selectedNewOwner)
 
+	const expectedDeletePhrase = isWallet
+		? 'i confirm in deleting the wallet'
+		: 'i confirm in deleting the organization'
+
 	const deleteButtonDisabled =
 		deleteConfirmName !== organization.name ||
-		deleteConfirmPhrase.toLowerCase() !== 'i confirm in deleting the organization' ||
+		deleteConfirmPhrase.toLowerCase() !== expectedDeletePhrase ||
 		isDeleting
 
 	return (
@@ -258,9 +268,13 @@ export function OrganizationSettings({
 
 			{/* Page Header */}
 			<div className="mb-8">
-				<h1 className="text-3xl font-bold text-foreground">Organization Settings</h1>
+				<h1 className="text-3xl font-bold text-foreground">
+					{isWallet ? 'Personal Wallet Settings' : 'Organization Settings'}
+				</h1>
 				<p className="text-muted-foreground mt-2">
-					Manage settings and preferences for {organization.name}
+					{isWallet
+						? `Manage settings and preferences for your personal wallet (${organization.name})`
+						: `Manage settings and preferences for ${organization.name}`}
 				</p>
 			</div>
 
@@ -271,11 +285,21 @@ export function OrganizationSettings({
 						<div className="flex items-center justify-between">
 							<div className="flex items-center gap-3">
 								<div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-									<Building2 className="h-5 w-5 text-primary" />
+									{isWallet ? (
+										<Wallet className="h-5 w-5 text-primary" />
+									) : (
+										<Building2 className="h-5 w-5 text-primary" />
+									)}
 								</div>
 								<div>
-									<CardTitle>Organization Information</CardTitle>
-									<CardDescription>Basic details about your organization</CardDescription>
+									<CardTitle>
+										{isWallet ? 'Wallet Information' : 'Organization Information'}
+									</CardTitle>
+									<CardDescription>
+										{isWallet
+											? 'Basic details about your personal wallet'
+											: 'Basic details about your organization'}
+									</CardDescription>
 								</div>
 							</div>
 							{canEdit && (
@@ -290,7 +314,9 @@ export function OrganizationSettings({
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 							{/* Name */}
 							<div className="space-y-1">
-								<Label className="text-muted-foreground text-sm">Name</Label>
+								<Label className="text-muted-foreground text-sm">
+									{isWallet ? 'Wallet Name' : 'Name'}
+								</Label>
 								<p className="font-medium text-foreground">{organization.name}</p>
 							</div>
 
@@ -306,7 +332,11 @@ export function OrganizationSettings({
 						</div>
 
 						<div className="border-t pt-4 mt-4">
-							<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+							<div
+								className={`grid grid-cols-1 gap-4 ${
+									isWallet ? 'sm:grid-cols-2' : 'sm:grid-cols-3'
+								}`}
+							>
 								{/* Created Date */}
 								<div className="flex items-center gap-3">
 									<div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
@@ -318,16 +348,18 @@ export function OrganizationSettings({
 									</div>
 								</div>
 
-								{/* Member Count */}
-								<div className="flex items-center gap-3">
-									<div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-										<Users className="h-4 w-4 text-green-600 dark:text-green-400" />
+								{/* Member Count - hide for Wallet */}
+								{!isWallet && (
+									<div className="flex items-center gap-3">
+										<div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+											<Users className="h-4 w-4 text-green-600 dark:text-green-400" />
+										</div>
+										<div>
+											<p className="text-xs text-muted-foreground">Members</p>
+											<p className="text-sm font-medium">{organization.member_count} members</p>
+										</div>
 									</div>
-									<div>
-										<p className="text-xs text-muted-foreground">Members</p>
-										<p className="text-sm font-medium">{organization.member_count} members</p>
-									</div>
-								</div>
+								)}
 
 								{/* Owner */}
 								<div className="flex items-center gap-3">
@@ -335,7 +367,9 @@ export function OrganizationSettings({
 										<Shield className="h-4 w-4 text-purple-600 dark:text-purple-400" />
 									</div>
 									<div>
-										<p className="text-xs text-muted-foreground">Owner</p>
+										<p className="text-xs text-muted-foreground">
+											{isWallet ? 'Wallet Owner' : 'Owner'}
+										</p>
 										<p className="text-sm font-medium">{ownerName}</p>
 									</div>
 								</div>
@@ -344,8 +378,117 @@ export function OrganizationSettings({
 					</CardContent>
 				</Card>
 
+				{/* Personal Wallet Sub Accounts Card */}
+				{isWallet && (
+					<Card>
+						<CardHeader>
+							<div className="flex items-center justify-between">
+								<div className="flex items-center gap-3">
+									<div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg flex items-center justify-center">
+										<Receipt className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+									</div>
+									<div>
+										<CardTitle>Wallet Sub-Accounts</CardTitle>
+										<CardDescription>
+											Manage custom accounts and starting balances for your personal wallet
+										</CardDescription>
+									</div>
+								</div>
+								<Button onClick={() => router.push(`/organizations/${organization.id}/accounts`)}>
+									Manage Accounts
+								</Button>
+							</div>
+						</CardHeader>
+						<CardContent>
+							<p className="text-sm text-muted-foreground mb-4">
+								Create and organize multiple sub-accounts (like Cash, Bank Accounts, E-Wallets, or Savings) to track your funds across different places.
+							</p>
+							<div className="flex items-center gap-2">
+								<Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+									Dynamic Balance Tracking
+								</Badge>
+								<Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20">
+									Archive Protected
+								</Badge>
+							</div>
+						</CardContent>
+					</Card>
+				)}
+
+				{/* Personal Wallet Categories Card */}
+				{isWallet && (
+					<Card>
+						<CardHeader>
+							<div className="flex items-center justify-between">
+								<div className="flex items-center gap-3">
+									<div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center">
+										<Tag className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+									</div>
+									<div>
+										<CardTitle>Transaction Categories</CardTitle>
+										<CardDescription>
+											Manage and organize categories separated by income and expense
+										</CardDescription>
+									</div>
+								</div>
+								<Button variant="outline" onClick={() => setManageCategoriesOpen(true)}>
+									<Tag className="h-4 w-4 mr-2" />
+									Manage Categories
+								</Button>
+							</div>
+						</CardHeader>
+						<CardContent className="space-y-4">
+							<p className="text-sm text-muted-foreground">
+								Categories are separated into Income and Expense so you only see relevant options when recording transactions. Core categories are automatically included and can be customized.
+							</p>
+
+							<div className="space-y-2">
+								<div>
+									<span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block mb-1.5">
+										Income Categories
+									</span>
+									<div className="flex flex-wrap gap-1.5">
+										{['Salary', 'Freelance', 'Investments', 'Gifts', 'Other Income'].map((cat) => (
+											<Badge
+												key={cat}
+												variant="secondary"
+												className="text-xs font-normal bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+											>
+												{cat}
+											</Badge>
+										))}
+									</div>
+								</div>
+
+								<div className="pt-2 border-t border-border/50">
+									<span className="text-xs font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider block mb-1.5">
+										Expense Categories
+									</span>
+									<div className="flex flex-wrap gap-1.5">
+										{['Food & Dining', 'Housing', 'Transportation', 'Utilities', 'Other Expense'].map((cat) => (
+											<Badge
+												key={cat}
+												variant="secondary"
+												className="text-xs font-normal bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+											>
+												{cat}
+											</Badge>
+										))}
+									</div>
+								</div>
+							</div>
+
+							<ManageCategoriesDialog
+								open={manageCategoriesOpen}
+								onOpenChange={setManageCategoriesOpen}
+								organizationId={organization.id}
+							/>
+						</CardContent>
+					</Card>
+				)}
+
 				{/* Manage Members Card - Admin and Owner */}
-				{canEdit && (
+				{canEdit && !isWallet && (
 					<Card>
 						<CardHeader>
 							<div className="flex items-center justify-between">
@@ -383,7 +526,7 @@ export function OrganizationSettings({
 				)}
 
 				{/* Business Held Allocations - Owner Only */}
-				{isOwner && (
+				{isOwner && !isWallet && (
 					<Card>
 						<CardHeader>
 							<div className="flex items-center justify-between">
@@ -415,7 +558,7 @@ export function OrganizationSettings({
 				)}
 
 				{/* Add Transactions for Members - Owner Only */}
-				{isOwner && (
+				{isOwner && !isWallet && (
 					<Card>
 						<CardHeader>
 							<div className="flex items-center justify-between">
@@ -455,7 +598,7 @@ export function OrganizationSettings({
 				)}
 
 				{/* Initial Values Section - Owner Only */}
-				{isOwner && (
+				{isOwner && !isWallet && (
 					<Card>
 						<CardHeader>
 							<div className="flex items-center justify-between">
@@ -570,98 +713,103 @@ export function OrganizationSettings({
 							</div>
 						</CardHeader>
 						<CardContent className="space-y-4">
-							{/* Transfer Ownership */}
-							<div className="flex items-center justify-between p-4 border rounded-lg">
-								<div className="flex items-start gap-3">
-									<UserCog className="h-5 w-5 text-muted-foreground mt-0.5" />
-									<div>
-										<h4 className="font-medium text-foreground">Transfer Ownership</h4>
-										<p className="text-sm text-muted-foreground">
-											Transfer this organization to another member. You will become an Admin.
-										</p>
-									</div>
-								</div>
-								<Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
-									<DialogTrigger asChild>
-										<Button variant="outline">Transfer</Button>
-									</DialogTrigger>
-									<DialogContent>
-										<DialogHeader>
-											<DialogTitle>Transfer Ownership</DialogTitle>
-											<DialogDescription>
-												Select a member to become the new owner of this organization. This action
-												cannot be undone. You will be demoted to Admin.
-											</DialogDescription>
-										</DialogHeader>
-										<div className="space-y-4 py-4">
-											<div className="space-y-2">
-												<Label>Select New Owner</Label>
-												<Select value={selectedNewOwner} onValueChange={setSelectedNewOwner}>
-													<SelectTrigger className="w-full">
-														<SelectValue placeholder="Choose a member..." />
-													</SelectTrigger>
-													<SelectContent>
-														{transferableMembers.map((member) => (
-															<SelectItem key={member.user_id} value={member.user_id}>
-																{member.user.name} ({member.user.email}) - {member.role}
-															</SelectItem>
-														))}
-													</SelectContent>
-												</Select>
-												{selectedMember && (
-													<p className="text-sm text-muted-foreground">
-														<strong>{selectedMember.user.name}</strong> will become the new owner.
-													</p>
-												)}
-											</div>
-											<div className="space-y-2">
-												<Label>
-													Type <strong className="text-foreground">{organization.name}</strong> to
-													confirm
-												</Label>
-												<Input
-													value={transferConfirmation}
-													onChange={(e) => setTransferConfirmation(e.target.value)}
-													placeholder="Enter organization name"
-												/>
-											</div>
+							{/* Transfer Ownership - hide for Wallet */}
+							{!isWallet && (
+								<div className="flex items-center justify-between p-4 border rounded-lg">
+									<div className="flex items-start gap-3">
+										<UserCog className="h-5 w-5 text-muted-foreground mt-0.5" />
+										<div>
+											<h4 className="font-medium text-foreground">Transfer Ownership</h4>
+											<p className="text-sm text-muted-foreground">
+												Transfer this organization to another member. You will become an Admin.
+											</p>
 										</div>
-										<DialogFooter>
-											<Button
-												variant="outline"
-												onClick={() => {
-													setTransferDialogOpen(false)
-													setSelectedNewOwner('')
-													setTransferConfirmation('')
-												}}
-											>
-												Cancel
-											</Button>
-											<Button
-												variant="destructive"
-												onClick={handleTransferOwnership}
-												disabled={
-													!selectedNewOwner ||
-													transferConfirmation !== organization.name ||
-													isTransferring
-												}
-											>
-												{isTransferring ? 'Transferring...' : 'Transfer Ownership'}
-											</Button>
-										</DialogFooter>
-									</DialogContent>
-								</Dialog>
-							</div>
+									</div>
+									<Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
+										<DialogTrigger asChild>
+											<Button variant="outline">Transfer</Button>
+										</DialogTrigger>
+										<DialogContent>
+											<DialogHeader>
+												<DialogTitle>Transfer Ownership</DialogTitle>
+												<DialogDescription>
+													Select a member to become the new owner of this organization. This action
+													cannot be undone. You will be demoted to Admin.
+												</DialogDescription>
+											</DialogHeader>
+											<div className="space-y-4 py-4">
+												<div className="space-y-2">
+													<Label>Select New Owner</Label>
+													<Select value={selectedNewOwner} onValueChange={setSelectedNewOwner}>
+														<SelectTrigger className="w-full">
+															<SelectValue placeholder="Choose a member..." />
+														</SelectTrigger>
+														<SelectContent>
+															{transferableMembers.map((member) => (
+																<SelectItem key={member.user_id} value={member.user_id}>
+																	{member.user.name} ({member.user.email}) - {member.role}
+																</SelectItem>
+															))}
+														</SelectContent>
+													</Select>
+													{selectedMember && (
+														<p className="text-sm text-muted-foreground">
+															<strong>{selectedMember.user.name}</strong> will become the new owner.
+														</p>
+													)}
+												</div>
+												<div className="space-y-2">
+													<Label>
+														Type <strong className="text-foreground">{organization.name}</strong> to
+														confirm
+													</Label>
+													<Input
+														value={transferConfirmation}
+														onChange={(e) => setTransferConfirmation(e.target.value)}
+														placeholder="Enter organization name"
+													/>
+												</div>
+											</div>
+											<DialogFooter>
+												<Button
+													variant="outline"
+													onClick={() => {
+														setTransferDialogOpen(false)
+														setSelectedNewOwner('')
+														setTransferConfirmation('')
+													}}
+												>
+													Cancel
+												</Button>
+												<Button
+													variant="destructive"
+													onClick={handleTransferOwnership}
+													disabled={
+														!selectedNewOwner ||
+														transferConfirmation !== organization.name ||
+														isTransferring
+													}
+												>
+													{isTransferring ? 'Transferring...' : 'Transfer Ownership'}
+												</Button>
+											</DialogFooter>
+										</DialogContent>
+									</Dialog>
+								</div>
+							)}
 
-							{/* Delete Organization */}
+							{/* Delete Organization / Personal Wallet */}
 							<div className="flex items-center justify-between p-4 border border-destructive/30 rounded-lg bg-destructive/5">
 								<div className="flex items-start gap-3">
 									<Trash2 className="h-5 w-5 text-destructive mt-0.5" />
 									<div>
-										<h4 className="font-medium text-destructive">Delete Organization</h4>
+										<h4 className="font-medium text-destructive">
+											{isWallet ? 'Delete Personal Wallet' : 'Delete Organization'}
+										</h4>
 										<p className="text-sm text-muted-foreground">
-											Permanently delete this organization and all its data including transactions,
-											members, invites, and balances.
+											{isWallet
+												? 'Permanently delete this personal wallet and all its transactions, sub-accounts, and history.'
+												: 'Permanently delete this organization and all its data including transactions, members, invites, and balances.'}
 										</p>
 									</div>
 								</div>
@@ -671,21 +819,31 @@ export function OrganizationSettings({
 									</DialogTrigger>
 									<DialogContent>
 										<DialogHeader>
-											<DialogTitle className="text-destructive">Delete Organization</DialogTitle>
+											<DialogTitle className="text-destructive">
+												{isWallet ? 'Delete Personal Wallet' : 'Delete Organization'}
+											</DialogTitle>
 											<DialogDescription>
-												This action <strong>cannot be undone</strong>. This will permanently delete the{' '}
-												<strong>{organization.name}</strong> organization and remove all associated data
+												This action <strong>cannot be undone</strong>. This will permanently delete{' '}
+												<strong>{organization.name}</strong> and remove all associated data
 												including:
 											</DialogDescription>
 										</DialogHeader>
 										<div className="py-4">
-											<ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
-												<li>All transactions (income, expenses)</li>
-												<li>All member associations and roles</li>
-												<li>All invite codes</li>
-												<li>All member balances and contributions</li>
-												<li>All reimbursement requests</li>
-											</ul>
+											{isWallet ? (
+												<ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+													<li>All wallet transactions (income, expenses, transfers)</li>
+													<li>All sub-accounts and starting balances</li>
+													<li>All transaction categories and history</li>
+												</ul>
+											) : (
+												<ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+													<li>All transactions (income, expenses)</li>
+													<li>All member associations and roles</li>
+													<li>All invite codes</li>
+													<li>All member balances and contributions</li>
+													<li>All reimbursement requests</li>
+												</ul>
+											)}
 											<div className="mt-4 space-y-4">
 												<div className="space-y-2">
 													<Label>
@@ -695,7 +853,7 @@ export function OrganizationSettings({
 													<Input
 														value={deleteConfirmName}
 														onChange={(e) => setDeleteConfirmName(e.target.value)}
-														placeholder="Enter organization name"
+														placeholder={isWallet ? 'Enter wallet name' : 'Enter organization name'}
 														className="border-destructive/50 focus-visible:ring-destructive/50"
 													/>
 												</div>
@@ -703,14 +861,14 @@ export function OrganizationSettings({
 													<Label>
 														Type{' '}
 														<strong className="text-foreground">
-															i confirm in deleting the organization
+															{expectedDeletePhrase}
 														</strong>{' '}
 														to confirm
 													</Label>
 													<Input
 														value={deleteConfirmPhrase}
 														onChange={(e) => setDeleteConfirmPhrase(e.target.value)}
-														placeholder="i confirm in deleting the organization"
+														placeholder={expectedDeletePhrase}
 														className="border-destructive/50 focus-visible:ring-destructive/50"
 													/>
 												</div>
@@ -732,7 +890,11 @@ export function OrganizationSettings({
 												onClick={handleDeleteOrganization}
 												disabled={deleteButtonDisabled}
 											>
-												{isDeleting ? 'Deleting...' : 'Delete Organization'}
+												{isDeleting
+													? 'Deleting...'
+													: isWallet
+													? 'Delete Wallet'
+													: 'Delete Organization'}
 											</Button>
 										</DialogFooter>
 									</DialogContent>

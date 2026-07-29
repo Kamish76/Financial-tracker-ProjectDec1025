@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Plus, Building2, Users, Crown, Shield, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { isWalletOrganization, stripWalletMarker } from '@/lib/wallet'
 
 export const dynamic = 'force-dynamic'
 
@@ -88,6 +89,8 @@ export default async function OrganizationsPage() {
     (org): org is NonNullable<typeof org> => org !== null
   )
 
+  const walletOrganizations = validOrganizations.filter((org) => isWalletOrganization(org.description))
+
   return (
     <div className="min-h-screen">
       <div className="container mx-auto px-4 py-8">
@@ -111,6 +114,14 @@ export default async function OrganizationsPage() {
                 Create Organization
               </Link>
             </Button>
+            {walletOrganizations.length === 0 && (
+              <Button variant="secondary" asChild>
+                <Link href="/organizations/create?mode=wallet">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Personal Wallet
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
 
@@ -136,6 +147,13 @@ export default async function OrganizationsPage() {
                     Create Organization
                   </Link>
                 </Button>
+                {walletOrganizations.length === 0 && (
+                  <Button variant="secondary" asChild>
+                    <Link href="/organizations/create?mode=wallet">
+                      Create Personal Wallet
+                    </Link>
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -150,7 +168,14 @@ export default async function OrganizationsPage() {
                         <Building2 className="h-5 w-5 text-white" />
                       </div>
                       <div>
-                        <CardTitle className="text-lg">{org.name}</CardTitle>
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-lg">{org.name}</CardTitle>
+                          {isWalletOrganization(org.description) && (
+                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                              Wallet
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 mt-1">
                           <CardDescription className="flex items-center gap-1">
                             <Users className="h-3 w-3" />
@@ -164,7 +189,7 @@ export default async function OrganizationsPage() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-muted-foreground line-clamp-2">
-                    {org.description || 'No description'}
+                    {stripWalletMarker(org.description) || 'No description'}
                   </p>
                   <div className="mt-4 flex items-center gap-2">
                     <Button size="sm" asChild className="flex-1">

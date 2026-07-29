@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Building2, User, LogOut, Settings, Moon, Sun } from 'lucide-react'
+import { Building2, User, LogOut, Settings, Moon, Sun, WalletCards } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -14,34 +14,73 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 
-const navigationItems = [
-  {
-    title: 'Organizations',
-    url: '/organizations',
-    icon: Building2,
-  },
-  {
-    title: 'Profile',
-    url: '/profile',
-    icon: User,
-  },
-]
-
-export function AppSidebar() {
+export function AppSidebar({ walletId }: { walletId?: string | null } = {}) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const router = useRouter()
-  const [mounted, setMounted] = useState(false)
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
 
+  const walletUrl = walletId
+    ? `/organizations/${walletId}`
+    : '/organizations/create?mode=wallet'
+
+  const navigationItems = [
+    {
+      title: 'Organizations',
+      url: '/organizations',
+      icon: Building2,
+    },
+    {
+      title: 'Personal Wallet',
+      url: walletUrl,
+      icon: WalletCards,
+    },
+    {
+      title: 'Profile',
+      url: '/profile',
+      icon: User,
+    },
+  ]
+
+  const isWalletActive = walletId
+    ? pathname === `/organizations/${walletId}` ||
+      pathname.startsWith(`/organizations/${walletId}/`)
+    : pathname === '/organizations/create' &&
+      searchParams?.get('mode') === 'wallet'
+
+  const isItemActive = (itemTitle: string, itemUrl: string) => {
+    if (itemTitle === 'Personal Wallet') {
+      return isWalletActive
+    }
+    if (itemTitle === 'Organizations') {
+      if (isWalletActive) {
+        return false
+      }
+      return pathname === '/organizations' || pathname.startsWith('/organizations/')
+    }
+    return pathname === itemUrl || pathname.startsWith(`${itemUrl}/`)
+  }
+
   useEffect(() => {
-    setMounted(true)
     const stored = window.localStorage.getItem('orgfinance-theme') as 'light' | 'dark' | null
     const current = document.documentElement.dataset.theme as 'light' | 'dark' | undefined
-    setTheme(stored || current || 'light')
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    const initialTheme =
+      stored === 'light' || stored === 'dark'
+        ? stored
+        : current === 'light' || current === 'dark'
+        ? current
+        : prefersDark
+        ? 'dark'
+        : 'light'
+    requestAnimationFrame(() => {
+      setTheme(initialTheme)
+      document.documentElement.dataset.theme = initialTheme
+    })
   }, [])
 
   const handleLogout = async () => {
@@ -86,7 +125,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {navigationItems.map((item) => {
-                const isActive = pathname === item.url || pathname.startsWith(item.url + '/')
+                const isActive = isItemActive(item.title, item.url)
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive}>
@@ -117,7 +156,7 @@ export function AppSidebar() {
               
               <SidebarMenuItem>
                 <SidebarMenuButton onClick={handleThemeToggle} className="w-full cursor-pointer">
-                  {mounted && theme === 'dark' ? <Sun /> : <Moon />}
+                    {theme === 'dark' ? <Sun /> : <Moon />}
                   <span>Theme</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>

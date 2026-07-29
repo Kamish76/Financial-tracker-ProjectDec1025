@@ -26,6 +26,7 @@ CREATE INDEX IF NOT EXISTS idx_transactions_category_id ON public.transactions(c
 ALTER TABLE public.transaction_categories ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policy: Users can view categories for their organizations
+DROP POLICY IF EXISTS "Users can view categories for their organizations" ON public.transaction_categories;
 CREATE POLICY "Users can view categories for their organizations" 
     ON public.transaction_categories 
     FOR SELECT 
@@ -38,6 +39,7 @@ CREATE POLICY "Users can view categories for their organizations"
     );
 
 -- RLS Policy: Only admins/owners can insert/update/delete categories
+DROP POLICY IF EXISTS "Admins and owners can manage categories" ON public.transaction_categories;
 CREATE POLICY "Admins and owners can manage categories"
     ON public.transaction_categories
     FOR INSERT
@@ -45,6 +47,7 @@ CREATE POLICY "Admins and owners can manage categories"
         public.fn_has_org_role(organization_id, ARRAY['owner', 'admin']::text[])
     );
 
+DROP POLICY IF EXISTS "Admins and owners can update categories" ON public.transaction_categories;
 CREATE POLICY "Admins and owners can update categories"
     ON public.transaction_categories
     FOR UPDATE
@@ -55,6 +58,7 @@ CREATE POLICY "Admins and owners can update categories"
         public.fn_has_org_role(organization_id, ARRAY['owner', 'admin']::text[])
     );
 
+DROP POLICY IF EXISTS "Admins and owners can delete categories" ON public.transaction_categories;
 CREATE POLICY "Admins and owners can delete categories"
     ON public.transaction_categories
     FOR DELETE
