@@ -23,6 +23,7 @@ type OrganizationWithRole = {
 	created_at: string
 	user_role: string
 	member_count: number
+	is_wallet?: boolean
 }
 
 type EditOrganizationDialogProps = {
@@ -41,13 +42,14 @@ export function EditOrganizationDialog({
 	const [description, setDescription] = useState(organization.description || '')
 	const [error, setError] = useState<string | null>(null)
 	const [isPending, startTransition] = useTransition()
+	const isWallet = Boolean(organization.is_wallet)
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
 		setError(null)
 
 		if (!name.trim()) {
-			setError('Organization name is required')
+			setError(`${isWallet ? 'Wallet' : 'Organization'} name is required`)
 			return
 		}
 
@@ -64,15 +66,15 @@ export function EditOrganizationDialog({
 
 				if (!response.ok) {
 					const data = await response.json()
-					setError(data.error || 'Failed to update organization')
+					setError(data.error || `Failed to update ${isWallet ? 'wallet' : 'organization'}`)
 					return
 				}
 
 				onOpenChange(false)
 				router.refresh()
 			} catch (err) {
-				console.error('Error updating organization:', err)
-				setError('An error occurred while updating the organization')
+				console.error(`Error updating ${isWallet ? 'wallet' : 'organization'}:`, err)
+				setError(`An error occurred while updating the ${isWallet ? 'wallet' : 'organization'}`)
 			}
 		})
 	}
@@ -81,21 +83,23 @@ export function EditOrganizationDialog({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>Edit Organization</DialogTitle>
+					<DialogTitle>{isWallet ? 'Edit Personal Wallet' : 'Edit Organization'}</DialogTitle>
 					<DialogDescription>
-						Update the name and description of your organization.
+						{isWallet
+							? 'Update the name and description of your personal wallet.'
+							: 'Update the name and description of your organization.'}
 					</DialogDescription>
 				</DialogHeader>
 
 				<form onSubmit={handleSubmit}>
 					<div className="space-y-4 py-4">
 						<div className="space-y-2">
-							<Label htmlFor="name">Organization Name</Label>
+							<Label htmlFor="name">{isWallet ? 'Wallet Name' : 'Organization Name'}</Label>
 							<Input
 								id="name"
 								value={name}
 								onChange={(e) => setName(e.target.value)}
-								placeholder="Enter organization name"
+								placeholder={isWallet ? 'Enter wallet name' : 'Enter organization name'}
 								required
 							/>
 						</div>
@@ -106,7 +110,7 @@ export function EditOrganizationDialog({
 								id="description"
 								value={description}
 								onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
-								placeholder="Enter organization description"
+								placeholder={isWallet ? 'Enter wallet description' : 'Enter organization description'}
 								rows={4}
 							/>
 						</div>
