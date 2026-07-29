@@ -16,6 +16,7 @@ import { DashboardClientWrapper } from './dashboard-client-wrapper'
 import { isWalletOrganization } from '@/lib/wallet'
 import { getAccountsWithBalances } from '@/lib/wallet-accounts'
 import { WalletFab } from '@/components/wallet/wallet-fab'
+import { WalletTotalBalanceCard } from '@/components/wallet/wallet-total-balance-card'
 
 type PageProps = {
 	params: Promise<{
@@ -153,6 +154,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 
 			{/* Top-level stats */}
 			{!isWallet && <StatsCards totals={stats.totals} />}
+			{isWallet && <WalletTotalBalanceCard organizationId={id} accounts={accounts} />}
 
 		{/* Period Summary Stats */}
 		<DashboardClientWrapper allTransactions={transactions} />
