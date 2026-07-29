@@ -32,6 +32,8 @@ type TransactionRecord = {
 	description: string | null
 	created_at: string
 	is_initial: boolean
+	account_name?: string | null
+	transfer_to_account_name?: string | null
 }
 
 const formatter = new Intl.NumberFormat('en-US', {
@@ -90,7 +92,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 
 	const { data: transactionRows, error: transactionsError } = await adminClient
 		.from('transactions')
-		.select('id, type, amount, category, description, created_at, is_initial')
+		.select('id, type, amount, category, description, created_at, is_initial, account_id, transfer_to_account_id, account:wallet_accounts!account_id(id, name), transfer_to_account:wallet_accounts!transfer_to_account_id(id, name)')
 		.eq('organization_id', id)
 		.order('created_at', { ascending: false })
 		.limit(365)
@@ -99,7 +101,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		console.error('[ORG_PAGE] Transactions error', { orgId: id, error: transactionsError.message })
 	}
 
-	const transactions: TransactionRecord[] = (transactionRows || []).map((row) => ({
+	const transactions: TransactionRecord[] = (transactionRows || []).map((row: any) => ({
 		id: row.id,
 		type: row.type,
 		amount: Number(row.amount ?? 0),
@@ -107,6 +109,8 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		description: row.description,
 		created_at: row.created_at,
 		is_initial: row.is_initial ?? false,
+		account_name: row.account?.name ?? null,
+		transfer_to_account_name: row.transfer_to_account?.name ?? null,
 	}))
 
 	// Compute organization stats (totals + per-member balances)
@@ -341,6 +345,16 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 															{tx.category}
 														</span>
 													)}
+													{tx.type === 'transfer' && tx.transfer_to_account_name ? (
+														<span className="rounded-full bg-purple-100 dark:bg-purple-950/50 px-2.5 py-1 text-xs font-medium text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+															{tx.account_name || 'Cash'} → {tx.transfer_to_account_name}
+														</span>
+													) : tx.account_name ? (
+														<span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-950/40 px-2.5 py-1 text-xs font-medium text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+															<span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+															{tx.account_name}
+														</span>
+													) : null}
 												</div>
 												{tx.description && (
 													<p className="text-sm text-foreground">{tx.description}</p>
