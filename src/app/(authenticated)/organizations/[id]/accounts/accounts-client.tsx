@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition, useEffect } from 'react'
-import { Archive, ArchiveRestore, Trash2, Wallet, AlertCircle } from 'lucide-react'
+import { Archive, ArchiveRestore, Trash2, Wallet, AlertCircle, ArrowLeft } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 import {
@@ -76,6 +76,18 @@ export function AccountsClient({ organizationId, accounts }: AccountsClientProps
 
   return (
     <div className="space-y-6">
+      {/* Back Button */}
+      <div className="-mt-2">
+        <Button
+          variant="ghost"
+          onClick={() => router.push(`/organizations/${organizationId}`)}
+          className="-ml-4 text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Dashboard
+        </Button>
+      </div>
+
       {/* Top Banner & Stats */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
