@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useMemo } from 'react'
-import { WalletAccount, AccountWithBalance } from '@/lib/wallet-accounts'
+import type { WalletAccount, AccountWithBalance } from '@/lib/wallet-accounts'
 import { addWalletTransaction } from '@/lib/wallet-transactions'
 import {
   getOrganizationCategoriesByType,
