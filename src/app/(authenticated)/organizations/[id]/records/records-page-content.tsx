@@ -312,19 +312,21 @@ export function RecordsPageContent() {
           </div>
 
           {/* Funded By Filter */}
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground block mb-2">Funded By</label>
-            <Select value={fundedByType} onValueChange={setFundedByType}>
-              <SelectTrigger>
-                <SelectValue placeholder="All" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="business">Business</SelectItem>
-                <SelectItem value="personal">Personal</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {!walletSummary?.isWallet && (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground block mb-2">Funded By</label>
+              <Select value={fundedByType} onValueChange={setFundedByType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="business">Business</SelectItem>
+                  <SelectItem value="personal">Personal</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Start Date */}
           <div>
@@ -378,6 +380,7 @@ export function RecordsPageContent() {
         transactions={transactions}
         organizationId={organizationId}
         isLoading={isLoading}
+        isWallet={Boolean(walletSummary?.isWallet)}
         onEdit={handleEdit}
       />
 

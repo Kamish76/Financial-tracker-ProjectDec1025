@@ -84,12 +84,16 @@ export async function fetchTransactionsWithFilters(
       funded_by_type,
       funded_by_user_id,
       user_id,
+      account_id,
+      transfer_to_account_id,
       occurred_at,
       created_at,
       updated_at,
       funded_by_user:profiles!funded_by_user_id(id, full_name, avatar_url),
       recorder:profiles!user_id(id, full_name, avatar_url),
-      category_ref:transaction_categories!category_id(id, normalized_name, aliases)
+      category_ref:transaction_categories!category_id(id, normalized_name, aliases),
+      account_ref:wallet_accounts!account_id(id, name),
+      transfer_to_account_ref:wallet_accounts!transfer_to_account_id(id, name)
       `
     )
     .eq('organization_id', organizationId)

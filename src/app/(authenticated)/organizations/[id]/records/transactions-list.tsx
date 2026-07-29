@@ -17,6 +17,7 @@ type TransactionsListProps = {
   transactions: Transaction[]
   organizationId: string
   isLoading: boolean
+  isWallet?: boolean
   onEdit: (transaction: Transaction) => void
 }
 
@@ -58,6 +59,7 @@ export function TransactionsList({
   transactions,
   organizationId,
   isLoading,
+  isWallet,
   onEdit,
 }: TransactionsListProps) {
   if (isLoading && transactions.length === 0) {
@@ -86,8 +88,11 @@ export function TransactionsList({
               <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Type</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Description</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Category</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Account</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Member</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Funded By</th>
+              {!isWallet && (
+                <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Funded By</th>
+              )}
               <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Amount</th>
               <th className="px-6 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
             </tr>
@@ -110,12 +115,30 @@ export function TransactionsList({
                 <td className="px-6 py-4 text-sm text-muted-foreground">
                   {tx.category_ref?.normalized_name || tx.category || "—"}
                 </td>
+                <td className="px-6 py-4 text-sm">
+                  {tx.transfer_to_account_ref?.name ? (
+                    <div className="inline-flex items-center gap-1 font-medium text-purple-700 dark:text-purple-300">
+                      <span className="rounded-md bg-purple-100 dark:bg-purple-950/50 px-2 py-0.5 text-xs border border-purple-200 dark:border-purple-800">
+                        {tx.account_ref?.name || "Cash"} → {tx.transfer_to_account_ref.name}
+                      </span>
+                    </div>
+                  ) : tx.account_ref?.name ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      {tx.account_ref.name}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </td>
                 <td className="px-6 py-4 text-sm text-muted-foreground">
                   {tx.funded_by_user?.full_name || tx.funded_by_user?.email || "Organization"}
                 </td>
-                <td className="px-6 py-4 text-sm text-muted-foreground">
-                  <span className="capitalize">{tx.funded_by_type}</span>
-                </td>
+                {!isWallet && (
+                  <td className="px-6 py-4 text-sm text-muted-foreground">
+                    <span className="capitalize">{tx.funded_by_type}</span>
+                  </td>
+                )}
                 <td className="px-6 py-4 text-sm font-semibold text-right text-foreground">
                   <div className="flex items-center justify-end gap-2">
                     {getTransactionIcon(tx.type)}
