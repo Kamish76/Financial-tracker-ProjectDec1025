@@ -26,6 +26,7 @@ CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON public.transactions(ac
 ALTER TABLE public.wallet_accounts ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policy: Users can view wallet accounts for their organizations
+DROP POLICY IF EXISTS "Users can view wallet accounts for their organizations" ON public.wallet_accounts;
 CREATE POLICY "Users can view wallet accounts for their organizations" 
     ON public.wallet_accounts 
     FOR SELECT 
@@ -38,6 +39,7 @@ CREATE POLICY "Users can view wallet accounts for their organizations"
     );
 
 -- RLS Policy: Only admins/owners can insert/update/delete wallet accounts
+DROP POLICY IF EXISTS "Admins and owners can insert wallet accounts" ON public.wallet_accounts;
 CREATE POLICY "Admins and owners can insert wallet accounts"
     ON public.wallet_accounts
     FOR INSERT
@@ -45,6 +47,7 @@ CREATE POLICY "Admins and owners can insert wallet accounts"
         public.fn_has_org_role(organization_id, ARRAY['owner', 'admin']::text[])
     );
 
+DROP POLICY IF EXISTS "Admins and owners can update wallet accounts" ON public.wallet_accounts;
 CREATE POLICY "Admins and owners can update wallet accounts"
     ON public.wallet_accounts
     FOR UPDATE
@@ -52,6 +55,7 @@ CREATE POLICY "Admins and owners can update wallet accounts"
         public.fn_has_org_role(organization_id, ARRAY['owner', 'admin']::text[])
     );
 
+DROP POLICY IF EXISTS "Admins and owners can delete wallet accounts" ON public.wallet_accounts;
 CREATE POLICY "Admins and owners can delete wallet accounts"
     ON public.wallet_accounts
     FOR DELETE
