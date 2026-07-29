@@ -274,10 +274,16 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 							</div>
 						</div>
 					</CardHeader>
-					<CardContent className="flex flex-col sm:flex-row gap-3">
+					<CardContent className="flex flex-col sm:flex-row flex-wrap gap-3">
 						<Button asChild className="w-full sm:w-auto">
 							<Link href={`/organizations/${id}/accounts`}>
 								Manage Sub Accounts
+							</Link>
+						</Button>
+						<Button asChild variant="outline" className="w-full sm:w-auto">
+							<Link href={`/organizations/${id}/records`}>
+								<ScrollText className="h-4 w-4 mr-2" />
+								View full records
 							</Link>
 						</Button>
 						<Button asChild variant="outline" className="w-full sm:w-auto">
@@ -347,6 +353,15 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 										</div>
 									)
 								})}
+							</div>
+						)}
+						{transactions.length > 0 && (
+							<div className="pt-2 border-t mt-4">
+								<Button asChild variant="ghost" className="w-full text-muted-foreground hover:text-foreground">
+									<Link href={`/organizations/${id}/records`}>
+										View all transactions &rarr;
+									</Link>
+								</Button>
 							</div>
 						)}
 					</CardContent>

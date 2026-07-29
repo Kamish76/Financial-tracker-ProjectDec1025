@@ -87,13 +87,14 @@ export async function fetchTransactionsWithFilters(
       occurred_at,
       created_at,
       updated_at,
-      funded_by_user:profiles!funded_by_user_id(id, full_name, email:auth.email),
-      recorder:profiles!user_id(id, full_name, email:auth.email),
+      funded_by_user:profiles!funded_by_user_id(id, full_name, avatar_url),
+      recorder:profiles!user_id(id, full_name, avatar_url),
       category_ref:transaction_categories!category_id(id, normalized_name, aliases)
       `
     )
     .eq('organization_id', organizationId)
-    .order('occurred_at', { ascending: false })
+    .order('occurred_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
 
   if (filters.searchText) {
     const searchLower = `%${filters.searchText.toLowerCase()}%`
@@ -159,7 +160,7 @@ export async function fetchOrganizationMembers(organizationId: string) {
       `
       user_id,
       role,
-      user:profiles(id, full_name, email:auth.email)
+      user:profiles(id, full_name, avatar_url)
       `
     )
     .eq('organization_id', organizationId)

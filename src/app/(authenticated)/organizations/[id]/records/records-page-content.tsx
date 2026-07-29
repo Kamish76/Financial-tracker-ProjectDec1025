@@ -1,8 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { useParams } from "next/navigation"
-import { Search, Filter, X } from "lucide-react"
+import { useParams, useRouter } from "next/navigation"
+import { Search, Filter, X, ArrowLeft } from "lucide-react"
 import { fetchTransactionsWithFilters, fetchOrganizationMembers, fetchOrganizationCategories } from "./actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,6 +40,7 @@ const TRANSACTION_TYPES = [
 ]
 
 export function RecordsPageContent() {
+  const router = useRouter()
   const params = useParams()
   const organizationId = params.id as string
 
@@ -202,6 +203,18 @@ export function RecordsPageContent() {
 
   return (
     <div className="space-y-6">
+      {/* Back Button */}
+      <div className="-mt-2">
+        <Button
+          variant="ghost"
+          onClick={() => router.push(`/organizations/${organizationId}`)}
+          className="-ml-4 text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Dashboard
+        </Button>
+      </div>
+
       <div>
         <h1 className="text-3xl font-bold text-foreground">Transaction Records</h1>
         <p className="text-muted-foreground mt-1">View, search, and manage all transactions</p>
