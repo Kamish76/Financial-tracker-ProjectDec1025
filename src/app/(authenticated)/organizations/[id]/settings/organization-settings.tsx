@@ -43,6 +43,7 @@ import { EditInitialValueSheet } from './edit-initial-value-sheet'
 import { deleteInitialTransaction } from '../actions'
 import { AddRegularIncomeSheet } from './add-regular-income-sheet'
 import { AddRegularExpenseSheet } from './add-regular-expense-sheet'
+import { ManageCategoriesDialog } from './manage-categories-dialog'
 
 type OrganizationRole = 'owner' | 'admin' | 'member'
 
@@ -106,6 +107,7 @@ export function OrganizationSettings({
 
 	// Edit organization state
 	const [editDialogOpen, setEditDialogOpen] = useState(false)
+	const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false)
 
 	// Delete organization state
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -425,23 +427,62 @@ export function OrganizationSettings({
 									<div>
 										<CardTitle>Transaction Categories</CardTitle>
 										<CardDescription>
-											Manage and organize categories for your income and expenses
+											Manage and organize categories separated by income and expense
 										</CardDescription>
 									</div>
 								</div>
+								<Button variant="outline" onClick={() => setManageCategoriesOpen(true)}>
+									<Tag className="h-4 w-4 mr-2" />
+									Manage Categories
+								</Button>
 							</div>
 						</CardHeader>
-						<CardContent className="space-y-3">
+						<CardContent className="space-y-4">
 							<p className="text-sm text-muted-foreground">
-								Categories are automatically created and matched as you type them when adding a new transaction. Your wallet tracks all categories to give you detailed breakdown reports.
+								Categories are separated into Income and Expense so you only see relevant options when recording transactions. Core categories are automatically included and can be customized.
 							</p>
-							<div className="flex flex-wrap gap-1.5 pt-1">
-								{['Food & Dining', 'Salary', 'Transportation', 'Shopping', 'Utilities', 'Entertainment', 'Health & Fitness', 'Transfers'].map((cat) => (
-									<Badge key={cat} variant="secondary" className="text-xs font-normal">
-										{cat}
-									</Badge>
-								))}
+
+							<div className="space-y-2">
+								<div>
+									<span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block mb-1.5">
+										Income Categories
+									</span>
+									<div className="flex flex-wrap gap-1.5">
+										{['Salary', 'Freelance', 'Investments', 'Gifts', 'Other Income'].map((cat) => (
+											<Badge
+												key={cat}
+												variant="secondary"
+												className="text-xs font-normal bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+											>
+												{cat}
+											</Badge>
+										))}
+									</div>
+								</div>
+
+								<div className="pt-2 border-t border-border/50">
+									<span className="text-xs font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider block mb-1.5">
+										Expense Categories
+									</span>
+									<div className="flex flex-wrap gap-1.5">
+										{['Food & Dining', 'Housing', 'Transportation', 'Utilities', 'Other Expense'].map((cat) => (
+											<Badge
+												key={cat}
+												variant="secondary"
+												className="text-xs font-normal bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+											>
+												{cat}
+											</Badge>
+										))}
+									</div>
+								</div>
 							</div>
+
+							<ManageCategoriesDialog
+								open={manageCategoriesOpen}
+								onOpenChange={setManageCategoriesOpen}
+								organizationId={organization.id}
+							/>
 						</CardContent>
 					</Card>
 				)}

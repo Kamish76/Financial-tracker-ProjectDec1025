@@ -71,7 +71,8 @@ export async function addWalletTransaction(input: AddWalletTransactionInput): Pr
     // 3. Resolve category ID if category string was specified and it is not a transfer
     let categoryId: string | null = null
     if (input.type !== 'transfer' && input.category?.trim()) {
-      categoryId = await getOrCreateCategory(input.organizationId, input.category.trim())
+      const catType = input.type === 'income' ? 'income' : 'expense'
+      categoryId = await getOrCreateCategory(input.organizationId, input.category.trim(), catType)
     }
 
     // 4. Insert transaction

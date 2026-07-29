@@ -1,8 +1,15 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { WalletAccount, AccountWithBalance } from '@/lib/wallet-accounts'
 import { addWalletTransaction } from '@/lib/wallet-transactions'
+import {
+  getOrganizationCategoriesByType,
+} from '@/lib/categories'
+import {
+  DEFAULT_INCOME_CATEGORIES,
+  DEFAULT_EXPENSE_CATEGORIES,
+} from '@/lib/category-constants'
 import { 
   X, 
   Check, 
@@ -37,19 +44,6 @@ function getDisplayBalance(acc: WalletAccount | AccountWithBalance): string {
 }
 
 type TabType = 'income' | 'expense' | 'transfer'
-
-const DEFAULT_CATEGORIES = [
-  'Salary',
-  'Food & Dining',
-  'Utilities',
-  'Shopping',
-  'Transportation',
-  'Entertainment',
-  'Health & Fitness',
-  'Housing',
-  'Investments',
-  'Other',
-]
 
 // Safely evaluates arithmetic expressions without eval()
 function evaluateMathExpression(expr: string): number {
@@ -136,6 +130,48 @@ export function AddTransactionModal({
   )
   const [category, setCategory] = useState<string>('Salary')
   const [customCategoryInput, setCustomCategoryInput] = useState<string>('')
+  const [orgCategories, setOrgCategories] = useState<{
+    income: string[]
+    expense: string[]
+  }>({
+    income: DEFAULT_INCOME_CATEGORIES,
+    expense: DEFAULT_EXPENSE_CATEGORIES,
+  })
+
+  useEffect(() => {
+    if (!isOpen || !organizationId) return
+    let isMounted = true
+    getOrganizationCategoriesByType(organizationId)
+      .then((res) => {
+        if (!isMounted) return
+        const incomeNames = res.income.map((c) => c.display_name || c.normalized_name)
+        const expenseNames = res.expense.map((c) => c.display_name || c.normalized_name)
+        setOrgCategories({
+          income: incomeNames.length > 0 ? incomeNames : DEFAULT_INCOME_CATEGORIES,
+          expense: expenseNames.length > 0 ? expenseNames : DEFAULT_EXPENSE_CATEGORIES,
+        })
+      })
+      .catch(() => {})
+    return () => {
+      isMounted = false
+    }
+  }, [isOpen, organizationId])
+
+  const currentCategoriesList = useMemo(() => {
+    return activeTab === 'income' ? orgCategories.income : orgCategories.expense
+  }, [activeTab, orgCategories])
+
+  useEffect(() => {
+    if (activeTab === 'income') {
+      if (!orgCategories.income.includes(category)) {
+        setCategory(orgCategories.income[0] || 'Salary')
+      }
+    } else if (activeTab === 'expense') {
+      if (!orgCategories.expense.includes(category)) {
+        setCategory(orgCategories.expense[0] || 'Food & Dining')
+      }
+    }
+  }, [activeTab, orgCategories, category])
   const [showCategoryDropdown, setShowCategoryDropdown] = useState<boolean>(false)
   const [showAccountDropdown, setShowAccountDropdown] = useState<'from' | 'to' | null>(null)
   const [notes, setNotes] = useState<string>('')
@@ -552,7 +588,7 @@ export function AddTransactionModal({
                       </button>
                     </div>
 
-                    {DEFAULT_CATEGORIES.map((cat) => (
+                    {currentCategoriesList.map((cat) => (
                       <button
                         key={cat}
                         onClick={() => {
