@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Building2, FileText, ArrowRight } from 'lucide-react'
 
@@ -10,10 +10,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { createOrganization } from './actions'
+import { createOrganization, createWallet } from './actions'
 
 export default function CreateOrganizationPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const isWalletMode = searchParams.get('mode') === 'wallet'
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [status, setStatus] = useState<'idle' | 'submitting' | 'done'>('idle')
@@ -28,7 +30,9 @@ export default function CreateOrganizationPage() {
     setStatus('submitting')
     setError(null)
 
-    const result = await createOrganization(name, description || null)
+    const result = isWalletMode
+      ? await createWallet(name, description || null)
+      : await createOrganization(name, description || null)
 
     if (result?.error) {
       setError(result.error)
@@ -59,9 +63,11 @@ export default function CreateOrganizationPage() {
                 <Building2 className="h-5 w-5 text-white" />
               </div>
               <div>
-                <CardTitle>Create Organization</CardTitle>
+                <CardTitle>{isWalletMode ? 'Create Personal Wallet' : 'Create Organization'}</CardTitle>
                 <CardDescription>
-                  Set up a new organization to manage finances with your team
+                  {isWalletMode
+                    ? 'Set up a private wallet to track your personal finances with a separate UI.'
+                    : 'Set up a new organization to manage finances with your team'}
                 </CardDescription>
               </div>
             </div>
@@ -72,7 +78,7 @@ export default function CreateOrganizationPage() {
               <div className="space-y-2">
                 <Label htmlFor="name" className="flex items-center gap-2 text-foreground">
                   <Building2 className="h-4 w-4 text-accent" aria-hidden />
-                  Organization Name
+                  {isWalletMode ? 'Wallet Name' : 'Organization Name'}
                   <span className="text-red-500">*</span>
                 </Label>
                 <Input
@@ -83,14 +89,16 @@ export default function CreateOrganizationPage() {
                     setName(event.target.value)
                     setError(null)
                   }}
-                  placeholder="Acme Corporation"
+                  placeholder={isWalletMode ? 'My Personal Wallet' : 'Acme Corporation'}
                   required
                   minLength={3}
                   maxLength={100}
                   autoFocus
                 />
                 <p className="text-xs text-muted-foreground">
-                  Must be at least 3 characters. This will be visible to all members.
+                  {isWalletMode
+                    ? 'Must be at least 3 characters. This wallet stays private to you.'
+                    : 'Must be at least 3 characters. This will be visible to all members.'}
                 </p>
               </div>
 
@@ -108,7 +116,11 @@ export default function CreateOrganizationPage() {
                     setDescription(event.target.value)
                     setError(null)
                   }}
-                  placeholder="A brief description of your organization and its purpose..."
+                  placeholder={
+                    isWalletMode
+                      ? 'Optional note for your personal wallet...'
+                      : 'A brief description of your organization and its purpose...'
+                  }
                   className={cn(
                     'flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm',
                     'ring-offset-background placeholder:text-muted-foreground',
@@ -118,14 +130,18 @@ export default function CreateOrganizationPage() {
                   maxLength={500}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Help members understand what this organization is for.
+                  {isWalletMode
+                    ? 'This stays private and is only used inside your wallet UI.'
+                    : 'Help members understand what this organization is for.'}
                 </p>
               </div>
 
               {/* Info box */}
               <div className="flex items-center gap-2 rounded-full bg-muted/60 px-3 py-2 text-sm text-foreground">
                 <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
-                You will be the owner of this organization
+                {isWalletMode
+                  ? 'You will be the owner of this personal wallet'
+                  : 'You will be the owner of this organization'}
               </div>
 
               {/* Error message */}
@@ -150,6 +166,8 @@ export default function CreateOrganizationPage() {
                     ? 'Creating...'
                     : status === 'done'
                     ? 'Created!'
+                    : isWalletMode
+                    ? 'Create Personal Wallet'
                     : 'Create Organization'}
                   <ArrowRight
                     className={cn('ml-2 h-4 w-4 transition', status !== 'submitting' && 'translate-x-0.5')}

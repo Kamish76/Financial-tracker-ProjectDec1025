@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/server'
 import { OrganizationSettings } from './organization-settings'
 import { requireOrgMembership } from '@/lib/auth/guards'
+import { isWalletOrganization } from '@/lib/wallet'
 
 type SettingsPageProps = {
 	params: Promise<{
@@ -50,14 +51,14 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 		const userIds = (members as Array<{ user_id: string }>).map((m) => m.user_id)
 		const { data: profiles } = await adminClient
 			.from('profiles')
-			.select('id, full_name, email')
+			.select('id, full_name, avatar_url')
 			.in('id', userIds)
 
 		if (profiles) {
 			profilesMap = profiles.reduce(
 				(acc, p) => ({
 					...acc,
-					[p.id]: { full_name: p.full_name, email: p.email },
+					[p.id]: { full_name: p.full_name, email: null },
 				}),
 				{}
 			)
@@ -87,7 +88,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 	// Get owner info
 	const { data: owner } = await adminClient
 		.from('profiles')
-		.select('full_name, email')
+		.select('full_name, avatar_url')
 		.eq('id', organization.owner_id)
 		.single()
 
@@ -95,6 +96,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 		...organization,
 		user_role: effectiveMembership.role,
 		member_count: memberCount || 0,
+		is_wallet: isWalletOrganization(organization.description),
 	}
 
 	const membersFormatted = (members || []).map((m) => {
@@ -152,13 +154,13 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 			if (userIds.length > 0) {
 				const { data: profiles } = await adminClient
 					.from('profiles')
-					.select('id, full_name, email')
+					.select('id, full_name, avatar_url')
 					.in('id', userIds)
 
 				profilesMap = profiles?.reduce(
 					(acc, p) => ({
 						...acc,
-						[p.id]: { full_name: p.full_name, email: p.email },
+						[p.id]: { full_name: p.full_name, email: null },
 					}),
 					{}
 				) || {}
@@ -197,7 +199,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 			<OrganizationSettings
 				organization={organizationWithRole}
 				members={membersFormatted}
-				ownerName={owner?.full_name || owner?.email || 'Unknown'}
+				ownerName={owner?.full_name || 'Unknown'}
 				initialTransactions={initialTransactions}
 				currentUserEmail={user.email}
 				currentUserName={user.user_metadata?.full_name || null}

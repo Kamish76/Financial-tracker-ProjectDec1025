@@ -1,9 +1,9 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { useParams } from "next/navigation"
-import { Search, Filter, X } from "lucide-react"
-import { fetchTransactionsWithFilters, fetchOrganizationMembers, fetchOrganizationCategories } from "./actions"
+import { useParams, useRouter } from "next/navigation"
+import { Search, Filter, X, ArrowLeft } from "lucide-react"
+import { fetchTransactionsWithFilters, fetchOrganizationMembers, fetchOrganizationCategories, fetchWalletSummary } from "./actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -17,6 +17,7 @@ import {
 import { TransactionsList } from "./transactions-list"
 import { TransactionEditDialog } from "./transaction-edit-dialog"
 import { FilteredStatsCard } from "./filtered-stats-card"
+import { WalletTotalBalanceCard } from "@/components/wallet/wallet-total-balance-card"
 import { calculateFilteredStats } from "@/lib/finance-client"
 
 type Transaction = any
@@ -40,6 +41,7 @@ const TRANSACTION_TYPES = [
 ]
 
 export function RecordsPageContent() {
+  const router = useRouter()
   const params = useParams()
   const organizationId = params.id as string
 
@@ -56,6 +58,7 @@ export function RecordsPageContent() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [walletSummary, setWalletSummary] = useState<any | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [hasMore, setHasMore] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
@@ -70,12 +73,14 @@ export function RecordsPageContent() {
   // Load initial filters
   useEffect(() => {
     const loadFilters = async () => {
-      const [membersData, categoriesData] = await Promise.all([
+      const [membersData, categoriesData, walletData] = await Promise.all([
         fetchOrganizationMembers(organizationId),
         fetchOrganizationCategories(organizationId),
+        fetchWalletSummary(organizationId),
       ])
       setMembers(membersData)
       setCategories(categoriesData)
+      setWalletSummary(walletData)
     }
     loadFilters()
   }, [organizationId])
@@ -202,10 +207,30 @@ export function RecordsPageContent() {
 
   return (
     <div className="space-y-6">
+      {/* Back Button */}
+      <div className="-mt-2">
+        <Button
+          variant="ghost"
+          onClick={() => router.push(`/organizations/${organizationId}`)}
+          className="-ml-4 text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Dashboard
+        </Button>
+      </div>
+
       <div>
         <h1 className="text-3xl font-bold text-foreground">Transaction Records</h1>
         <p className="text-muted-foreground mt-1">View, search, and manage all transactions</p>
       </div>
+
+      {/* Personal Wallet Current Total Balance Card */}
+      {walletSummary?.isWallet && walletSummary.accounts && (
+        <WalletTotalBalanceCard
+          organizationId={organizationId}
+          accounts={walletSummary.accounts}
+        />
+      )}
 
       {/* Filtered Stats Card */}
       <FilteredStatsCard
@@ -287,19 +312,21 @@ export function RecordsPageContent() {
           </div>
 
           {/* Funded By Filter */}
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground block mb-2">Funded By</label>
-            <Select value={fundedByType} onValueChange={setFundedByType}>
-              <SelectTrigger>
-                <SelectValue placeholder="All" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="business">Business</SelectItem>
-                <SelectItem value="personal">Personal</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {!walletSummary?.isWallet && (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground block mb-2">Funded By</label>
+              <Select value={fundedByType} onValueChange={setFundedByType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="business">Business</SelectItem>
+                  <SelectItem value="personal">Personal</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Start Date */}
           <div>
@@ -353,6 +380,7 @@ export function RecordsPageContent() {
         transactions={transactions}
         organizationId={organizationId}
         isLoading={isLoading}
+        isWallet={Boolean(walletSummary?.isWallet)}
         onEdit={handleEdit}
       />
 

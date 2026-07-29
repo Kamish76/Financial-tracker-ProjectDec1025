@@ -2,6 +2,9 @@
 
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireUser } from '@/lib/auth/guards'
+import { encodeWalletDescription, isWalletOrganization } from '@/lib/wallet'
+import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 
 export async function createOrganization(
   name: string,
@@ -88,4 +91,60 @@ export async function createOrganization(
   }
 
   console.log('[CREATE_ORG] Owner added to organization_members')
+
+  if (isWalletOrganization(description)) {
+    const { error: accError } = await adminClient.from('wallet_accounts').insert({
+      organization_id: org.id,
+      name: 'Cash',
+      starting_value: 0,
+      is_active: true,
+    })
+    if (accError) {
+      console.error('[CREATE_ORG] Failed to spawn default Cash account:', accError.message)
+    } else {
+      console.log('[CREATE_ORG] Default Cash account created for wallet:', org.id)
+    }
+  }
+
+  revalidatePath('/', 'layout')
+  redirect(`/organizations/${org.id}`)
+}
+
+export async function createWallet(
+  name: string,
+  description: string | null
+) {
+  const trimmedName = name.trim()
+  if (!trimmedName) {
+    return { error: 'Wallet name is required' }
+  }
+  if (trimmedName.length < 3) {
+    return { error: 'Wallet name must be at least 3 characters' }
+  }
+  if (trimmedName.length > 100) {
+    return { error: 'Wallet name must be less than 100 characters' }
+  }
+
+  const user = await requireUser()
+  const adminClient = createAdminClient()
+
+  const { count: walletCount, error: walletCountError } = await adminClient
+    .from('organizations')
+    .select('*', { count: 'exact', head: true })
+    .eq('owner_id', user.id)
+    .ilike('description', '[wallet]%')
+
+  if (walletCountError) {
+    console.error('[CREATE_WALLET] Failed to check existing wallets:', walletCountError.message)
+    return { error: 'Unable to verify existing wallet right now' }
+  }
+
+  if ((walletCount || 0) > 0) {
+    return { error: 'You already have a personal wallet' }
+  }
+
+  const walletDescription = encodeWalletDescription(description)
+
+  const result = await createOrganization(trimmedName, walletDescription)
+  return result ?? { success: true }
 }

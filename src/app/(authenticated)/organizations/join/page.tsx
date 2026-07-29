@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { Ticket, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -17,6 +17,14 @@ export default function JoinOrganizationPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<{ organizationName: string; organizationId: string } | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  useEffect(() => {
+    if (!error) return
+    const timer = setTimeout(() => {
+      setError(null)
+    }, 30000)
+    return () => clearTimeout(timer)
+  }, [error])
 
   const handleJoinWithCode = () => {
     setError(null)
@@ -60,7 +68,7 @@ export default function JoinOrganizationPage() {
           </Button>
           <h1 className="text-3xl font-semibold text-foreground">Join an Organization</h1>
           <p className="text-muted-foreground mt-1">
-            Enter an invite code to join a financial organization
+            Enter an invite code to join a financial organization. Personal wallets are private and do not appear here.
           </p>
         </div>
 
@@ -141,6 +149,9 @@ export default function JoinOrganizationPage() {
             </p>
             <p className="text-sm text-muted-foreground">
               If you want to create your own organization, go back and click <strong>&quot;Create Organization&quot;</strong>.
+            </p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Personal wallets use a separate private UI and cannot be joined with invite codes.
             </p>
           </CardContent>
         </Card>

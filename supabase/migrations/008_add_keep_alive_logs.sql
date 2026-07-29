@@ -25,6 +25,7 @@ CREATE INDEX idx_keep_alive_logs_status ON public.keep_alive_logs(status);
 ALTER TABLE public.keep_alive_logs ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policy: Allow service role (cron job) to insert logs
+DROP POLICY IF EXISTS "Allow service role to insert keep-alive logs" ON public.keep_alive_logs;
 CREATE POLICY "Allow service role to insert keep-alive logs"
     ON public.keep_alive_logs
     FOR INSERT
@@ -32,6 +33,7 @@ CREATE POLICY "Allow service role to insert keep-alive logs"
     WITH CHECK (true);
 
 -- RLS Policy: Allow authenticated users to view keep-alive logs (for monitoring dashboard)
+DROP POLICY IF EXISTS "Allow authenticated users to view keep-alive logs" ON public.keep_alive_logs;
 CREATE POLICY "Allow authenticated users to view keep-alive logs"
     ON public.keep_alive_logs
     FOR SELECT

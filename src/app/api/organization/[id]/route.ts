@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { assertOrgRoleForAction } from '@/lib/auth/guards'
+import { revalidatePath } from 'next/cache'
 
 type RouteContext = {
 	params: Promise<{
@@ -92,6 +93,7 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
 			return NextResponse.json({ error: 'Failed to delete organization' }, { status: 500 })
 		}
 
+		revalidatePath('/', 'layout')
 		return NextResponse.json({ success: true })
 	} catch (error) {
 		console.error('Error in DELETE /api/organization/[id]:', error)

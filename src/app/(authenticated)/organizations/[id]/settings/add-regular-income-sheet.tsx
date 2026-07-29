@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { CircleDollarSign } from "lucide-react"
 
@@ -53,6 +53,14 @@ export function AddRegularIncomeSheet({
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [assignedToUserId, setAssignedToUserId] = useState<string>("")
+
+  useEffect(() => {
+    if (!error) return
+    const timer = setTimeout(() => {
+      setError(null)
+    }, 30000)
+    return () => clearTimeout(timer)
+  }, [error])
 
   const defaultDate = useMemo(() => new Date().toISOString().slice(0, 10), [])
 
