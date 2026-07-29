@@ -8,7 +8,7 @@ import {
   deleteWalletAccount,
   toggleArchiveWalletAccount,
 } from '@/lib/wallet-accounts'
-import type { AccountWithBalance } from '@/lib/wallet-accounts'
+import type { AccountWithBalance } from '@/lib/wallet-types'
 import { Button } from '@/components/ui/button'
 import {
   Card,

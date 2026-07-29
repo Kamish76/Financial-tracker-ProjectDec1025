@@ -4,20 +4,7 @@ import { requireUser } from '@/lib/auth/guards'
 import { createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-export type WalletAccount = {
-  id: string
-  organization_id: string
-  name: string
-  starting_value: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
-
-export type AccountWithBalance = WalletAccount & {
-  current_balance: number
-  transaction_count: number
-}
+import type { WalletAccount, AccountWithBalance } from './wallet-types'
 
 async function verifyOrgAccess(organizationId: string, userId: string): Promise<boolean> {
   const adminClient = createAdminClient()

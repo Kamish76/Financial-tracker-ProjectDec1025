@@ -2,7 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 
-export interface HeroStats {
+interface HeroStats {
   organizationCount: number;
   totalContributions: number;
   transactionCount: number;
