@@ -7,8 +7,6 @@ import {
 } from './utils'
 import type { FetchTransactionsResult, TransactionFilters } from './utils'
 
-export type { FetchTransactionsResult, TransactionFilters }
-
 export async function fetchTransactionsWithFilters(
 	organizationId: string,
 	filters: TransactionFilters
