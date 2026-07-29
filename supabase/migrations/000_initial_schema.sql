@@ -4,22 +4,6 @@
 create extension if not exists "pgcrypto";
 create extension if not exists "uuid-ossp";
 
--- Helper: check role membership
-create or replace function public.fn_has_org_role(p_org_id uuid, p_roles text[])
-returns boolean
-language sql
-security definer
-set search_path = public
-stable as $$
-  select exists (
-    select 1
-    from public.organization_members om
-    where om.organization_id = p_org_id
-      and om.user_id = auth.uid()
-      and om.role = any(p_roles)
-  );
-$$;
-
 -- Profiles (one-to-one with auth.users)
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
@@ -65,6 +49,22 @@ create table if not exists public.organization_members (
   created_at timestamptz not null default now(),
   unique (organization_id, user_id)
 );
+
+-- Helper: check role membership
+create or replace function public.fn_has_org_role(p_org_id uuid, p_roles text[])
+returns boolean
+language sql
+security definer
+set search_path = public
+stable as $$
+  select exists (
+    select 1
+    from public.organization_members om
+    where om.organization_id = p_org_id
+      and om.user_id = auth.uid()
+      and om.role = any(p_roles)
+  );
+$$;
 
 -- Invite codes (one active code per org ideally)
 create table if not exists public.invite_codes (
