@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { getOrCreateCategory } from '@/lib/categories'
 import { revalidatePath } from 'next/cache'
 
-export type AddWalletTransactionInput = {
+type AddWalletTransactionInput = {
   organizationId: string
   type: 'income' | 'expense_personal' | 'expense_business' | 'transfer'
   amount: number

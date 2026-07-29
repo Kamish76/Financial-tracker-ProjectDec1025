@@ -5,10 +5,10 @@ import { Archive, ArchiveRestore, Trash2, Wallet, AlertCircle, ArrowLeft } from 
 import { useRouter } from 'next/navigation'
 
 import {
-  AccountWithBalance,
   deleteWalletAccount,
   toggleArchiveWalletAccount,
 } from '@/lib/wallet-accounts'
+import type { AccountWithBalance } from '@/lib/wallet-types'
 import { Button } from '@/components/ui/button'
 import {
   Card,

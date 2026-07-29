@@ -10,8 +10,6 @@ import {
   type CategoryItem,
 } from "./category-constants"
 
-export type { CategoryItem }
-
 function formatCategoryName(normalized: string): string {
   if (!normalized) return ''
   return normalized
