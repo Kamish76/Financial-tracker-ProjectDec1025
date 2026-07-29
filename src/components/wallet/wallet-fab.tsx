@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { Plus } from 'lucide-react'
-import { WalletAccount, AccountWithBalance } from '@/lib/wallet-accounts'
+import type { WalletAccount, AccountWithBalance } from '@/lib/wallet-accounts'
 import { AddTransactionModal } from './add-transaction-modal'
 
 type WalletFabProps = {
