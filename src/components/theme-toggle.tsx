@@ -6,11 +6,6 @@ const THEME_KEY = "orgfinance-theme";
 
 type Theme = "light" | "dark";
 
-function applyTheme(theme: Theme) {
-  document.documentElement.dataset.theme = theme;
-  document.documentElement.classList.toggle("dark", theme === "dark");
-}
-
 function getInitialTheme(): Theme {
   if (typeof window === "undefined") return "light";
   const stored = window.localStorage.getItem(THEME_KEY) as Theme | null;
@@ -24,11 +19,11 @@ export function ThemeToggle() {
   useEffect(() => {
     const initial = getInitialTheme();
     setTheme(initial);
-    applyTheme(initial);
+    document.documentElement.dataset.theme = initial;
   }, []);
 
   useEffect(() => {
-    applyTheme(theme);
+    document.documentElement.dataset.theme = theme;
     window.localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
 
