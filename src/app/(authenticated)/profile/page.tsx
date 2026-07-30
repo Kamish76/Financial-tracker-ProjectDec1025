@@ -1,11 +1,12 @@
 import { requireUser } from '@/lib/auth/guards'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { User } from 'lucide-react'
+import { DeleteAccountCard } from './delete-account-card'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ProfilePage() {
-  const user = await requireUser()
+  const user = await requireUser({ redirectTo: '/auth?next=/profile' })
 
   return (
     <div className="min-h-screen">
@@ -52,14 +53,7 @@ export default async function ProfilePage() {
             </CardContent>
           </Card>
 
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <CardTitle className="mb-2">More settings coming soon</CardTitle>
-              <CardDescription className="text-center max-w-md">
-                Additional profile customization and account settings will be available here.
-              </CardDescription>
-            </CardContent>
-          </Card>
+          <DeleteAccountCard email={user.email || ''} userId={user.id} />
         </div>
       </div>
     </div>

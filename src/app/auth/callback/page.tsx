@@ -63,7 +63,15 @@ function CallbackInner() {
         
         // Wait before redirecting
         await new Promise(resolve => setTimeout(resolve, 500))
-        router.push('/organizations')
+        const nextParam =
+          searchParams.get('next') ||
+          searchParams.get('redirect') ||
+          searchParams.get('redirectTo')
+        const targetUrl =
+          nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//')
+            ? nextParam
+            : '/organizations'
+        router.push(targetUrl)
       } catch (err) {
         console.error('[AUTH_CALLBACK] Unexpected error:', err)
         setError('An error occurred during authentication')

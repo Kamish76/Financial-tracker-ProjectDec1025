@@ -4,11 +4,20 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
+function getSafeRedirect(nextParam?: string | null): string {
+  if (nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//')) {
+    return nextParam
+  }
+  return '/organizations'
+}
+
 export async function signInWithEmailPassword(
   email: string,
-  password: string
+  password: string,
+  redirectToParam?: string
 ) {
   const cookieStore = await cookies()
+  const targetUrl = getSafeRedirect(redirectToParam)
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -52,7 +61,7 @@ export async function signInWithEmailPassword(
   }
 
   console.log('[AUTH_ACTION] Sign in successful for user:', data.user.email)
-  // Redirect to organizations on successful login
+  // Redirect to targetUrl on successful login
   // The server-side client has set the session cookies
-  redirect('/organizations')
+  redirect(targetUrl)
 }

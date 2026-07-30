@@ -601,11 +601,17 @@ export function PrivacyPolicyContent() {
                     </p>
                   </div>
 
-                  <div className="rounded-lg border border-border/70 bg-background/50 p-3.5 space-y-1">
+                  <div className="rounded-lg border border-border/70 bg-background/50 p-3.5 space-y-2">
                     <div className="font-semibold text-foreground text-sm">Deletion Request</div>
                     <p className="text-xs text-muted-foreground">
                       Request deletion of your account. Note that shared organization ledgers may retain archived records.
                     </p>
+                    <Link href="/delete-account" className="inline-block">
+                      <Button variant="outline" size="sm" className="mt-1 text-xs h-7 gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10">
+                        Open Deletion Portal
+                        <ArrowRight className="h-3 w-3" />
+                      </Button>
+                    </Link>
                   </div>
 
                   <div className="rounded-lg border border-border/70 bg-background/50 p-3.5 space-y-1">
@@ -614,6 +620,21 @@ export function PrivacyPolicyContent() {
                       Organization owners can remove your membership at any time, revoking access immediately.
                     </p>
                   </div>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-foreground text-sm">Need to Request Account or Data Deletion?</p>
+                    <p className="text-xs text-muted-foreground">
+                      Access our dedicated Data Deletion Request portal in compliance with Apple App Store, Google Play Store, and GDPR requirements.
+                    </p>
+                  </div>
+                  <Link href="/delete-account">
+                    <Button variant="destructive" size="sm" className="whitespace-nowrap gap-1.5">
+                      Open Deletion Portal
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </Link>
                 </div>
               </div>
             </section>
