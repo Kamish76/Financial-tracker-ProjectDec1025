@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ArrowRight, CheckCircle2, LockKeyhole, Mail } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,11 @@ import { signInWithEmailPassword } from "./actions";
 import { signUpWithEmailPassword } from "./signup-actions";
 
 function AuthForm() {
+  const searchParams = useSearchParams();
+  const nextParam =
+    searchParams.get("next") ||
+    searchParams.get("redirect") ||
+    searchParams.get("redirectTo");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
@@ -44,7 +50,7 @@ function AuthForm() {
       return;
     } else {
       // Sign in
-      const result = await signInWithEmailPassword(email, password);
+      const result = await signInWithEmailPassword(email, password, nextParam || undefined);
       
       if (result?.error) {
         setMessage(result.error);
@@ -63,7 +69,10 @@ function AuthForm() {
 
     // Use the configured redirect URI from Google Cloud Console
     // This must match exactly what's configured in Google OAuth settings
-    const redirectTo = `${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback`;
+    const callbackBase = `${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback`;
+    const redirectTo = nextParam
+      ? `${callbackBase}?next=${encodeURIComponent(nextParam)}`
+      : callbackBase;
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {

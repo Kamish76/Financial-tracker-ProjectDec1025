@@ -7,6 +7,8 @@ const publicRoutes = [
   '/auth',
   '/auth/callback',
   '/privacy',
+  '/delete-account',
+  '/account-deletion',
 ]
 
 // Define auth routes that should redirect to authenticated area if user is already logged in
@@ -71,10 +73,18 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    // If user is authenticated and trying to access auth pages, redirect to organizations
+    // If user is authenticated and trying to access auth pages, redirect to target or organizations
     if (user && isAuthRoute) {
+      const param =
+        request.nextUrl.searchParams.get('next') ||
+        request.nextUrl.searchParams.get('redirect') ||
+        request.nextUrl.searchParams.get('redirectTo')
+      const targetUrl =
+        param && param.startsWith('/') && !param.startsWith('//') ? param : '/organizations'
       const url = request.nextUrl.clone()
-      url.pathname = '/organizations'
+      url.pathname = targetUrl.split('#')[0]
+      url.hash = targetUrl.includes('#') ? `#${targetUrl.split('#')[1]}` : ''
+      url.search = ''
       return NextResponse.redirect(url)
     }
 
@@ -82,7 +92,8 @@ export async function updateSession(request: NextRequest) {
     if (!user && !isPublicRoute) {
       const url = request.nextUrl.clone()
       url.pathname = '/auth'
-      // Add the original URL as a redirect parameter
+      // Add the original URL as both next and redirect parameters
+      url.searchParams.set('next', pathname)
       url.searchParams.set('redirect', pathname)
       return NextResponse.redirect(url)
     }
