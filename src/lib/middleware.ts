@@ -6,6 +6,7 @@ const publicRoutes = [
   '/',
   '/auth',
   '/auth/callback',
+  '/privacy',
 ]
 
 // Define auth routes that should redirect to authenticated area if user is already logged in
