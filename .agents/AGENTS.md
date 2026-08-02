@@ -10,6 +10,9 @@
 ## 2. Personal Wallet Mode Conventions (`is_wallet = true`)
 - **UI Separation**: In Wallet Mode, hide multi-user business features (such as "Quick actions" and "Member balances") and render dedicated Wallet navigation cards ("Wallet Sub Accounts", "Wallet Settings").
 - **Default Sub Account Spawning**: When creating a new Personal Wallet organization, automatically spawn a default `'Cash'` sub-account (`starting_value: 0`, `is_active: true`) in `wallet_accounts`.
+- **Default Category Seeding**: When creating a new Personal Wallet organization, automatically seed default preset income/expense categories in `transaction_categories` (in `actions.ts`).
+- **No Auto-Seeding on Read/Sync**: Never auto-seed default categories inside read queries (e.g., `getOrganizationCategoriesByType`) or sync pulls. Syncing must strictly mirror what is explicitly stored in the database.
+- **Historical Category Label Preservation**: Deleting a category from `transaction_categories` removes the definition for new transactions but preserves text labels on historical transactions.
 - **Account Deletion Safeguard**: Never hard-delete a sub-account if it is referenced by any transactions. Require users to archive (`is_active = false`) the account instead.
 
 ## 3. Middleware & Authentication Redirection Conventions
