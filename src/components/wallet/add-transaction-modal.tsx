@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import type { WalletAccount, AccountWithBalance } from '@/lib/wallet-types'
 import { addWalletTransaction } from '@/lib/wallet-transactions'
 import {
@@ -200,8 +200,77 @@ export function AddTransactionModal({
     return evaluateMathExpression(displayExpr)
   }, [displayExpr])
 
-  // Non-negative safeguard rule: check if evaluated amount > 0
-  const isAmountValid = evaluatedAmount > 0
+  // Non-negative safeguard rule: check if evaluated amount !== 0
+  const isAmountValid = evaluatedAmount !== 0
+
+  const handleKeypadPress = useCallback((key: string) => {
+    setError(null)
+    if (key === '=') {
+      const val = evaluateMathExpression(displayExpr)
+      setDisplayExpr(String(val))
+      return
+    }
+
+    if (key === 'BACKSPACE') {
+      if (displayExpr.length <= 1) {
+        setDisplayExpr('0')
+      } else {
+        setDisplayExpr(displayExpr.slice(0, -1))
+      }
+      return
+    }
+
+    if (displayExpr === '0' && '0123456789'.includes(key)) {
+      setDisplayExpr(key)
+    } else {
+      // Prevent consecutive operators
+      const lastChar = displayExpr.slice(-1)
+      const isOp = '+-×÷.'.includes(key)
+      const lastIsOp = '+-×÷.'.includes(lastChar)
+      if (isOp && lastIsOp) {
+        setDisplayExpr(displayExpr.slice(0, -1) + key)
+      } else {
+        setDisplayExpr(displayExpr + key)
+      }
+    }
+  }, [displayExpr])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in a generic input or textarea
+      if (
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA'
+      ) {
+        return
+      }
+
+      if (e.key >= '0' && e.key <= '9') {
+        handleKeypadPress(e.key)
+      } else if (e.key === '+' || e.key === '-') {
+        handleKeypadPress(e.key)
+      } else if (e.key === '*') {
+        handleKeypadPress('×')
+      } else if (e.key === '/') {
+        e.preventDefault()
+        handleKeypadPress('÷')
+      } else if (e.key === '.') {
+        handleKeypadPress('.')
+      } else if (e.key === 'Enter' || e.key === '=') {
+        e.preventDefault()
+        handleKeypadPress('=')
+      } else if (e.key === 'Backspace') {
+        handleKeypadPress('BACKSPACE')
+      } else if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, handleKeypadPress, onClose])
 
   if (!isOpen) return null
 
@@ -237,47 +306,12 @@ export function AddTransactionModal({
       ? 'bg-rose-500/15 text-rose-500'
       : 'bg-amber-500/15 text-amber-500'
 
-  const handleKeypadPress = (key: string) => {
-    setError(null)
-    if (key === '=') {
-      const val = evaluateMathExpression(displayExpr)
-      if (val <= 0) {
-        setError('Calculated amount must be greater than 0.')
-        setDisplayExpr('0')
-      } else {
-        setDisplayExpr(String(val))
-      }
-      return
-    }
 
-    if (key === 'BACKSPACE') {
-      if (displayExpr.length <= 1) {
-        setDisplayExpr('0')
-      } else {
-        setDisplayExpr(displayExpr.slice(0, -1))
-      }
-      return
-    }
-
-    if (displayExpr === '0' && '0123456789'.includes(key)) {
-      setDisplayExpr(key)
-    } else {
-      // Prevent consecutive operators
-      const lastChar = displayExpr.slice(-1)
-      const isOp = '+-×÷.'.includes(key)
-      const lastIsOp = '+-×÷.'.includes(lastChar)
-      if (isOp && lastIsOp) {
-        setDisplayExpr(displayExpr.slice(0, -1) + key)
-      } else {
-        setDisplayExpr(displayExpr + key)
-      }
-    }
-  }
 
   const handleSave = async () => {
     setError(null)
     if (!isAmountValid) {
-      setError('Transaction amount must be greater than 0.')
+      setError('Transaction amount cannot be 0.')
       return
     }
 
@@ -311,7 +345,7 @@ export function AddTransactionModal({
     const res = await addWalletTransaction({
       organizationId,
       type: typeParam,
-      amount: evaluatedAmount,
+      amount: Math.abs(evaluatedAmount),
       accountId: selectedAccountId,
       transferToAccountId: activeTab === 'transfer' ? transferToAccountId : null,
       category: activeTab === 'transfer' ? 'Transfer' : category,
@@ -654,10 +688,16 @@ export function AddTransactionModal({
             </button>
           </div>
 
-          {!isAmountValid && displayExpr !== '0' && (
+          {evaluatedAmount === 0 && displayExpr !== '0' && (
             <div className="flex items-center gap-1.5 text-xs text-destructive px-2">
               <AlertCircle className="h-3.5 w-3.5" />
-              <span>Amount must be greater than 0</span>
+              <span>Amount cannot be 0</span>
+            </div>
+          )}
+          {evaluatedAmount < 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-amber-500 px-2">
+              <AlertCircle className="h-3.5 w-3.5" />
+              <span>Negative result will be recorded as a positive value</span>
             </div>
           )}
         </div>
