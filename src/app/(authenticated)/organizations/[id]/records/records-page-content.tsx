@@ -382,6 +382,7 @@ export function RecordsPageContent() {
         isLoading={isLoading}
         isWallet={Boolean(walletSummary?.isWallet)}
         onEdit={handleEdit}
+        onDelete={handleEditSave}
       />
 
       {/* Infinite scroll target */}
