@@ -216,6 +216,29 @@ export function AddTransactionModal({
       return
     }
 
+    if (key === 'BACKSPACE') {
+      if (displayExpr.length <= 1) {
+        setDisplayExpr('0')
+      } else {
+        setDisplayExpr(displayExpr.slice(0, -1))
+      }
+      return
+    }
+
+    if (displayExpr === '0' && '0123456789'.includes(key)) {
+      setDisplayExpr(key)
+    } else {
+      // Prevent consecutive operators
+      const lastChar = displayExpr.slice(-1)
+      const isOp = '+-×÷.'.includes(key)
+      const lastIsOp = '+-×÷.'.includes(lastChar)
+      if (isOp && lastIsOp) {
+        setDisplayExpr(displayExpr.slice(0, -1) + key)
+      } else {
+        setDisplayExpr(displayExpr + key)
+      }
+    }
+  }
 
   const handleSave = async () => {
     setError(null)
