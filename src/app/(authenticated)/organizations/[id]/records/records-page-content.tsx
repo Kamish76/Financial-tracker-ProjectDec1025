@@ -154,8 +154,10 @@ export function RecordsPageContent() {
   }
 
   const handleEditSave = async () => {
-    // Refresh transactions after edit
+    // Refresh transactions and balances after edit/delete
     loadTransactions(false)
+    const walletData = await fetchWalletSummary(organizationId)
+    setWalletSummary(walletData)
     handleCloseEdit()
   }
 
