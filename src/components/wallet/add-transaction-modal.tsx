@@ -200,112 +200,21 @@ export function AddTransactionModal({
     return evaluateMathExpression(displayExpr)
   }, [displayExpr])
 
-  // Non-negative safeguard rule: check if evaluated amount !== 0
+  // Check if evaluated amount is not zero
   const isAmountValid = evaluatedAmount !== 0
 
-  const handleKeypadPress = useCallback((key: string) => {
+  const handleKeypadPress = (key: string) => {
     setError(null)
     if (key === '=') {
       const val = evaluateMathExpression(displayExpr)
-      setDisplayExpr(String(val))
-      return
-    }
-
-    if (key === 'BACKSPACE') {
-      if (displayExpr.length <= 1) {
+      if (val === 0) {
+        setError('Calculated amount cannot be 0.')
         setDisplayExpr('0')
       } else {
-        setDisplayExpr(displayExpr.slice(0, -1))
+        setDisplayExpr(String(val))
       }
       return
     }
-
-    if (displayExpr === '0' && '0123456789'.includes(key)) {
-      setDisplayExpr(key)
-    } else {
-      // Prevent consecutive operators
-      const lastChar = displayExpr.slice(-1)
-      const isOp = '+-×÷.'.includes(key)
-      const lastIsOp = '+-×÷.'.includes(lastChar)
-      if (isOp && lastIsOp) {
-        setDisplayExpr(displayExpr.slice(0, -1) + key)
-      } else {
-        setDisplayExpr(displayExpr + key)
-      }
-    }
-  }, [displayExpr])
-
-  useEffect(() => {
-    if (!isOpen) return
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in a generic input or textarea
-      if (
-        document.activeElement?.tagName === 'INPUT' ||
-        document.activeElement?.tagName === 'TEXTAREA'
-      ) {
-        return
-      }
-
-      if (e.key >= '0' && e.key <= '9') {
-        handleKeypadPress(e.key)
-      } else if (e.key === '+' || e.key === '-') {
-        handleKeypadPress(e.key)
-      } else if (e.key === '*') {
-        handleKeypadPress('×')
-      } else if (e.key === '/') {
-        e.preventDefault()
-        handleKeypadPress('÷')
-      } else if (e.key === '.') {
-        handleKeypadPress('.')
-      } else if (e.key === 'Enter' || e.key === '=') {
-        e.preventDefault()
-        handleKeypadPress('=')
-      } else if (e.key === 'Backspace') {
-        handleKeypadPress('BACKSPACE')
-      } else if (e.key === 'Escape') {
-        onClose()
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, handleKeypadPress, onClose])
-
-  if (!isOpen) return null
-
-  const selectedAccount = accounts.find((a) => a.id === selectedAccountId)
-  const selectedToAccount = accounts.find((a) => a.id === transferToAccountId)
-
-  // Color coding by transaction type: Income = Green, Expense = Red, Transfer = Yellow
-  const accentText =
-    activeTab === 'income'
-      ? 'text-emerald-500'
-      : activeTab === 'expense'
-      ? 'text-rose-500'
-      : 'text-amber-500'
-
-  const accentBadgeBg =
-    activeTab === 'income'
-      ? 'bg-emerald-500 text-emerald-950'
-      : activeTab === 'expense'
-      ? 'bg-rose-500 text-rose-950'
-      : 'bg-amber-500 text-amber-950'
-
-  const accentButtonBg =
-    activeTab === 'income'
-      ? 'bg-emerald-500 text-emerald-950 hover:bg-emerald-400'
-      : activeTab === 'expense'
-      ? 'bg-rose-500 text-rose-950 hover:bg-rose-400'
-      : 'bg-amber-500 text-amber-950 hover:bg-amber-400'
-
-  const accentDropdownActive =
-    activeTab === 'income'
-      ? 'bg-emerald-500/15 text-emerald-500'
-      : activeTab === 'expense'
-      ? 'bg-rose-500/15 text-rose-500'
-      : 'bg-amber-500/15 text-amber-500'
-
 
 
   const handleSave = async () => {
@@ -366,6 +275,117 @@ export function AddTransactionModal({
       setError(null)
     }
   }
+
+  // Handle keyboard events for calculator
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input or textarea
+      if (
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement
+      ) {
+        return
+      }
+
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        // Check if expression is just a number or evaluated
+        const isEvaluated = !/[+\-×÷]/.test(displayExpr)
+        if (isEvaluated && isAmountValid && !isSubmitting) {
+          handleSave()
+        } else {
+          handleKeypadPress('=')
+        }
+        return
+      }
+
+      if (e.key === 'Backspace') {
+        e.preventDefault()
+        handleKeypadPress('BACKSPACE')
+        return
+      }
+
+      const keyMap: Record<string, string> = {
+        '*': '×',
+        'x': '×',
+        'X': '×',
+        '/': '÷',
+        '+': '+',
+        '-': '-',
+        '.': '.',
+      }
+
+      if (keyMap[e.key]) {
+        e.preventDefault()
+        handleKeypadPress(keyMap[e.key])
+        return
+      }
+
+      if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault()
+        handleKeypadPress(e.key)
+        return
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [
+    isOpen,
+    displayExpr,
+    isAmountValid,
+    isSubmitting,
+    // Note: handleSave, handleKeypadPress, and onClose aren't wrapped in useCallback
+    // so they trigger re-binds on every render, which is fine for this lightweight listener.
+    handleSave,
+    handleKeypadPress,
+    onClose,
+  ])
+
+  if (!isOpen) return null
+
+  const selectedAccount = accounts.find((a) => a.id === selectedAccountId)
+  const selectedToAccount = accounts.find((a) => a.id === transferToAccountId)
+
+  // Color coding by transaction type: Income = Green, Expense = Red, Transfer = Yellow
+  const accentText =
+    activeTab === 'income'
+      ? 'text-emerald-500'
+      : activeTab === 'expense'
+      ? 'text-rose-500'
+      : 'text-amber-500'
+
+  const accentBadgeBg =
+    activeTab === 'income'
+      ? 'bg-emerald-500 text-emerald-950'
+      : activeTab === 'expense'
+      ? 'bg-rose-500 text-rose-950'
+      : 'bg-amber-500 text-amber-950'
+
+  const accentButtonBg =
+    activeTab === 'income'
+      ? 'bg-emerald-500 text-emerald-950 hover:bg-emerald-400'
+      : activeTab === 'expense'
+      ? 'bg-rose-500 text-rose-950 hover:bg-rose-400'
+      : 'bg-amber-500 text-amber-950 hover:bg-amber-400'
+
+  const accentDropdownActive =
+    activeTab === 'income'
+      ? 'bg-emerald-500/15 text-emerald-500'
+      : activeTab === 'expense'
+      ? 'bg-rose-500/15 text-rose-500'
+      : 'bg-amber-500/15 text-amber-500'
+
+
 
   const formatDisplayDate = (dStr: string) => {
     try {
@@ -695,7 +715,7 @@ export function AddTransactionModal({
             </div>
           )}
           {evaluatedAmount < 0 && (
-            <div className="flex items-center gap-1.5 text-xs text-amber-500 px-2">
+            <div className="flex items-center gap-1.5 text-xs text-amber-500 px-2 mt-1">
               <AlertCircle className="h-3.5 w-3.5" />
               <span>Negative result will be recorded as a positive value</span>
             </div>
