@@ -165,31 +165,8 @@ export async function getOrganizationCategoriesByType(organizationId: string): P
     return { income: [], expense: [] }
   }
 
-  // If no categories exist for this organization yet, seed the default 5 income + 5 expense categories
   if (!data || data.length === 0) {
-    const toInsert = [
-      ...DEFAULT_INCOME_CATEGORIES.map((name) => ({
-        organization_id: organizationId,
-        normalized_name: name.toLowerCase(),
-        aliases: ['type:income'],
-        is_custom: false,
-      })),
-      ...DEFAULT_EXPENSE_CATEGORIES.map((name) => ({
-        organization_id: organizationId,
-        normalized_name: name.toLowerCase(),
-        aliases: ['type:expense'],
-        is_custom: false,
-      })),
-    ]
-
-    const { data: seeded, error: seedError } = await admin
-      .from('transaction_categories')
-      .insert(toInsert)
-      .select('id, normalized_name, aliases, is_custom')
-
-    if (!seedError && seeded) {
-      data = seeded
-    }
+    return { income: [], expense: [] }
   }
 
   const income: CategoryItem[] = []

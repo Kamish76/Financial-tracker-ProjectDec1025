@@ -1,5 +1,15 @@
 "use client"
 
+import { useState, useTransition } from "react"
+import { deleteTransaction } from "../actions"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { ArrowUpRight, ArrowDownLeft, MoreHorizontal } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
@@ -19,6 +29,7 @@ type TransactionsListProps = {
   isLoading: boolean
   isWallet?: boolean
   onEdit: (transaction: Transaction) => void
+  onDelete: () => void
 }
 
 const getTransactionColor = (type: string) => {
@@ -61,7 +72,31 @@ export function TransactionsList({
   isLoading,
   isWallet,
   onEdit,
+  onDelete,
 }: TransactionsListProps) {
+  const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null)
+  const [isDeleting, startTransition] = useTransition()
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  const confirmDelete = () => {
+    if (!transactionToDelete) return
+    setDeleteError(null)
+
+    startTransition(async () => {
+      const result = await deleteTransaction({
+        organizationId,
+        transactionId: transactionToDelete.id,
+      })
+
+      if (result && 'error' in result) {
+        setDeleteError(result.error ?? "Unable to delete transaction")
+      } else {
+        setTransactionToDelete(null)
+        onDelete()
+      }
+    })
+  }
+
   if (isLoading && transactions.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -160,7 +195,12 @@ export function TransactionsList({
                       <DropdownMenuItem onClick={() => onEdit(tx)}>
                         Edit
                       </DropdownMenuItem>
-                      <DropdownMenuItem>Delete</DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => setTransactionToDelete(tx)}
+                        className="text-red-600 focus:text-red-600 focus:bg-red-100 dark:focus:bg-red-950"
+                      >
+                        Delete
+                      </DropdownMenuItem>
                       {(tx.type === "expense_business" || tx.type === "expense_personal") && (
                         <DropdownMenuItem>Create Refund</DropdownMenuItem>
                       )}
@@ -172,6 +212,49 @@ export function TransactionsList({
           </tbody>
         </table>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!transactionToDelete} onOpenChange={(open) => {
+        if (!open && !isDeleting) {
+          setTransactionToDelete(null)
+          setDeleteError(null)
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Transaction</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this transaction? This action cannot be undone and will affect your balances.
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+              {deleteError}
+            </div>
+          )}
+
+          <DialogFooter className="flex gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setTransactionToDelete(null)
+                setDeleteError(null)
+              }}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

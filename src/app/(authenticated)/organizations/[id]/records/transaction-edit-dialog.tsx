@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { updateTransaction, deleteTransaction } from "../actions"
+import { updateTransaction } from "../actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -49,7 +49,6 @@ export function TransactionEditDialog({
   )
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [isDeleting, setIsDeleting] = useState(false)
 
   const handleSave = () => {
     setError(null)
@@ -79,27 +78,6 @@ export function TransactionEditDialog({
     })
   }
 
-  const handleDelete = () => {
-    if (!confirm("Are you sure you want to delete this transaction?")) return
-
-    setIsDeleting(true)
-    startTransition(async () => {
-      const result = await deleteTransaction({
-        organizationId,
-        transactionId: transaction.id,
-      })
-
-      if ('error' in result) {
-        setError(result.error ?? "Unable to delete transaction")
-      } else {
-        onSave()
-        onOpenChange(false)
-      }
-
-      setIsDeleting(false)
-    })
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -124,7 +102,7 @@ export function TransactionEditDialog({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
-              disabled={isPending || isDeleting}
+              disabled={isPending}
             />
           </div>
 
@@ -139,7 +117,7 @@ export function TransactionEditDialog({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Transaction description..."
               rows={3}
-              disabled={isPending || isDeleting}
+              disabled={isPending}
             />
           </div>
 
@@ -153,7 +131,7 @@ export function TransactionEditDialog({
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               placeholder="Enter category..."
-              disabled={isPending || isDeleting}
+              disabled={isPending}
             />
           </div>
 
@@ -167,7 +145,7 @@ export function TransactionEditDialog({
               type="date"
               value={occurredAt}
               onChange={(e) => setOccurredAt(e.target.value)}
-              disabled={isPending || isDeleting}
+              disabled={isPending}
             />
           </div>
 
@@ -180,26 +158,17 @@ export function TransactionEditDialog({
         </div>
 
         <DialogFooter className="flex gap-2 justify-between">
-          <Button
-            variant="destructive"
-            onClick={handleDelete}
-            disabled={isPending || isDeleting}
-            className="mr-auto"
-          >
-            {isDeleting ? "Deleting..." : "Delete"}
-          </Button>
-
           <div className="flex gap-2">
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={isPending || isDeleting}
+              disabled={isPending}
             >
               Cancel
             </Button>
             <Button
               onClick={handleSave}
-              disabled={isPending || isDeleting}
+              disabled={isPending}
             >
               {isPending ? "Saving..." : "Save"}
             </Button>

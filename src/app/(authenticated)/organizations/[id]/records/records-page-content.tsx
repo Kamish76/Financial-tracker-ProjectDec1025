@@ -154,8 +154,10 @@ export function RecordsPageContent() {
   }
 
   const handleEditSave = async () => {
-    // Refresh transactions after edit
+    // Refresh transactions and balances after edit/delete
     loadTransactions(false)
+    const walletData = await fetchWalletSummary(organizationId)
+    setWalletSummary(walletData)
     handleCloseEdit()
   }
 
@@ -382,6 +384,7 @@ export function RecordsPageContent() {
         isLoading={isLoading}
         isWallet={Boolean(walletSummary?.isWallet)}
         onEdit={handleEdit}
+        onDelete={handleEditSave}
       />
 
       {/* Infinite scroll target */}

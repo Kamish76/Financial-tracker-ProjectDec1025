@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import type { WalletAccount, AccountWithBalance } from '@/lib/wallet-types'
 import { addWalletTransaction } from '@/lib/wallet-transactions'
 import {
@@ -200,8 +200,179 @@ export function AddTransactionModal({
     return evaluateMathExpression(displayExpr)
   }, [displayExpr])
 
-  // Non-negative safeguard rule: check if evaluated amount > 0
-  const isAmountValid = evaluatedAmount > 0
+  // Check if evaluated amount is not zero
+  const isAmountValid = evaluatedAmount !== 0
+
+  const handleKeypadPress = (key: string) => {
+    setError(null)
+    if (key === '=') {
+      const val = evaluateMathExpression(displayExpr)
+      if (val === 0) {
+        setError('Calculated amount cannot be 0.')
+        setDisplayExpr('0')
+      } else {
+        setDisplayExpr(String(val))
+      }
+      return
+    }
+
+    if (key === 'BACKSPACE') {
+      if (displayExpr.length <= 1) {
+        setDisplayExpr('0')
+      } else {
+        setDisplayExpr(displayExpr.slice(0, -1))
+      }
+      return
+    }
+
+    if (displayExpr === '0' && '0123456789'.includes(key)) {
+      setDisplayExpr(key)
+    } else {
+      // Prevent consecutive operators
+      const lastChar = displayExpr.slice(-1)
+      const isOp = '+-×÷.'.includes(key)
+      const lastIsOp = '+-×÷.'.includes(lastChar)
+      if (isOp && lastIsOp) {
+        setDisplayExpr(displayExpr.slice(0, -1) + key)
+      } else {
+        setDisplayExpr(displayExpr + key)
+      }
+    }
+  }
+
+  const handleSave = async () => {
+    setError(null)
+    if (!isAmountValid) {
+      setError('Transaction amount cannot be 0.')
+      return
+    }
+
+    if (!selectedAccountId) {
+      setError('Please select an account.')
+      return
+    }
+
+    if (activeTab === 'transfer' && !transferToAccountId) {
+      setError('Please select a destination account.')
+      return
+    }
+
+    if (activeTab === 'transfer' && selectedAccountId === transferToAccountId) {
+      setError('Source and destination accounts must be different.')
+      return
+    }
+
+    setIsSubmitting(true)
+
+    // Build ISO timestamp from date and time
+    const fullDate = new Date(`${txDate}T${txTime}:00`).toISOString()
+
+    const typeParam =
+      activeTab === 'income'
+        ? 'income'
+        : activeTab === 'expense'
+        ? 'expense_personal'
+        : 'transfer'
+
+    const res = await addWalletTransaction({
+      organizationId,
+      type: typeParam,
+      amount: Math.abs(evaluatedAmount),
+      accountId: selectedAccountId,
+      transferToAccountId: activeTab === 'transfer' ? transferToAccountId : null,
+      category: activeTab === 'transfer' ? 'Transfer' : category,
+      notes: notes.trim(),
+      createdAt: fullDate,
+    })
+
+    setIsSubmitting(false)
+
+    if (res.error) {
+      setError(res.error)
+    } else {
+      onTransactionAdded?.()
+      onClose()
+      // reset form
+      setDisplayExpr('0')
+      setNotes('')
+      setError(null)
+    }
+  }
+
+  // Handle keyboard events for calculator
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input or textarea
+      if (
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement
+      ) {
+        return
+      }
+
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        // Check if expression is just a number or evaluated
+        const isEvaluated = !/[+\-×÷]/.test(displayExpr)
+        if (isEvaluated && isAmountValid && !isSubmitting) {
+          handleSave()
+        } else {
+          handleKeypadPress('=')
+        }
+        return
+      }
+
+      if (e.key === 'Backspace') {
+        e.preventDefault()
+        handleKeypadPress('BACKSPACE')
+        return
+      }
+
+      const keyMap: Record<string, string> = {
+        '*': '×',
+        'x': '×',
+        'X': '×',
+        '/': '÷',
+        '+': '+',
+        '-': '-',
+        '.': '.',
+      }
+
+      if (keyMap[e.key]) {
+        e.preventDefault()
+        handleKeypadPress(keyMap[e.key])
+        return
+      }
+
+      if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault()
+        handleKeypadPress(e.key)
+        return
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [
+    isOpen,
+    displayExpr,
+    isAmountValid,
+    isSubmitting,
+    // Note: handleSave, handleKeypadPress, and onClose aren't wrapped in useCallback
+    // so they trigger re-binds on every render, which is fine for this lightweight listener.
+    handleSave,
+    handleKeypadPress,
+    onClose,
+  ])
 
   if (!isOpen) return null
 
@@ -237,101 +408,7 @@ export function AddTransactionModal({
       ? 'bg-rose-500/15 text-rose-500'
       : 'bg-amber-500/15 text-amber-500'
 
-  const handleKeypadPress = (key: string) => {
-    setError(null)
-    if (key === '=') {
-      const val = evaluateMathExpression(displayExpr)
-      if (val <= 0) {
-        setError('Calculated amount must be greater than 0.')
-        setDisplayExpr('0')
-      } else {
-        setDisplayExpr(String(val))
-      }
-      return
-    }
 
-    if (key === 'BACKSPACE') {
-      if (displayExpr.length <= 1) {
-        setDisplayExpr('0')
-      } else {
-        setDisplayExpr(displayExpr.slice(0, -1))
-      }
-      return
-    }
-
-    if (displayExpr === '0' && '0123456789'.includes(key)) {
-      setDisplayExpr(key)
-    } else {
-      // Prevent consecutive operators
-      const lastChar = displayExpr.slice(-1)
-      const isOp = '+-×÷.'.includes(key)
-      const lastIsOp = '+-×÷.'.includes(lastChar)
-      if (isOp && lastIsOp) {
-        setDisplayExpr(displayExpr.slice(0, -1) + key)
-      } else {
-        setDisplayExpr(displayExpr + key)
-      }
-    }
-  }
-
-  const handleSave = async () => {
-    setError(null)
-    if (!isAmountValid) {
-      setError('Transaction amount must be greater than 0.')
-      return
-    }
-
-    if (!selectedAccountId) {
-      setError('Please select an account.')
-      return
-    }
-
-    if (activeTab === 'transfer' && !transferToAccountId) {
-      setError('Please select a destination account.')
-      return
-    }
-
-    if (activeTab === 'transfer' && selectedAccountId === transferToAccountId) {
-      setError('Source and destination accounts must be different.')
-      return
-    }
-
-    setIsSubmitting(true)
-
-    // Build ISO timestamp from date and time
-    const fullDate = new Date(`${txDate}T${txTime}:00`).toISOString()
-
-    const typeParam =
-      activeTab === 'income'
-        ? 'income'
-        : activeTab === 'expense'
-        ? 'expense_personal'
-        : 'transfer'
-
-    const res = await addWalletTransaction({
-      organizationId,
-      type: typeParam,
-      amount: evaluatedAmount,
-      accountId: selectedAccountId,
-      transferToAccountId: activeTab === 'transfer' ? transferToAccountId : null,
-      category: activeTab === 'transfer' ? 'Transfer' : category,
-      notes: notes.trim(),
-      createdAt: fullDate,
-    })
-
-    setIsSubmitting(false)
-
-    if (res.error) {
-      setError(res.error)
-    } else {
-      onTransactionAdded?.()
-      onClose()
-      // reset form
-      setDisplayExpr('0')
-      setNotes('')
-      setError(null)
-    }
-  }
 
   const formatDisplayDate = (dStr: string) => {
     try {
@@ -654,10 +731,16 @@ export function AddTransactionModal({
             </button>
           </div>
 
-          {!isAmountValid && displayExpr !== '0' && (
+          {evaluatedAmount === 0 && displayExpr !== '0' && (
             <div className="flex items-center gap-1.5 text-xs text-destructive px-2">
               <AlertCircle className="h-3.5 w-3.5" />
-              <span>Amount must be greater than 0</span>
+              <span>Amount cannot be 0</span>
+            </div>
+          )}
+          {evaluatedAmount < 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-amber-500 px-2 mt-1">
+              <AlertCircle className="h-3.5 w-3.5" />
+              <span>Negative result will be recorded as a positive value</span>
             </div>
           )}
         </div>

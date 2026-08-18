@@ -3,6 +3,10 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireUser } from '@/lib/auth/guards'
 import { encodeWalletDescription, isWalletOrganization } from '@/lib/wallet'
+import {
+  DEFAULT_INCOME_CATEGORIES,
+  DEFAULT_EXPENSE_CATEGORIES,
+} from '@/lib/category-constants'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 
@@ -103,6 +107,29 @@ export async function createOrganization(
       console.error('[CREATE_ORG] Failed to spawn default Cash account:', accError.message)
     } else {
       console.log('[CREATE_ORG] Default Cash account created for wallet:', org.id)
+    }
+
+    const defaultCategories = [
+      ...DEFAULT_INCOME_CATEGORIES.map((name) => ({
+        organization_id: org.id,
+        normalized_name: name.toLowerCase(),
+        aliases: ['type:income'],
+        is_custom: false,
+      })),
+      ...DEFAULT_EXPENSE_CATEGORIES.map((name) => ({
+        organization_id: org.id,
+        normalized_name: name.toLowerCase(),
+        aliases: ['type:expense'],
+        is_custom: false,
+      })),
+    ]
+    const { error: catError } = await adminClient
+      .from('transaction_categories')
+      .insert(defaultCategories)
+    if (catError) {
+      console.error('[CREATE_ORG] Failed to seed default categories:', catError.message)
+    } else {
+      console.log('[CREATE_ORG] Default categories seeded for wallet:', org.id)
     }
   }
 
