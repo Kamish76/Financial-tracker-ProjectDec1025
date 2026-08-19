@@ -5,6 +5,7 @@ import { Plus, Building2, Users, Crown, Shield, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { isWalletOrganization, stripWalletMarker } from '@/lib/wallet'
+import { OrganizationLinkButton } from './organization-link-button'
 
 export const dynamic = 'force-dynamic'
 
@@ -207,11 +208,7 @@ export default async function OrganizationsPage() {
                     {stripWalletMarker(org.description) || 'No description'}
                   </p>
                   <div className="mt-4 flex items-center gap-2">
-                    <Button size="sm" asChild className="flex-1">
-                      <Link href={`/organizations/${org.id}`}>
-                        View Details
-                      </Link>
-                    </Button>
+                    <OrganizationLinkButton orgId={org.id} />
                   </div>
                 </CardContent>
               </Card>
