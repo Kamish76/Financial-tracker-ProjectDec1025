@@ -133,13 +133,13 @@ export async function getOrganizationStats(organizationId: string): Promise<Orga
 
   if (userIds.length > 0) {
     try {
-      const { data, error } = await admin.auth.admin.listUsers()
+      const { data, error } = await admin.rpc('get_org_member_emails', { p_org_id: organizationId })
 
-      if (!error && data?.users) {
-        for (const user of data.users as AuthUserRow[]) {
-          if (userIds.includes(user.id)) {
-            emailByUserId[user.id] = user.email
-          }
+      if (error) {
+        console.error('[finance] Failed to fetch user emails via RPC:', error)
+      } else if (data) {
+        for (const user of data) {
+          emailByUserId[user.user_id] = user.email
         }
       }
     } catch (error) {
