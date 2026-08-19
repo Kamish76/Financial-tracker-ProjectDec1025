@@ -79,23 +79,28 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 	debugInfo.push({ label: 'userEmail', value: user?.email ?? 'none' })
 	debugInfo.push({ label: 'membershipRole', value: effectiveMembership.role })
 
-	const { data: organization } = await adminClient
-		.from('organizations')
-		.select('id, name, description')
-		.eq('id', id)
-		.maybeSingle()
+	const [
+		organizationResult,
+		transactionsResult,
+		stats
+	] = await Promise.all([
+		adminClient.from('organizations').select('id, name, description').eq('id', id).maybeSingle(),
+		adminClient.from('transactions')
+			.select('id, type, amount, category, description, created_at, is_initial, account_id, transfer_to_account_id, account:wallet_accounts!account_id(id, name), transfer_to_account:wallet_accounts!transfer_to_account_id(id, name)')
+			.eq('organization_id', id)
+			.order('created_at', { ascending: false })
+			.limit(365),
+		getOrganizationStats(id)
+	])
+
+	const organization = organizationResult.data
+	const transactionRows = transactionsResult.data
+	const transactionsError = transactionsResult.error
 
 	const isWallet = isWalletOrganization(organization?.description)
 	debugInfo.push({ label: 'isWallet', value: isWallet ? 'yes' : 'no' })
 
 	const accounts = isWallet ? await getAccountsWithBalances(id, false) : []
-
-	const { data: transactionRows, error: transactionsError } = await adminClient
-		.from('transactions')
-		.select('id, type, amount, category, description, created_at, is_initial, account_id, transfer_to_account_id, account:wallet_accounts!account_id(id, name), transfer_to_account:wallet_accounts!transfer_to_account_id(id, name)')
-		.eq('organization_id', id)
-		.order('created_at', { ascending: false })
-		.limit(365)
 
 	if (transactionsError) {
 		console.error('[ORG_PAGE] Transactions error', { orgId: id, error: transactionsError.message })
@@ -112,9 +117,6 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		account_name: row.account?.name ?? null,
 		transfer_to_account_name: row.transfer_to_account?.name ?? null,
 	}))
-
-	// Compute organization stats (totals + per-member balances)
-	const stats = await getOrganizationStats(id)
 
 	const canManage = effectiveMembership?.role === 'owner' || effectiveMembership?.role === 'admin'
 

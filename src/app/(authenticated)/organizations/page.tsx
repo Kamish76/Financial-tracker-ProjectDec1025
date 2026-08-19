@@ -50,40 +50,55 @@ export default async function OrganizationsPage() {
     console.error('[ORGS_PAGE] Failed to fetch organizations:', error.message)
   }
 
-  const organizations = await Promise.all(
-    (memberships || [])
-      .filter((m) => m.organizations)
-      .map(async (m) => {
-        const organizationData = Array.isArray(m.organizations)
-          ? m.organizations[0]
-          : m.organizations
+  const validMemberships = (memberships || []).filter((m) => m.organizations)
+  
+  const orgIds = validMemberships
+    .map((m) => {
+      const organizationData = Array.isArray(m.organizations)
+        ? m.organizations[0]
+        : m.organizations
+      return organizationData ? (organizationData as any).id : null
+    })
+    .filter(Boolean) as string[]
 
-        if (!organizationData) {
-          return null
-        }
+  let memberCounts: Record<string, number> = {}
+  if (orgIds.length > 0) {
+    const { data: allMembers } = await adminClient
+      .from('organization_members')
+      .select('organization_id')
+      .in('organization_id', orgIds)
+      
+    memberCounts = (allMembers || []).reduce((acc, curr) => {
+      acc[curr.organization_id] = (acc[curr.organization_id] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+  }
 
-        const org = organizationData as unknown as {
-          id: string
-          name: string
-          description: string | null
-          created_at: string
-        }
+  const organizations = validMemberships.map((m) => {
+    const organizationData = Array.isArray(m.organizations)
+      ? m.organizations[0]
+      : m.organizations
 
-        const { count } = await adminClient
-          .from('organization_members')
-          .select('*', { count: 'exact', head: true })
-          .eq('organization_id', org.id)
+    if (!organizationData) {
+      return null
+    }
 
-        return {
-          id: org.id,
-          name: org.name,
-          description: org.description,
-          created_at: org.created_at,
-          role: m.role,
-          member_count: count || 0,
-        }
-      })
-  )
+    const org = organizationData as unknown as {
+      id: string
+      name: string
+      description: string | null
+      created_at: string
+    }
+
+    return {
+      id: org.id,
+      name: org.name,
+      description: org.description,
+      created_at: org.created_at,
+      role: m.role,
+      member_count: memberCounts[org.id] || 0,
+    }
+  })
 
   const validOrganizations = organizations.filter(
     (org): org is NonNullable<typeof org> => org !== null
