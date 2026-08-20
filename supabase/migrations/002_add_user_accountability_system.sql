@@ -7,7 +7,7 @@
 alter table public.transactions 
   alter column type type text, 
   drop constraint if exists transactions_type_check,
-  add constraint transactions_type_check check (type in ('income','expense_business','expense_personal'));
+  add constraint transactions_type_check check (type in ('income','expense_business','expense_personal','held_allocate','held_return','transfer'));
 
 alter table public.transactions 
   add column if not exists funded_by_type text not null default 'business' check (funded_by_type in ('business','personal')),
