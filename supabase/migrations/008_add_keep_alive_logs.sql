@@ -16,10 +16,10 @@ CREATE TABLE IF NOT EXISTS public.keep_alive_logs (
 );
 
 -- Add index for efficient querying by execution time
-CREATE INDEX idx_keep_alive_logs_executed_at ON public.keep_alive_logs(executed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_keep_alive_logs_executed_at ON public.keep_alive_logs(executed_at DESC);
 
 -- Add index for status filtering
-CREATE INDEX idx_keep_alive_logs_status ON public.keep_alive_logs(status);
+CREATE INDEX IF NOT EXISTS idx_keep_alive_logs_status ON public.keep_alive_logs(status);
 
 -- Enable RLS (Row Level Security)
 ALTER TABLE public.keep_alive_logs ENABLE ROW LEVEL SECURITY;
