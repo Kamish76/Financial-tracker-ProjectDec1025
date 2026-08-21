@@ -4,6 +4,10 @@
 --              reimbursement requests, and optional cost allocations
 
 -- Step 1: Add new fields to transactions table
+
+-- Ensure legacy transaction types are updated before enforcing the constraint
+update public.transactions set type = 'expense_business' where type = 'expense';
+
 alter table public.transactions 
   alter column type type text, 
   drop constraint if exists transactions_type_check,
