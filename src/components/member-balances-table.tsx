@@ -1,16 +1,12 @@
 import type { MemberBalance } from '@/lib/finance'
-
-const formatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-})
+import { formatCurrency } from '@/lib/utils'
 
 type Props = {
   members: MemberBalance[]
+  currency?: string
 }
 
-export function MemberBalancesTable({ members }: Props) {
+export function MemberBalancesTable({ members, currency }: Props) {
   if (!members || members.length === 0) {
     return (
       <div className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
@@ -43,8 +39,8 @@ export function MemberBalancesTable({ members }: Props) {
                   {m.role && <span className="text-xs text-muted-foreground">{m.role}</span>}
                 </div>
               </td>
-              <td className="px-3 py-2 text-right">{formatter.format(m.businessHeld)}</td>
-              <td className="px-3 py-2 text-right font-semibold">{formatter.format(m.outstandingReimbursable)}</td>
+              <td className="px-3 py-2 text-right">{formatCurrency(m.businessHeld, currency)}</td>
+              <td className="px-3 py-2 text-right font-semibold">{formatCurrency(m.outstandingReimbursable, currency)}</td>
             </tr>
           ))}
         </tbody>

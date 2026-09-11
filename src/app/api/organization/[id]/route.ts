@@ -27,7 +27,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 		}
 
 		const body = await request.json()
-		const { name, description } = body
+		const { name, description, currency } = body
 
 		if (!name || typeof name !== 'string' || !name.trim()) {
 			return NextResponse.json({ error: 'Organization name is required' }, { status: 400 })
@@ -39,6 +39,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 			.update({
 				name: name.trim(),
 				description: description?.trim() || null,
+				currency: currency || 'USD',
 			})
 			.eq('id', id)
 			.select()

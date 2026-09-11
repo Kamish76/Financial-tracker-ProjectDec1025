@@ -5,12 +5,7 @@ import { ChevronDown, ChevronUp } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import type { FilteredStats } from "@/lib/finance-client"
-
-const formatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-})
+import { formatCurrency } from "@/lib/utils"
 
 const TRANSACTION_TYPE_LABELS: Record<string, string> = {
   income: "Income",
@@ -23,9 +18,10 @@ const TRANSACTION_TYPE_LABELS: Record<string, string> = {
 type FilteredStatsCardProps = {
   stats: FilteredStats | null
   isLoading?: boolean
+  currency?: string
 }
 
-export function FilteredStatsCard({ stats, isLoading = false }: FilteredStatsCardProps) {
+export function FilteredStatsCard({ stats, isLoading = false, currency }: FilteredStatsCardProps) {
   const [showBreakdown, setShowBreakdown] = useState(false)
 
   if (isLoading) {
@@ -64,7 +60,7 @@ export function FilteredStatsCard({ stats, isLoading = false }: FilteredStatsCar
   const mainCards = [
     {
       label: "Total Amount",
-      value: formatter.format(stats.totalAmount),
+      value: formatCurrency(stats.totalAmount, currency),
     },
     {
       label: "Transaction Count",
@@ -72,7 +68,7 @@ export function FilteredStatsCard({ stats, isLoading = false }: FilteredStatsCar
     },
     {
       label: "Gross Profit",
-      value: formatter.format(stats.grossProfit),
+      value: formatCurrency(stats.grossProfit, currency),
       highlight: stats.grossProfit > 0 ? "text-green-600" : stats.grossProfit < 0 ? "text-red-600" : "",
     },
   ]
@@ -124,7 +120,7 @@ export function FilteredStatsCard({ stats, isLoading = false }: FilteredStatsCar
                   <p className="text-xs text-muted-foreground font-medium">
                     {TRANSACTION_TYPE_LABELS[type]}
                   </p>
-                  <p className="text-sm font-semibold">{formatter.format(amount)}</p>
+                  <p className="text-sm font-semibold">{formatCurrency(amount, currency)}</p>
                 </div>
               ))}
             </div>
