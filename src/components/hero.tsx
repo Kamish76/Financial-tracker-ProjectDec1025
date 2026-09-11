@@ -11,18 +11,7 @@ function formatNumber(num: number): string {
   return new Intl.NumberFormat("en-US").format(num);
 }
 
-/**
- * Formats a currency value with dollar sign and commas
- */
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
+import { formatCurrency } from "@/lib/utils";
 export async function Hero() {
   // Fetch statistics with error handling
   let stats;

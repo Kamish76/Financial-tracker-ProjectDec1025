@@ -1,17 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { Totals } from '@/lib/finance'
-
-const formatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-})
+import { formatCurrency } from '@/lib/utils'
 
 type StatProps = {
   totals: Totals
+  currency?: string
 }
 
-export function StatsCards({ totals }: StatProps) {
+export function StatsCards({ totals, currency }: StatProps) {
   const items = [
     { label: 'Total Income', value: totals.totalIncome },
     { label: 'Actual Expenses (no capital)', value: totals.actualExpensesWithoutCapital },
@@ -27,7 +23,7 @@ export function StatsCards({ totals }: StatProps) {
             <CardTitle className="text-sm text-muted-foreground">{it.label}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-semibold text-foreground">{formatter.format(it.value)}</div>
+            <div className="text-2xl font-semibold text-foreground">{formatCurrency(it.value, currency)}</div>
           </CardContent>
         </Card>
       ))}
