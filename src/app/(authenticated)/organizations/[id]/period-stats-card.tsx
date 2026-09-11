@@ -4,12 +4,7 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import type { PeriodStats } from "@/lib/finance-client"
-
-const formatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-})
+import { formatCurrency } from "@/lib/utils"
 
 function formatDateRange(startDate: Date, endDate: Date, periodType: "weekly" | "monthly"): string {
   const options: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" }
@@ -26,9 +21,10 @@ function formatDateRange(startDate: Date, endDate: Date, periodType: "weekly" | 
 type PeriodStatsCardProps = {
   allTransactions: any[]
   calculatePeriodStats: (txs: any[], period: "weekly" | "monthly") => PeriodStats
+  currency?: string
 }
 
-export function PeriodStatsCard({ allTransactions, calculatePeriodStats }: PeriodStatsCardProps) {
+export function PeriodStatsCard({ allTransactions, calculatePeriodStats, currency }: PeriodStatsCardProps) {
   const [periodType, setPeriodType] = useState<"weekly" | "monthly">("monthly")
   const stats = calculatePeriodStats(allTransactions, periodType)
 
@@ -69,19 +65,19 @@ export function PeriodStatsCard({ allTransactions, calculatePeriodStats }: Perio
           {/* Income Card */}
           <div className="rounded-lg border p-4 bg-muted/50">
             <p className="text-xs font-medium text-muted-foreground mb-1">Income</p>
-            <p className="text-2xl font-semibold text-green-600">{formatter.format(stats.income)}</p>
+            <p className="text-2xl font-semibold text-green-600">{formatCurrency(stats.income, currency)}</p>
           </div>
 
           {/* Expenses Card */}
           <div className="rounded-lg border p-4 bg-muted/50">
             <p className="text-xs font-medium text-muted-foreground mb-1">Expenses</p>
-            <p className="text-2xl font-semibold text-red-600">{formatter.format(stats.expenses)}</p>
+            <p className="text-2xl font-semibold text-red-600">{formatCurrency(stats.expenses, currency)}</p>
           </div>
 
           {/* Net Card */}
           <div className="rounded-lg border p-4 bg-muted/50">
             <p className="text-xs font-medium text-muted-foreground mb-1">Net</p>
-            <p className={`text-2xl font-semibold ${netColor}`}>{formatter.format(stats.net)}</p>
+            <p className={`text-2xl font-semibold ${netColor}`}>{formatCurrency(stats.net, currency)}</p>
           </div>
         </div>
 

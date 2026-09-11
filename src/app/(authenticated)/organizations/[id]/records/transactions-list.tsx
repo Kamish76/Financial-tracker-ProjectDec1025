@@ -28,6 +28,7 @@ type TransactionsListProps = {
   organizationId: string
   isLoading: boolean
   isWallet?: boolean
+  currency?: string
   onEdit: (transaction: Transaction) => void
   onDelete: () => void
 }
@@ -71,6 +72,7 @@ export function TransactionsList({
   organizationId,
   isLoading,
   isWallet,
+  currency,
   onEdit,
   onDelete,
 }: TransactionsListProps) {
@@ -177,7 +179,7 @@ export function TransactionsList({
                 <td className="px-6 py-4 text-sm font-semibold text-right text-foreground">
                   <div className="flex items-center justify-end gap-2">
                     {getTransactionIcon(tx.type)}
-                    {formatCurrency(tx.amount)}
+                    {formatCurrency(tx.amount, currency)}
                   </div>
                 </td>
                 <td className="px-6 py-4 text-sm text-center">

@@ -40,7 +40,11 @@ const TRANSACTION_TYPES = [
   { value: "held_return", label: "Held Return" },
 ]
 
-export function RecordsPageContent() {
+type RecordsPageContentProps = {
+  currency?: string
+}
+
+export function RecordsPageContent({ currency }: RecordsPageContentProps) {
   const router = useRouter()
   const params = useParams()
   const organizationId = params.id as string
@@ -231,6 +235,7 @@ export function RecordsPageContent() {
         <WalletTotalBalanceCard
           organizationId={organizationId}
           accounts={walletSummary.accounts}
+          currency={currency}
         />
       )}
 
@@ -238,6 +243,7 @@ export function RecordsPageContent() {
       <FilteredStatsCard
         stats={calculateFilteredStats(transactions)}
         isLoading={isLoading && transactions.length === 0}
+        currency={currency}
       />
 
       {/* Search Bar */}
@@ -383,6 +389,7 @@ export function RecordsPageContent() {
         organizationId={organizationId}
         isLoading={isLoading}
         isWallet={Boolean(walletSummary?.isWallet)}
+        currency={currency}
         onEdit={handleEdit}
         onDelete={handleEditSave}
       />

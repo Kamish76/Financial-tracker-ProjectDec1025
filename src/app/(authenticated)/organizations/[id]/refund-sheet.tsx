@@ -25,18 +25,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { formatCurrency } from "@/lib/utils"
 
 type RefundSheetProps = {
   organizationId: string
+  currency?: string
 }
 
-const formatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-})
-
-export function RefundSheet({ organizationId }: RefundSheetProps) {
+export function RefundSheet({ organizationId, currency }: RefundSheetProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [amount, setAmount] = useState("")
@@ -197,7 +193,7 @@ export function RefundSheet({ organizationId }: RefundSheetProps) {
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
             <div className="text-sm text-muted-foreground">Refund amount</div>
             <div className="mt-1 text-2xl font-semibold">
-              {confirmationAmount !== null ? formatter.format(confirmationAmount) : "$0.00"}
+              {confirmationAmount !== null ? formatCurrency(confirmationAmount, currency) : formatCurrency(0, currency)}
             </div>
           </div>
 

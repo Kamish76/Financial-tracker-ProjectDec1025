@@ -36,11 +36,7 @@ type TransactionRecord = {
 	transfer_to_account_name?: string | null
 }
 
-const formatter = new Intl.NumberFormat('en-US', {
-	style: 'currency',
-	currency: 'USD',
-	minimumFractionDigits: 2,
-})
+import { formatCurrency } from '@/lib/utils'
 
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
 	month: 'short',
@@ -50,9 +46,9 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 	minute: '2-digit',
 })
 
-function formatAmount(type: string, amount: number) {
+function formatAmount(type: string, amount: number, currency?: string) {
 	const sign = type === 'income' ? '+' : type === 'held_allocate' ? '+' : '-'
-	return `${sign} ${formatter.format(amount)}`
+	return `${sign} ${formatCurrency(amount, currency)}`
 }
 
 function typeBadge(type: string) {
@@ -84,7 +80,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		transactionsResult,
 		stats
 	] = await Promise.all([
-		adminClient.from('organizations').select('id, name, description').eq('id', id).maybeSingle(),
+		adminClient.from('organizations').select('id, name, description, currency').eq('id', id).maybeSingle(),
 		adminClient.from('transactions')
 			.select('id, type, amount, category, description, created_at, is_initial, account_id, transfer_to_account_id, account:wallet_accounts!account_id(id, name), transfer_to_account:wallet_accounts!transfer_to_account_id(id, name)')
 			.eq('organization_id', id)
@@ -159,11 +155,11 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 			</div>
 
 			{/* Top-level stats */}
-			{!isWallet && <StatsCards totals={stats.totals} />}
-			{isWallet && <WalletTotalBalanceCard organizationId={id} accounts={accounts} />}
+			{!isWallet && <StatsCards totals={stats.totals} currency={organization?.currency} />}
+			{isWallet && <WalletTotalBalanceCard organizationId={id} accounts={accounts} currency={organization?.currency} />}
 
 		{/* Period Summary Stats */}
-		<DashboardClientWrapper allTransactions={transactions} />
+		<DashboardClientWrapper allTransactions={transactions} currency={organization?.currency} />
 			{!isWallet && (
 				<Card>
 					<CardHeader>
@@ -204,7 +200,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 						)}
 						{!isWallet && (
 							canManage ? (
-								<RefundSheet organizationId={id} />
+								<RefundSheet organizationId={id} currency={organization?.currency} />
 							) : (
 								<Button
 									type="button"
@@ -263,7 +259,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 						<CardDescription>Business funds held and outstanding personal contributions.</CardDescription>
 					</CardHeader>
 					<CardContent>
-						<MemberBalancesTable members={stats.members} />
+						<MemberBalancesTable members={stats.members} currency={organization?.currency} />
 					</CardContent>
 				</Card>
 			)}
@@ -366,7 +362,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 												</p>
 											</div>
 											<div className="text-right text-base font-semibold text-foreground">
-												{formatAmount(tx.type, tx.amount)}
+												{formatAmount(tx.type, tx.amount, organization?.currency)}
 											</div>
 										</div>
 									)
