@@ -335,7 +335,7 @@ export function OrganizationSettings({
 						<div className="border-t pt-4 mt-4">
 							<div
 								className={`grid grid-cols-1 gap-4 ${
-									isWallet ? 'sm:grid-cols-2' : 'sm:grid-cols-3'
+									isWallet ? 'sm:grid-cols-3' : 'sm:grid-cols-4'
 								}`}
 							>
 								{/* Created Date */}
@@ -346,6 +346,17 @@ export function OrganizationSettings({
 									<div>
 										<p className="text-xs text-muted-foreground">Created</p>
 										<p className="text-sm font-medium">{formatDate(organization.created_at)}</p>
+									</div>
+								</div>
+
+								{/* Currency */}
+								<div className="flex items-center gap-3">
+									<div className="w-8 h-8 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center">
+										<Receipt className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+									</div>
+									<div>
+										<p className="text-xs text-muted-foreground">Currency</p>
+										<p className="text-sm font-medium">{organization.currency || 'USD'}</p>
 									</div>
 								</div>
 

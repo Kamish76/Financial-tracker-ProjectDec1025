@@ -18,7 +18,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 	// Fetch organization details
 	const { data: organization } = await adminClient
 		.from('organizations')
-		.select('id, name, description, owner_id, created_at')
+		.select('id, name, description, owner_id, created_at, currency')
 		.eq('id', id)
 		.single()
 
