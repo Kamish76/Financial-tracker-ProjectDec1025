@@ -56,6 +56,7 @@ type OrganizationWithRole = {
 	user_role: OrganizationRole
 	member_count: number
 	is_wallet?: boolean
+	currency?: string
 }
 
 type MemberWithUser = {
