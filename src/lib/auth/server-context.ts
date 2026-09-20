@@ -33,6 +33,26 @@ export const getAuthContext = cache(async (): Promise<AuthContext> => {
     }
 
     const admin = createAdminClient()
+
+    // Check if user is owner of the organization first (AGENTS.md Rule 1)
+    const { data: org } = await admin
+      .from('organizations')
+      .select('id, owner_id')
+      .eq('id', organizationId)
+      .eq('owner_id', user.id)
+      .maybeSingle()
+
+    if (org) {
+      const ownerMembership: OrgMembership = {
+        organizationId,
+        userId: user.id,
+        role: 'owner',
+        isActive: true,
+      }
+      membershipCache.set(organizationId, ownerMembership)
+      return ownerMembership
+    }
+
     const { data, error } = await admin
       .from('organization_members')
       .select('organization_id, user_id, role, is_active')

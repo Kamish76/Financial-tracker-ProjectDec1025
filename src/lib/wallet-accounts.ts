@@ -1,12 +1,17 @@
 'use server'
 
-import { requireUser } from '@/lib/auth/guards'
+import { requireUser, requireOrgMembership } from '@/lib/auth/guards'
 import { createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
 import type { WalletAccount, AccountWithBalance } from './wallet-types'
 
-async function verifyOrgAccess(organizationId: string, userId: string): Promise<boolean> {
+function sanitizePostgrestFilter(term: string): string {
+  if (!term) return ''
+  return term.replace(/[(),."\\]/g, '').trim()
+}
+
+export async function verifyOrgAccess(organizationId: string, userId: string): Promise<boolean> {
   const adminClient = createAdminClient()
 
   // First check if user is owner of the organization
@@ -22,7 +27,7 @@ async function verifyOrgAccess(organizationId: string, userId: string): Promise<
   // Otherwise check if user is an active member
   const { data: member } = await adminClient
     .from('organization_members')
-    .select('id')
+    .select('organization_id, user_id, is_active')
     .eq('organization_id', organizationId)
     .eq('user_id', userId)
     .eq('is_active', true)
@@ -35,6 +40,7 @@ export async function getWalletAccounts(
   organizationId: string,
   includeArchived = false
 ): Promise<WalletAccount[]> {
+  await requireOrgMembership(organizationId)
   const adminClient = createAdminClient()
 
   let query = adminClient
@@ -70,6 +76,7 @@ export async function getAccountsWithBalances(
   organizationId: string,
   includeArchived = false
 ): Promise<AccountWithBalance[]> {
+  await requireOrgMembership(organizationId)
   const accounts = await getWalletAccounts(organizationId, includeArchived)
   if (accounts.length === 0) return []
 
@@ -285,10 +292,15 @@ export async function deleteWalletAccount(
       return { error: 'You do not have permission to delete this account' }
     }
 
+    const sanitizedAccountId = sanitizePostgrestFilter(accountId)
+    if (!sanitizedAccountId) {
+      return { error: 'Invalid account ID' }
+    }
+
     const { count, error: txError } = await adminClient
       .from('transactions')
       .select('id', { count: 'exact', head: true })
-      .or(`account_id.eq.${accountId},transfer_to_account_id.eq.${accountId}`)
+      .or(`account_id.eq.${sanitizedAccountId},transfer_to_account_id.eq.${sanitizedAccountId}`)
 
     if (txError) {
       return { error: 'Failed to verify transaction references' }

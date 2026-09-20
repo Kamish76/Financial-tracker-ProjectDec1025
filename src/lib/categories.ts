@@ -6,7 +6,6 @@ import { revalidatePath } from "next/cache"
 
 import {
   DEFAULT_INCOME_CATEGORIES,
-  DEFAULT_EXPENSE_CATEGORIES,
   type CategoryItem,
 } from "./category-constants"
 
@@ -39,6 +38,7 @@ function getCategoryType(
  * Fetch top N categories for an organization, sorted by usage frequency
  */
 export async function getTopCategories(organizationId: string, limit: number = 10) {
+  await requireOrgMembership(organizationId)
   const admin = createAdminClient()
   
   const { data, error } = await admin
@@ -65,11 +65,12 @@ export async function getOrCreateCategory(
   categoryName: string,
   type: 'income' | 'expense' = 'expense'
 ) {
-  const admin = createAdminClient()
-
   if (!categoryName?.trim()) {
     return null
   }
+
+  await requireOrgMembership(organizationId)
+  const admin = createAdminClient()
 
   // Call the Supabase function for fuzzy matching
   const { data, error } = await admin.rpc("get_or_create_category", {
@@ -105,7 +106,7 @@ export async function getOrCreateCategory(
           .eq("id", categoryId)
       }
     }
-  } catch (err) {
+  } catch {
     // Non-fatal if alias update fails
   }
 
@@ -119,6 +120,7 @@ export async function searchCategories(
   organizationId: string,
   searchText: string
 ) {
+  await requireOrgMembership(organizationId)
   const admin = createAdminClient()
 
   if (!searchText?.trim()) {
@@ -152,9 +154,10 @@ export async function getOrganizationCategoriesByType(organizationId: string): P
   income: CategoryItem[]
   expense: CategoryItem[]
 }> {
+  await requireOrgMembership(organizationId)
   const admin = createAdminClient()
 
-  let { data, error } = await admin
+  const { data, error } = await admin
     .from('transaction_categories')
     .select('id, normalized_name, aliases, is_custom')
     .eq('organization_id', organizationId)
@@ -242,8 +245,8 @@ export async function addOrganizationCategory(
         type,
       },
     }
-  } catch (err: any) {
-    return { error: err.message || 'Failed to add category' }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : 'Failed to add category' }
   }
 }
 
@@ -280,8 +283,8 @@ export async function updateOrganizationCategory(
 
     revalidatePath(`/organizations/${organizationId}/settings`)
     return { success: true }
-  } catch (err: any) {
-    return { error: err.message || 'Failed to update category' }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : 'Failed to update category' }
   }
 }
 
@@ -308,8 +311,8 @@ export async function deleteOrganizationCategory(
 
     revalidatePath(`/organizations/${organizationId}/settings`)
     return { success: true }
-  } catch (err: any) {
-    return { error: err.message || 'Failed to delete category' }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : 'Failed to delete category' }
   }
 }
 

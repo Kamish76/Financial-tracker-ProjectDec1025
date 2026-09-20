@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
       },
       { status: 202 }
     )
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Failed to process account deletion request. Please check your request payload.' },
       { status: 500 }
@@ -132,7 +132,7 @@ export async function DELETE(request: NextRequest) {
       success: true,
       message: 'Your account and personal wallet data have been scheduled for deletion.',
     })
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'An error occurred while processing account deletion.' },
       { status: 500 }
