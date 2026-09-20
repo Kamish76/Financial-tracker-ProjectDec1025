@@ -23,26 +23,28 @@ function AuthForm() {
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [status, setStatus] = useState<"idle" | "submitting" | "done">("idle");
-  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const disabled = useMemo(() => !email || !password || status === "submitting", [email, password, status]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setStatus("submitting");
-    setMessage(null);
+    setError(null);
+    setSuccessMessage(null);
 
     if (isSignUp) {
       // Sign up
       const result = await signUpWithEmailPassword(email, password);
       
       if (result?.error) {
-        setMessage(result.error);
+        setError(result.error);
         setStatus("idle");
         return;
       }
 
-      setMessage('Account created! Check your email to verify, then login.');
+      setSuccessMessage('Account created! Check your email to verify, then login.');
       setStatus("idle");
       setEmail("");
       setPassword("");
@@ -53,7 +55,7 @@ function AuthForm() {
       const result = await signInWithEmailPassword(email, password, nextParam || undefined);
       
       if (result?.error) {
-        setMessage(result.error);
+        setError(result.error);
         setStatus("idle");
         return;
       }
@@ -65,7 +67,8 @@ function AuthForm() {
   const handleGoogle = async () => {
     if (status === "submitting") return;
     setStatus("submitting");
-    setMessage(null);
+    setError(null);
+    setSuccessMessage(null);
 
     // Use the configured redirect URI from Google Cloud Console
     // This must match exactly what's configured in Google OAuth settings
@@ -73,15 +76,15 @@ function AuthForm() {
     const redirectTo = nextParam
       ? `${callbackBase}?next=${encodeURIComponent(nextParam)}`
       : callbackBase;
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo,
       },
     });
 
-    if (error) {
-      setMessage(error.message ?? "Google sign-in failed. Try again.");
+    if (oauthError) {
+      setError(oauthError.message ?? "Google sign-in failed. Try again.");
       setStatus("idle");
     }
   };
@@ -93,7 +96,7 @@ function AuthForm() {
         <div className="relative z-10 flex h-full flex-col justify-between p-6 sm:p-8 lg:p-10">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-white/80 backdrop-blur">
-              <LockKeyhole className="h-3.5 w-3.5 text-accent" />
+              <LockKeyhole className="h-3.5 w-3.5 text-accent-strong" />
               OrgFinance Access
             </div>
             <h1 className="mt-6 max-w-sm text-3xl font-semibold leading-tight text-white sm:text-4xl">
@@ -107,7 +110,7 @@ function AuthForm() {
           <div className="mt-8 space-y-3">
             {["Fine-grained project access", "Realtime cashflow visibility", "Audit-ready activity logs"].map((item) => (
               <div key={item} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/8 px-4 py-3 text-sm font-medium text-white/90 backdrop-blur">
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-accent" aria-hidden />
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-accent-strong" aria-hidden />
                 <span>{item}</span>
               </div>
             ))}
@@ -128,9 +131,10 @@ function AuthForm() {
                 type="button"
                 onClick={() => {
                   setIsSignUp(!isSignUp);
-                  setMessage(null);
+                  setError(null);
+                  setSuccessMessage(null);
                 }}
-                className="text-xs font-semibold text-accent hover:underline"
+                className="text-xs font-semibold text-accent-strong hover:underline"
               >
                 {isSignUp ? 'Have an account? Log in' : 'Need an account? Sign up'}
               </button>
@@ -145,7 +149,7 @@ function AuthForm() {
             <form className="space-y-6" onSubmit={handleSubmit}>
               <div className="space-y-2">
                 <Label htmlFor="email" className="flex items-center gap-2 text-foreground">
-                  <Mail className="h-4 w-4 text-accent" aria-hidden />
+                  <Mail className="h-4 w-4 text-accent-strong" aria-hidden />
                   Work email
                 </Label>
                 <Input
@@ -155,6 +159,8 @@ function AuthForm() {
                   onChange={(event) => {
                     setEmail(event.target.value);
                     setStatus("idle");
+                    setError(null);
+                    setSuccessMessage(null);
                   }}
                   placeholder="you@company.com"
                   autoComplete="email"
@@ -164,7 +170,7 @@ function AuthForm() {
 
               <div className="space-y-2">
                 <Label htmlFor="password" className="flex items-center gap-2 text-foreground">
-                  <LockKeyhole className="h-4 w-4 text-accent" aria-hidden />
+                  <LockKeyhole className="h-4 w-4 text-accent-strong" aria-hidden />
                   Password
                 </Label>
                 <Input
@@ -174,6 +180,8 @@ function AuthForm() {
                   onChange={(event) => {
                     setPassword(event.target.value);
                     setStatus("idle");
+                    setError(null);
+                    setSuccessMessage(null);
                   }}
                   placeholder="••••••••"
                   autoComplete="current-password"
@@ -184,10 +192,10 @@ function AuthForm() {
 
               <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-muted/40 px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2 text-foreground">
-                  <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
+                  <span className="h-2 w-2 rounded-full bg-accent-strong" aria-hidden />
                   Secure by Supabase Auth
                 </div>
-                <a className="font-semibold text-accent" href="#" onClick={(e) => e.preventDefault()}>
+                <a className="font-semibold text-accent-strong hover:underline" href="#" onClick={(e) => e.preventDefault()}>
                   Forgot password?
                 </a>
               </div>
@@ -208,10 +216,24 @@ function AuthForm() {
                 )}
               </div>
 
-              {message ? (
-                <p className={`text-sm ${message.includes('Error') || message.includes('error') ? 'text-red-600' : 'text-green-600'}`}>
-                  {message}
-                </p>
+              {error ? (
+                <div
+                  role="alert"
+                  aria-live="assertive"
+                  className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400"
+                >
+                  {error}
+                </div>
+              ) : null}
+
+              {successMessage ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400"
+                >
+                  {successMessage}
+                </div>
               ) : null}
 
               <p className="text-center text-sm text-muted-foreground">

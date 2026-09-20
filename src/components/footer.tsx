@@ -6,24 +6,11 @@ import { Github, Linkedin, Mail } from 'lucide-react'
 const footerLinks = {
   Product: [
     { label: 'Features', href: '#features' },
-    { label: 'Security', href: '#security' },
-    { label: 'Pricing', href: '#pricing' },
-  ],
-  Company: [
-    { label: 'About', href: '/about' },
-    { label: 'Blog', href: '/blog' },
-    { label: 'Careers', href: '/careers' },
-  ],
-  Resources: [
-    { label: 'Documentation', href: '/docs' },
-    { label: 'Support', href: '/support' },
-    { label: 'Status', href: 'https://status.orgfinance.com' },
+    { label: 'Sign In', href: '/auth' },
   ],
   Legal: [
-    { label: 'Privacy', href: '/privacy' },
-    { label: 'Terms', href: '/terms' },
+    { label: 'Privacy Policy', href: '/privacy' },
     { label: 'Delete Account', href: '/delete-account' },
-    { label: 'Contact', href: '/contact' },
   ],
 }
 
@@ -52,11 +39,11 @@ export function Footer() {
     <footer className="border-t border-border/70 bg-card/50 py-12">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Main Footer Content */}
-        <div className="grid gap-8 md:grid-cols-5 mb-8">
+        <div className="grid gap-8 md:grid-cols-3 mb-8">
           {/* Brand Section */}
           <div className="col-span-1">
             <div className="inline-flex items-center gap-2 rounded-lg border border-border/70 bg-background/50 px-3 py-2 mb-4">
-              <div className="h-6 w-6 rounded bg-accent"></div>
+              <div className="h-6 w-6 rounded bg-accent-strong"></div>
               <span className="font-semibold text-foreground">OrgFinance</span>
             </div>
             <p className="text-sm text-muted-foreground">

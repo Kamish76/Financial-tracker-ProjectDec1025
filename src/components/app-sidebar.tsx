@@ -80,6 +80,7 @@ export function AppSidebar({ walletId }: { walletId?: string | null } = {}) {
     requestAnimationFrame(() => {
       setTheme(initialTheme)
       document.documentElement.dataset.theme = initialTheme
+      document.documentElement.classList.toggle('dark', initialTheme === 'dark')
     })
   }, [])
 
@@ -95,6 +96,7 @@ export function AppSidebar({ walletId }: { walletId?: string | null } = {}) {
   const handleThemeToggle = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light'
     document.documentElement.dataset.theme = newTheme
+    document.documentElement.classList.toggle('dark', newTheme === 'dark')
     window.localStorage.setItem('orgfinance-theme', newTheme)
     setTheme(newTheme)
   }
@@ -106,7 +108,7 @@ export function AppSidebar({ walletId }: { walletId?: string | null } = {}) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/organizations">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-accent text-white">
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-accent-strong text-white">
                   <Building2 className="size-4" />
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">

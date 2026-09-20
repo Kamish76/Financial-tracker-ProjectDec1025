@@ -67,13 +67,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 	const { id } = await params
 	const adminClient = createAdminClient()
 
-	const debugInfo: { label: string; value: string }[] = []
-	const { user, membership: effectiveMembership } = await requireOrgMembership(id)
-
-	debugInfo.push({ label: 'orgId', value: id })
-	debugInfo.push({ label: 'userId', value: user?.id ?? 'none' })
-	debugInfo.push({ label: 'userEmail', value: user?.email ?? 'none' })
-	debugInfo.push({ label: 'membershipRole', value: effectiveMembership.role })
+	const { membership: effectiveMembership } = await requireOrgMembership(id)
 
 	const [
 		organizationResult,
@@ -94,7 +88,6 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 	const transactionsError = transactionsResult.error
 
 	const isWallet = isWalletOrganization(organization?.description)
-	debugInfo.push({ label: 'isWallet', value: isWallet ? 'yes' : 'no' })
 
 	const accounts = isWallet ? await getAccountsWithBalances(id, false) : []
 
@@ -102,7 +95,19 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		console.error('[ORG_PAGE] Transactions error', { orgId: id, error: transactionsError.message })
 	}
 
-	const transactions: TransactionRecord[] = (transactionRows || []).map((row: any) => ({
+	type RawTransactionRow = {
+		id: string
+		type: string
+		amount: number | null
+		category: string | null
+		description: string | null
+		created_at: string
+		is_initial?: boolean | null
+		account?: { name?: string | null } | null
+		transfer_to_account?: { name?: string | null } | null
+	}
+
+	const transactions: TransactionRecord[] = ((transactionRows as unknown as RawTransactionRow[]) || []).map((row) => ({
 		id: row.id,
 		type: row.type,
 		amount: Number(row.amount ?? 0),
@@ -116,21 +121,8 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 
 	const canManage = effectiveMembership?.role === 'owner' || effectiveMembership?.role === 'admin'
 
-	debugInfo.push({ label: 'transactionsCount', value: transactions.length.toString() })
-
 	return (
 		<div className="flex flex-col gap-6">
-			<Card className="border-dashed bg-muted/30">
-				<CardContent className="flex flex-wrap gap-3 px-4 py-3 text-xs text-muted-foreground">
-					<span className="font-semibold text-foreground">Debug (temporary)</span>
-					{debugInfo.map((item) => (
-						<span key={item.label} className="rounded-md bg-background px-2 py-1 shadow-sm">
-							{item.label}: {item.value}
-						</span>
-					))}
-				</CardContent>
-			</Card>
-
 			<div className="flex flex-col gap-2">
 				<div className="flex items-center gap-3 text-sm text-muted-foreground">
 					<Link href="/organizations" className="hover:text-foreground">
@@ -172,7 +164,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 										: 'Quick actions open sheets for fast entry. Add income, expenses, and refunds.'}
 								</CardDescription>
 							</div>
-							<div className="rounded-full bg-accent text-background p-2">
+							<div className="rounded-full bg-accent-strong text-white p-2">
 								<ArrowLeftRight className="h-5 w-5" />
 							</div>
 						</div>
@@ -273,7 +265,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 									Organize your personal funds across custom cash, checking, and savings accounts.
 								</CardDescription>
 							</div>
-							<div className="rounded-full bg-accent text-background p-2">
+							<div className="rounded-full bg-accent-strong text-white p-2">
 								<ArrowLeftRight className="h-5 w-5" />
 							</div>
 						</div>
@@ -300,7 +292,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 				</Card>
 			)}
 
-			<div className="grid gap-4 lg:grid-cols-[1.1fr,1.2fr]">
+			<div className="grid gap-4">
 				<Card>
 					<CardHeader className="flex flex-row items-start justify-between">
 						<div className="space-y-1">
@@ -328,7 +320,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 
 						{!transactionsError && transactions.length > 0 && (
 							<div className="divide-y divide-border/70 rounded-xl border border-border/70">
-								{transactions.map((tx) => {
+								{transactions.slice(0, 10).map((tx) => {
 									const badge = typeBadge(tx.type)
 									const badgeLabel = tx.is_initial ? `${badge.label} (Initial)` : badge.label
 									return (

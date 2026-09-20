@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import type { WalletAccount, AccountWithBalance } from '@/lib/wallet-types'
 import { addWalletTransaction } from '@/lib/wallet-transactions'
 import {
@@ -121,7 +121,40 @@ export function AddTransactionModal({
   accounts,
   onTransactionAdded,
 }: AddTransactionModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null)
+  const previousFocusedElementRef = useRef<HTMLElement | null>(null)
   const [activeTab, setActiveTab] = useState<TabType>('income')
+
+  // Lock body scroll and manage focus when modal is open
+  useEffect(() => {
+    if (!isOpen) return
+
+    previousFocusedElementRef.current = document.activeElement as HTMLElement | null
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const timer = setTimeout(() => {
+      if (modalRef.current) {
+        const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled])'
+        )
+        if (focusable.length > 0) {
+          focusable[0].focus()
+        } else {
+          modalRef.current.focus()
+        }
+      }
+    }, 0)
+
+    return () => {
+      clearTimeout(timer)
+      document.body.style.overflow = originalOverflow
+      if (previousFocusedElementRef.current && typeof previousFocusedElementRef.current.focus === 'function') {
+        previousFocusedElementRef.current.focus()
+      }
+    }
+  }, [isOpen])
+
   const [selectedAccountId, setSelectedAccountId] = useState<string>(
     accounts[0]?.id ?? ''
   )
@@ -161,17 +194,18 @@ export function AddTransactionModal({
     return activeTab === 'income' ? orgCategories.income : orgCategories.expense
   }, [activeTab, orgCategories])
 
-  useEffect(() => {
-    if (activeTab === 'income') {
-      if (!orgCategories.income.includes(category)) {
-        setCategory(orgCategories.income[0] || 'Salary')
-      }
-    } else if (activeTab === 'expense') {
-      if (!orgCategories.expense.includes(category)) {
-        setCategory(orgCategories.expense[0] || 'Food & Dining')
-      }
+  // Adjust category if current category is not in the active category list
+  const [prevTab, setPrevTab] = useState(activeTab)
+  const [prevOrgCategories, setPrevOrgCategories] = useState(orgCategories)
+  if (prevTab !== activeTab || prevOrgCategories !== orgCategories) {
+    setPrevTab(activeTab)
+    setPrevOrgCategories(orgCategories)
+    if (activeTab === 'income' && !orgCategories.income.includes(category)) {
+      setCategory(orgCategories.income[0] || 'Salary')
+    } else if (activeTab === 'expense' && !orgCategories.expense.includes(category)) {
+      setCategory(orgCategories.expense[0] || 'Food & Dining')
     }
-  }, [activeTab, orgCategories, category])
+  }
   const [showCategoryDropdown, setShowCategoryDropdown] = useState<boolean>(false)
   const [showAccountDropdown, setShowAccountDropdown] = useState<'from' | 'to' | null>(null)
   const [notes, setNotes] = useState<string>('')
@@ -203,7 +237,7 @@ export function AddTransactionModal({
   // Check if evaluated amount is not zero
   const isAmountValid = evaluatedAmount !== 0
 
-  const handleKeypadPress = (key: string) => {
+  const handleKeypadPress = useCallback((key: string) => {
     setError(null)
     if (key === '=') {
       const val = evaluateMathExpression(displayExpr)
@@ -238,9 +272,9 @@ export function AddTransactionModal({
         setDisplayExpr(displayExpr + key)
       }
     }
-  }
+  }, [displayExpr])
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setError(null)
     if (!isAmountValid) {
       setError('Transaction amount cannot be 0.')
@@ -297,23 +331,67 @@ export function AddTransactionModal({
       setNotes('')
       setError(null)
     }
-  }
+  }, [
+    isAmountValid,
+    selectedAccountId,
+    activeTab,
+    transferToAccountId,
+    txDate,
+    txTime,
+    organizationId,
+    evaluatedAmount,
+    category,
+    notes,
+    onTransactionAdded,
+    onClose,
+  ])
 
   // Handle keyboard events for calculator
   useEffect(() => {
     if (!isOpen) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input or textarea
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+        return
+      }
+
+      if (e.key === 'Tab') {
+        if (!modalRef.current) return
+        const focusable = Array.from(
+          modalRef.current.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled])'
+          )
+        ).filter((el) => el.offsetParent !== null || el.offsetWidth > 0 || el.offsetHeight > 0)
+
+        if (focusable.length === 0) {
+          e.preventDefault()
+          return
+        }
+
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+
+        if (e.shiftKey) {
+          if (document.activeElement === first || !modalRef.current.contains(document.activeElement)) {
+            e.preventDefault()
+            last.focus()
+          }
+        } else {
+          if (document.activeElement === last || !modalRef.current.contains(document.activeElement)) {
+            e.preventDefault()
+            first.focus()
+          }
+        }
+        return
+      }
+
+      // Ignore calculator keys if user is typing in an input or textarea
       if (
         document.activeElement instanceof HTMLInputElement ||
         document.activeElement instanceof HTMLTextAreaElement
       ) {
-        return
-      }
-
-      if (e.key === 'Escape') {
-        onClose()
         return
       }
 
@@ -367,8 +445,6 @@ export function AddTransactionModal({
     displayExpr,
     isAmountValid,
     isSubmitting,
-    // Note: handleSave, handleKeypadPress, and onClose aren't wrapped in useCallback
-    // so they trigger re-binds on every render, which is fine for this lightweight listener.
     handleSave,
     handleKeypadPress,
     onClose,
@@ -437,7 +513,14 @@ export function AddTransactionModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background/80 backdrop-blur-md text-foreground animate-in fade-in-0 duration-200 overflow-y-auto">
+    <div
+      ref={modalRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Add Transaction"
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex flex-col bg-background/80 backdrop-blur-md text-foreground animate-in fade-in-0 duration-200 overflow-y-auto outline-none"
+    >
       {/* Top Header Bar */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card/50 backdrop-blur-sm">
         <button

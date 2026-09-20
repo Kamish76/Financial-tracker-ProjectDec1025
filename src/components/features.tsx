@@ -89,7 +89,7 @@ export function Features() {
               <CardHeader>
                 <div className="flex items-start gap-4">
                   <div className="rounded-lg bg-accent/10 p-2.5 ring-1 ring-accent/20">
-                    <Icon className="h-5 w-5 text-accent" aria-hidden />
+                    <Icon className="h-5 w-5 text-accent-strong" aria-hidden />
                   </div>
                   <div>
                     <CardTitle className="text-lg">{feature.title}</CardTitle>
@@ -108,7 +108,7 @@ export function Features() {
 
       <div className="rounded-2xl border border-border/70 bg-muted/30 px-6 py-8 text-center">
         <p className="text-sm font-medium text-muted-foreground">
-          Powered by <span className="font-semibold text-foreground">Next.js 15</span>, 
+          Powered by <span className="font-semibold text-foreground">Next.js 16</span>, 
           <span className="font-semibold text-foreground"> Supabase</span>, 
           <span className="font-semibold text-foreground"> TypeScript</span>, and 
           <span className="font-semibold text-foreground"> Shadcn UI</span>
