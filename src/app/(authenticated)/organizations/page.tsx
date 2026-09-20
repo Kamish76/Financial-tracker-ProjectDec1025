@@ -58,7 +58,7 @@ export default async function OrganizationsPage() {
       const organizationData = Array.isArray(m.organizations)
         ? m.organizations[0]
         : m.organizations
-      return organizationData ? (organizationData as any).id : null
+      return organizationData ? (organizationData as { id: string }).id : null
     })
     .filter(Boolean) as string[]
 
@@ -180,7 +180,7 @@ export default async function OrganizationsPage() {
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="rounded-lg bg-accent p-2">
+                      <div className="rounded-lg bg-accent-strong text-white p-2">
                         <Building2 className="h-5 w-5 text-white" />
                       </div>
                       <div>

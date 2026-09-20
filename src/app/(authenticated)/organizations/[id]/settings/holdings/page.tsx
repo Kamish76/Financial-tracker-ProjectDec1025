@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
-import { createClient, createAdminClient } from "@/lib/supabase/server"
+import { requireOrgRole } from "@/lib/auth/guards"
+import { createAdminClient } from "@/lib/supabase/server"
 import { getOrganizationStats } from "@/lib/finance"
 import { HoldingsManager } from "./holdings-manager"
 
@@ -9,33 +10,9 @@ export default async function HoldingsPage({
   params: Promise<{ id: string }>
 }) {
   const { id: orgId } = await params
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
-
-  if (userError || !user) {
-    redirect("/auth")
-  }
+  await requireOrgRole(orgId, ['owner'])
 
   const admin = createAdminClient()
-  const { data: membership, error: membershipError } = await admin
-    .from("organization_members")
-    .select("role")
-    .eq("organization_id", orgId)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (membershipError || !membership) {
-    redirect("/")
-  }
-
-  // Only owner can access holdings page
-  if (membership.role !== "owner") {
-    redirect(`/organizations/${orgId}`)
-  }
 
   // Fetch organization stats
   const stats = await getOrganizationStats(orgId)

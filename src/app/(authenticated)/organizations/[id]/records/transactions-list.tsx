@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { ArrowUpRight, ArrowDownLeft, MoreHorizontal } from "lucide-react"
+import { ArrowUpRight, ArrowDownLeft, ArrowLeftRight, MoreHorizontal } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -21,7 +21,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-type Transaction = any
+import type { TransactionRecord } from "./utils"
+
+type Transaction = TransactionRecord
 
 type TransactionsListProps = {
   transactions: Transaction[]
@@ -33,7 +35,7 @@ type TransactionsListProps = {
   onDelete: () => void
 }
 
-const getTransactionColor = (type: string) => {
+const getTransactionColor = () => {
   // Use CSS variables from shadcn for consistent theming
   return "hover:bg-muted/30 transition-colors"
 }
@@ -45,6 +47,8 @@ const getTransactionIcon = (type: string) => {
     case "expense_business":
     case "expense_personal":
       return <ArrowUpRight className="h-4 w-4 text-red-600" />
+    case "transfer":
+      return <ArrowLeftRight className="h-4 w-4 text-purple-600 dark:text-purple-400" />
     default:
       return null
   }
@@ -62,6 +66,8 @@ const getTransactionBadge = (type: string) => {
       return <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:bg-blue-950/30">Held</Badge>
     case "held_return":
       return <Badge variant="outline" className="border-purple-200 text-purple-700 bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:bg-purple-950/30">Return</Badge>
+    case "transfer":
+      return <Badge variant="outline" className="border-purple-200 text-purple-700 bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:bg-purple-950/30">Transfer</Badge>
     default:
       return <Badge variant="outline">{type}</Badge>
   }
@@ -138,7 +144,7 @@ export function TransactionsList({
             {transactions.map((tx) => (
               <tr
                 key={tx.id}
-                className={`${getTransactionColor(tx.type)} transition-colors`}
+                className={`${getTransactionColor()} transition-colors`}
               >
                 <td className="px-6 py-4 text-sm text-foreground">
                   {formatDate(tx.occurred_at)}

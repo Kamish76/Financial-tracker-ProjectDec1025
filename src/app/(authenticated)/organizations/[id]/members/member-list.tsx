@@ -1,14 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { Users, UserMinus, UserPlus, Shield, Crown, User } from 'lucide-react'
+import { Users, UserMinus, UserPlus } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { MemberWithProfile, OrganizationRole } from '@/lib/types/member'
-import { ROLE_INFO, getMemberDisplayName, formatJoinedDate, formatDeactivatedDate } from '@/lib/types/member'
+import { getMemberDisplayName } from '@/lib/types/member'
 import { MemberCard } from './member-card'
 import { InviteCodeManager } from './invite-code-manager'
 import { isWalletOrganization } from '@/lib/wallet'
@@ -30,8 +30,8 @@ export function MemberList({
   inactiveMembers: initialInactiveMembers,
   organizationDescription,
 }: MemberListProps) {
-  const [activeMembers, setActiveMembers] = useState(initialActiveMembers)
-  const [inactiveMembers, setInactiveMembers] = useState(initialInactiveMembers)
+  const activeMembers = initialActiveMembers
+  const inactiveMembers = initialInactiveMembers
   const [searchQuery, setSearchQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState<OrganizationRole | 'all'>('all')
 

@@ -25,11 +25,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-// Add backdrop blur overlay styles
-const selectContentStyle = {
-  backdropFilter: "blur(4px)",
-  backgroundColor: "rgba(13, 20, 33, 0.9)",
-}
 
 type Member = {
   user_id: string

@@ -3,6 +3,14 @@
  * These functions operate on transaction data without needing backend/server access
  */
 
+export type ClientTransaction = {
+  id?: string
+  amount?: number | string | null
+  type?: string | null
+  occurred_at?: string | null
+  created_at?: string | null
+}
+
 export type FilteredStats = {
   totalAmount: number
   count: number
@@ -29,7 +37,7 @@ export type PeriodStats = {
 /**
  * Calculate statistics for filtered transactions
  */
-export function calculateFilteredStats(transactions: any[]): FilteredStats {
+export function calculateFilteredStats(transactions: ClientTransaction[]): FilteredStats {
   let totalAmount = 0
   let count = 0
   const byType = {
@@ -66,7 +74,7 @@ export function calculateFilteredStats(transactions: any[]): FilteredStats {
 /**
  * Calculate period-based statistics (weekly or monthly)
  */
-export function calculatePeriodStats(transactions: any[], periodType: "weekly" | "monthly"): PeriodStats {
+export function calculatePeriodStats(transactions: ClientTransaction[], periodType: "weekly" | "monthly"): PeriodStats {
   const now = new Date()
   let startDate: Date
   let endDate: Date
@@ -95,7 +103,7 @@ export function calculatePeriodStats(transactions: any[], periodType: "weekly" |
   let expenses = 0
   let count = 0
 
-  function getTransactionDate(tx: any): Date | null {
+  function getTransactionDate(tx: ClientTransaction): Date | null {
     const rawDate = tx.occurred_at ?? tx.created_at
     if (!rawDate) return null
 

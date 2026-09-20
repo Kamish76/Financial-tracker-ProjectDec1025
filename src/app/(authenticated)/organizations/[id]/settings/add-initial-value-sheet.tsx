@@ -43,7 +43,6 @@ export function AddInitialValueSheet({
   organizationId, 
   members,
   currentUserEmail,
-  currentUserName,
   currentUserId,
 }: AddInitialValueSheetProps) {
   const router = useRouter()

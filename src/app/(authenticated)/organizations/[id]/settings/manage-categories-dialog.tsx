@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useTransition } from 'react'
+import React, { useState, useEffect, useCallback, useTransition } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -61,25 +61,25 @@ export function ManageCategoriesDialog({
     return () => clearTimeout(timer)
   }, [error])
 
-  const loadCategories = async () => {
+  const loadCategories = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
       const res = await getOrganizationCategoriesByType(organizationId)
       setIncomeCategories(res.income)
       setExpenseCategories(res.expense)
-    } catch (err: any) {
-      setError(err.message || 'Failed to load categories.')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load categories.')
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [organizationId])
 
   useEffect(() => {
     if (open && organizationId) {
       loadCategories()
     }
-  }, [open, organizationId])
+  }, [open, organizationId, loadCategories])
 
   const handleAdd = () => {
     if (!newCategoryName.trim()) return
