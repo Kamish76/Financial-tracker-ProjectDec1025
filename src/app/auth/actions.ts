@@ -5,8 +5,18 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 function getSafeRedirect(nextParam?: string | null): string {
-  if (nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//')) {
-    return nextParam
+  if (!nextParam) return '/organizations'
+  try {
+    const decoded = decodeURIComponent(nextParam).trim()
+    if (
+      decoded.startsWith('/') &&
+      !decoded.startsWith('//') &&
+      !decoded.startsWith('/\\')
+    ) {
+      return decoded
+    }
+  } catch {
+    return '/organizations'
   }
   return '/organizations'
 }

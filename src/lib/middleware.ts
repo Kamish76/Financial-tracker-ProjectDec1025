@@ -16,6 +16,9 @@ const authRoutes = [
   '/auth',
 ]
 
+// Strict static asset file extension whitelist
+const STATIC_ASSET_REGEX = /\.(ico|png|jpg|jpeg|svg|css|js|webp|woff|woff2|ttf|eot)$/i
+
 export async function updateSession(request: NextRequest) {
   const supabaseResponse = NextResponse.next({
     request,
@@ -24,9 +27,19 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
   // Allow framework assets and public files through without auth checks.
-  if (pathname.startsWith('/_next/') || pathname.includes('.')) {
+  // Fix dot-path bypass: Only match framework routes and whitelisted static extensions.
+  if (pathname.startsWith('/_next/') || STATIC_ASSET_REGEX.test(pathname)) {
     return supabaseResponse
   }
+
+  const isPublicRoute = publicRoutes.some((route) => {
+    if (route === '/') {
+      return pathname === '/'
+    }
+    return pathname === route || pathname.startsWith(`${route}/`)
+  })
+  const isAuthRoute = authRoutes.some((route) => pathname === route)
+  const destination = pathname + (request.nextUrl.search || '')
 
   try {
     const supabase = createServerClient(
@@ -50,26 +63,30 @@ export async function updateSession(request: NextRequest) {
     // IMPORTANT: Refresh session to check if user is authenticated
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser()
-
-    const isPublicRoute = publicRoutes.some((route) => {
-      if (route === '/') {
-        return pathname === '/'
-      }
-
-      return pathname === route || pathname.startsWith(`${route}/`)
-    })
-    const isAuthRoute = authRoutes.some((route) => pathname === route)
 
     // Debug logging
     if (process.env.NODE_ENV === 'development') {
       console.log(`[PROXY] ${pathname} - User: ${user?.email || 'none'}, isAuth: ${isAuthRoute}`)
     }
 
-    // If user is authenticated and trying to access the public homepage or auth pages, redirect to organizations
+    // If session lookup returned an error, treat as unauthenticated
+    if (authError && !isPublicRoute) {
+      console.warn('[PROXY] Auth error in middleware:', authError.message)
+      const url = request.nextUrl.clone()
+      url.pathname = '/auth'
+      url.search = ''
+      url.searchParams.set('next', destination)
+      url.searchParams.set('redirect', destination)
+      return NextResponse.redirect(url)
+    }
+
+    // If user is authenticated and trying to access the public homepage, redirect to organizations
     if (user && pathname === '/') {
       const url = request.nextUrl.clone()
       url.pathname = '/organizations'
+      url.search = ''
       return NextResponse.redirect(url)
     }
 
@@ -79,22 +96,35 @@ export async function updateSession(request: NextRequest) {
         request.nextUrl.searchParams.get('next') ||
         request.nextUrl.searchParams.get('redirect') ||
         request.nextUrl.searchParams.get('redirectTo')
-      const targetUrl =
-        param && param.startsWith('/') && !param.startsWith('//') ? param : '/organizations'
-      const url = request.nextUrl.clone()
-      url.pathname = targetUrl.split('#')[0]
-      url.hash = targetUrl.includes('#') ? `#${targetUrl.split('#')[1]}` : ''
-      url.search = ''
-      return NextResponse.redirect(url)
+
+      let targetUrl = '/organizations'
+      if (param) {
+        try {
+          const decoded = decodeURIComponent(param).trim()
+          if (
+            decoded.startsWith('/') &&
+            !decoded.startsWith('//') &&
+            !decoded.startsWith('/\\')
+          ) {
+            targetUrl = decoded
+          }
+        } catch {
+          targetUrl = '/organizations'
+        }
+      }
+
+      const redirectUrl = new URL(targetUrl, request.nextUrl.origin)
+      return NextResponse.redirect(redirectUrl)
     }
 
     // If user is not authenticated and trying to access protected routes
     if (!user && !isPublicRoute) {
       const url = request.nextUrl.clone()
       url.pathname = '/auth'
-      // Add the original URL as both next and redirect parameters
-      url.searchParams.set('next', pathname)
-      url.searchParams.set('redirect', pathname)
+      url.search = ''
+      // Add the original URL as both next and redirect parameters (AGENTS.md Rule 3)
+      url.searchParams.set('next', destination)
+      url.searchParams.set('redirect', destination)
       return NextResponse.redirect(url)
     }
 
@@ -102,7 +132,16 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse
   } catch (err) {
     console.error('[PROXY] Error checking session:', err)
-    // On error, allow request to continue - don't block with error
+    // Fail-secure: If the route is protected, redirect to /auth instead of failing open
+    if (!isPublicRoute) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/auth'
+      url.search = ''
+      url.searchParams.set('next', destination)
+      url.searchParams.set('redirect', destination)
+      url.searchParams.set('error', 'session_error')
+      return NextResponse.redirect(url)
+    }
     return supabaseResponse
   }
 }

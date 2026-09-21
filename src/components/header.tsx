@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
 import { ShieldCheck, Menu, X } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -9,8 +8,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 
 const navigationLinks = [
   { label: 'Features', href: '#features' },
-  { label: 'Pricing', href: '#pricing' },
-  { label: 'Docs', href: '/docs' },
+  { label: 'Privacy', href: '/privacy' },
 ]
 
 export function Header() {
@@ -23,7 +21,7 @@ export function Header() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 shrink-0">
             <div className="inline-flex items-center gap-2 rounded-lg border border-border/70 bg-background/50 px-3 py-1.5 hover:bg-background transition-colors">
-              <ShieldCheck className="h-5 w-5 text-accent" aria-hidden />
+              <ShieldCheck className="h-5 w-5 text-accent-strong" aria-hidden />
               <span className="font-semibold text-foreground text-sm">OrgFinance</span>
             </div>
           </Link>

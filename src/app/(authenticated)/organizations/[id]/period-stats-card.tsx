@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import type { PeriodStats } from "@/lib/finance-client"
+import type { PeriodStats, ClientTransaction } from "@/lib/finance-client"
 import { formatCurrency } from "@/lib/utils"
 
 function formatDateRange(startDate: Date, endDate: Date, periodType: "weekly" | "monthly"): string {
@@ -19,8 +19,8 @@ function formatDateRange(startDate: Date, endDate: Date, periodType: "weekly" | 
 }
 
 type PeriodStatsCardProps = {
-  allTransactions: any[]
-  calculatePeriodStats: (txs: any[], period: "weekly" | "monthly") => PeriodStats
+  allTransactions: ClientTransaction[]
+  calculatePeriodStats: (txs: ClientTransaction[], period: "weekly" | "monthly") => PeriodStats
   currency?: string
 }
 

@@ -20,6 +20,15 @@ export interface FetchTransactionsResult {
   hasMore: boolean
 }
 
+/**
+ * Sanitizes input strings before interpolating into PostgREST `.or()` or filter strings.
+ * Strips characters that break PostgREST filter syntax: (, ), ,, ., ", and backslashes.
+ */
+export function sanitizePostgrestFilter(term: string): string {
+  if (!term) return ''
+  return term.replace(/[(),."\\]/g, '').trim()
+}
+
 export interface TransactionRecord {
   id: string
   type: string
@@ -47,6 +56,16 @@ export interface TransactionRecord {
     id: string
     normalized_name: string
     aliases: string[] | null
+  } | null
+  account_id?: string | null
+  transfer_to_account_id?: string | null
+  account_ref?: {
+    id: string
+    name: string
+  } | null
+  transfer_to_account_ref?: {
+    id: string
+    name: string
   } | null
 }
 
@@ -101,8 +120,11 @@ export async function fetchTransactionsWithFilters(
     .order('created_at', { ascending: false })
 
   if (filters.searchText) {
-    const searchLower = `%${filters.searchText.toLowerCase()}%`
-    query = query.or(`description.ilike.${searchLower},category.ilike.${searchLower}`)
+    const sanitizedSearch = sanitizePostgrestFilter(filters.searchText)
+    if (sanitizedSearch) {
+      const searchLower = `%${sanitizedSearch.toLowerCase()}%`
+      query = query.or(`description.ilike.${searchLower},category.ilike.${searchLower}`)
+    }
   }
 
   if (filters.category) {

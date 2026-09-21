@@ -2,7 +2,7 @@ import { cookies } from 'next/headers'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/app-sidebar'
 import { Separator } from '@/components/ui/separator'
-import { getCachedUser } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/auth/guards'
 import { getUserWalletId } from '@/lib/wallet-server'
 
 export default async function AuthenticatedLayout({
@@ -13,8 +13,8 @@ export default async function AuthenticatedLayout({
   const cookieStore = await cookies()
   const defaultOpen = cookieStore.get('sidebar:state')?.value === 'true'
 
-  const { user } = await getCachedUser()
-  const walletId = user ? await getUserWalletId(user.id) : null
+  const user = await requireUser()
+  const walletId = await getUserWalletId(user.id)
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>

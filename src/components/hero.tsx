@@ -38,7 +38,7 @@ export async function Hero() {
     <div className="grid gap-6 rounded-3xl border border-border/70 bg-card px-8 py-10 shadow-sm md:grid-cols-[1.3fr,1fr]">
       <div className="space-y-4">
         <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted px-3 py-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          <ShieldCheck className="h-4 w-4 text-accent" aria-hidden />
+          <ShieldCheck className="h-4 w-4 text-accent-strong" aria-hidden />
           OrgFinance
         </div>
         <h1 className="text-3xl font-semibold leading-tight text-foreground sm:text-4xl">
@@ -55,9 +55,9 @@ export async function Hero() {
             </Link>
           </Button>
           <Button variant="secondary" className="gap-2" asChild>
-            <a href="https://supabase.com" target="_blank" rel="noreferrer">
-              Supabase dashboard
-            </a>
+            <Link href="#features">
+              Explore Features
+            </Link>
           </Button>
         </div>
       </div>
@@ -67,7 +67,7 @@ export async function Hero() {
           <CardContent className="space-y-1 p-5">
             <CardDescription className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
               Organizations
-              <Users className="h-4 w-4 text-accent" aria-hidden />
+              <Users className="h-4 w-4 text-accent-strong" aria-hidden />
             </CardDescription>
             <CardTitle className="text-xl">{formatNumber(stats.organizationCount)}</CardTitle>
             <p className="text-sm text-muted-foreground">{orgDetailText}</p>
@@ -78,7 +78,7 @@ export async function Hero() {
           <CardContent className="space-y-1 p-5">
             <CardDescription className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
               Contributions
-              <TrendingUp className="h-4 w-4 text-accent" aria-hidden />
+              <TrendingUp className="h-4 w-4 text-accent-strong" aria-hidden />
             </CardDescription>
             <CardTitle className="text-xl">{formatCurrency(stats.totalContributions)}</CardTitle>
             <p className="text-sm text-muted-foreground">{contributionsDetailText}</p>
@@ -89,7 +89,7 @@ export async function Hero() {
           <CardContent className="space-y-1 p-5">
             <CardDescription className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
               Transactions
-              <Receipt className="h-4 w-4 text-accent" aria-hidden />
+              <Receipt className="h-4 w-4 text-accent-strong" aria-hidden />
             </CardDescription>
             <CardTitle className="text-xl">{formatNumber(stats.transactionCount)}</CardTitle>
             <p className="text-sm text-muted-foreground">{transactionsDetailText}</p>

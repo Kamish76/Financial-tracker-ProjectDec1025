@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { joinWithInviteCode } from './actions'
-import { cleanInviteCode, formatInviteCode, isValidInviteCodeFormat } from '@/lib/types/invite'
+import { cleanInviteCode, isValidInviteCodeFormat } from '@/lib/types/invite'
 
 export default function JoinOrganizationPage() {
   const router = useRouter()

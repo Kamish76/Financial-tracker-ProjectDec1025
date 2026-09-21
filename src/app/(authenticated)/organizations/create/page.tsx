@@ -59,7 +59,7 @@ export default function CreateOrganizationPage() {
         <Card>
           <CardHeader className="space-y-2">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-accent p-2">
+              <div className="rounded-lg bg-accent-strong text-white p-2">
                 <Building2 className="h-5 w-5 text-white" />
               </div>
               <div>
@@ -138,7 +138,7 @@ export default function CreateOrganizationPage() {
 
               {/* Info box */}
               <div className="flex items-center gap-2 rounded-full bg-muted/60 px-3 py-2 text-sm text-foreground">
-                <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
+                <span className="h-2 w-2 rounded-full bg-accent-strong" aria-hidden />
                 {isWalletMode
                   ? 'You will be the owner of this personal wallet'
                   : 'You will be the owner of this organization'}
