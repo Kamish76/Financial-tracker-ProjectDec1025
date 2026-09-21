@@ -321,6 +321,68 @@ ALTER TABLE public.transactions ADD CONSTRAINT check_transfer_accounts
   );
 
 -- 6.2 Partial unique index to enforce exactly one personal wallet per user
+-- Clean up / deduplicate existing personal wallets per owner before indexing:
+-- Priority: Retain the wallet with the highest transaction count; if tied, retain the most recently created.
+-- For duplicate wallets with zero transactions, safely remove them.
+WITH wallet_tx_counts AS (
+  SELECT 
+    o.id,
+    o.owner_id,
+    o.created_at,
+    COUNT(t.id) AS tx_count
+  FROM public.organizations o
+  LEFT JOIN public.transactions t ON t.organization_id = o.id
+  WHERE o.description LIKE '[wallet]%'
+  GROUP BY o.id, o.owner_id, o.created_at
+),
+ranked_wallets AS (
+  SELECT 
+    id,
+    owner_id,
+    tx_count,
+    ROW_NUMBER() OVER (
+      PARTITION BY owner_id 
+      ORDER BY tx_count DESC, created_at DESC
+    ) AS rn
+  FROM wallet_tx_counts
+)
+DELETE FROM public.organizations o
+USING ranked_wallets r
+WHERE o.id = r.id 
+  AND r.rn > 1 
+  AND r.tx_count = 0;
+
+-- For any remaining duplicate wallets that have recorded transactions,
+-- safely archive their marker to preserve all audit records while satisfying the unique index.
+WITH wallet_tx_counts AS (
+  SELECT 
+    o.id,
+    o.owner_id,
+    o.created_at,
+    COUNT(t.id) AS tx_count
+  FROM public.organizations o
+  LEFT JOIN public.transactions t ON t.organization_id = o.id
+  WHERE o.description LIKE '[wallet]%'
+  GROUP BY o.id, o.owner_id, o.created_at
+),
+ranked_wallets AS (
+  SELECT 
+    id,
+    owner_id,
+    tx_count,
+    ROW_NUMBER() OVER (
+      PARTITION BY owner_id 
+      ORDER BY tx_count DESC, created_at DESC
+    ) AS rn
+  FROM wallet_tx_counts
+)
+UPDATE public.organizations o
+SET description = REGEXP_REPLACE(o.description, '^(\s*)\[wallet\]', '\1[archived-wallet]', 'i')
+FROM ranked_wallets r
+WHERE o.id = r.id 
+  AND r.rn > 1;
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_wallet_per_user 
   ON public.organizations(owner_id) 
   WHERE description LIKE '[wallet]%';
+
