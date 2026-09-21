@@ -45,10 +45,6 @@ type ReimbursementRow = {
   amount: number | string | null
 }
 
-type AuthUserRow = {
-  id: string
-  email: string | null
-}
 
 /**
  * Computes organization-level totals and per-member balances.

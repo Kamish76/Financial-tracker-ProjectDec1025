@@ -67,10 +67,21 @@ function CallbackInner() {
           searchParams.get('next') ||
           searchParams.get('redirect') ||
           searchParams.get('redirectTo')
-        const targetUrl =
-          nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//')
-            ? nextParam
-            : '/organizations'
+        let targetUrl = '/organizations'
+        if (nextParam) {
+          try {
+            const decoded = decodeURIComponent(nextParam).trim()
+            if (
+              decoded.startsWith('/') &&
+              !decoded.startsWith('//') &&
+              !decoded.startsWith('/\\')
+            ) {
+              targetUrl = decoded
+            }
+          } catch {
+            targetUrl = '/organizations'
+          }
+        }
         router.push(targetUrl)
       } catch (err) {
         console.error('[AUTH_CALLBACK] Unexpected error:', err)
@@ -89,7 +100,7 @@ function CallbackInner() {
           <p className="text-muted-foreground mt-2">{error}</p>
           <button
             onClick={() => router.push('/auth')}
-            className="mt-4 px-4 py-2 bg-accent text-white rounded hover:opacity-90"
+            className="mt-4 px-4 py-2 bg-accent-strong text-white rounded hover:opacity-90"
           >
             Try Again
           </button>

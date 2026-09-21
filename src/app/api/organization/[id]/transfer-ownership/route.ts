@@ -52,17 +52,18 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 			return NextResponse.json({ error: 'New owner ID is required' }, { status: 400 })
 		}
 
-		// Check if new owner is a member of the organization
+		// Check if new owner is an active member of the organization
 		const { data: newOwnerMembership } = await adminClient
 			.from('organization_members')
-			.select('user_id, role')
+			.select('user_id, role, is_active')
 			.eq('organization_id', id)
 			.eq('user_id', new_owner_id)
-			.single()
+			.eq('is_active', true)
+			.maybeSingle()
 
 		if (!newOwnerMembership) {
 			return NextResponse.json(
-				{ error: 'New owner must be a member of the organization' },
+				{ error: 'New owner must be an active member of the organization' },
 				{ status: 400 }
 			)
 		}

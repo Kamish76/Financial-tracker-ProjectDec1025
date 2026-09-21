@@ -19,8 +19,14 @@ import { TransactionEditDialog } from "./transaction-edit-dialog"
 import { FilteredStatsCard } from "./filtered-stats-card"
 import { WalletTotalBalanceCard } from "@/components/wallet/wallet-total-balance-card"
 import { calculateFilteredStats } from "@/lib/finance-client"
+import type { TransactionRecord } from "./utils"
+import type { AccountWithBalance } from "@/lib/wallet-types"
 
-type Transaction = any
+type Transaction = TransactionRecord
+type WalletSummary = {
+  isWallet: boolean
+  accounts: AccountWithBalance[]
+}
 type Member = {
   id: string
   name: string
@@ -38,6 +44,7 @@ const TRANSACTION_TYPES = [
   { value: "expense_personal", label: "Personal Expense" },
   { value: "held_allocate", label: "Held Allocation" },
   { value: "held_return", label: "Held Return" },
+  { value: "transfer", label: "Transfer" },
 ]
 
 type RecordsPageContentProps = {
@@ -62,7 +69,7 @@ export function RecordsPageContent({ currency }: RecordsPageContentProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const [walletSummary, setWalletSummary] = useState<any | null>(null)
+  const [walletSummary, setWalletSummary] = useState<WalletSummary | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [hasMore, setHasMore] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
@@ -74,9 +81,9 @@ export function RecordsPageContent({ currency }: RecordsPageContentProps) {
   // Intersection observer for infinite scroll
   const observerTarget = useRef<HTMLDivElement>(null)
 
-  // Load initial filters
+  // Load initial filter data (members, categories, wallet summary)
   useEffect(() => {
-    const loadFilters = async () => {
+    async function loadFilters() {
       const [membersData, categoriesData, walletData] = await Promise.all([
         fetchOrganizationMembers(organizationId),
         fetchOrganizationCategories(organizationId),
@@ -99,7 +106,7 @@ export function RecordsPageContent({ currency }: RecordsPageContentProps) {
         category: selectedCategory === 'all' ? undefined : selectedCategory,
         type: selectedType === 'all' ? undefined : selectedType,
         memberId: selectedMember === 'all' ? undefined : selectedMember,
-        fundedByType: fundedByType === 'all' ? undefined : (fundedByType as any),
+        fundedByType: fundedByType === 'all' ? undefined : (fundedByType as 'business' | 'personal'),
         startDate,
         endDate,
         cursor: append ? (nextCursor ?? undefined) : undefined,
@@ -126,8 +133,38 @@ export function RecordsPageContent({ currency }: RecordsPageContentProps) {
 
   // Load transactions on filter change
   useEffect(() => {
-    loadTransactions(false)
-  }, [searchText, selectedCategory, selectedType, selectedMember, fundedByType, startDate, endDate])
+    let ignore = false
+    void fetchTransactionsWithFilters(organizationId, {
+      searchText,
+      category: selectedCategory === 'all' ? undefined : selectedCategory,
+      type: selectedType === 'all' ? undefined : selectedType,
+      memberId: selectedMember === 'all' ? undefined : selectedMember,
+      fundedByType: fundedByType === 'all' ? undefined : (fundedByType as 'business' | 'personal'),
+      startDate,
+      endDate,
+      limit: 20,
+    }).then((result) => {
+      if (!ignore) {
+        setTransactions(result.transactions)
+        setNextCursor(result.nextCursor)
+        setHasMore(result.hasMore)
+        setIsLoading(false)
+      }
+    })
+
+    return () => {
+      ignore = true
+    }
+  }, [
+    organizationId,
+    searchText,
+    selectedCategory,
+    selectedType,
+    selectedMember,
+    fundedByType,
+    startDate,
+    endDate,
+  ])
 
   // Infinite scroll observer
   useEffect(() => {

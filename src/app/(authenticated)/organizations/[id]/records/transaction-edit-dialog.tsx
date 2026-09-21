@@ -15,7 +15,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
-type Transaction = any
+import type { TransactionRecord } from "./utils"
+
+type Transaction = TransactionRecord
 type Category = {
   id: string
   normalized_name: string
@@ -28,7 +30,7 @@ type TransactionEditDialogProps = {
   transaction: Transaction
   organizationId: string
   onSave: () => void
-  categories: Category[]
+  categories?: Category[]
 }
 
 export function TransactionEditDialog({
@@ -37,7 +39,6 @@ export function TransactionEditDialog({
   transaction,
   organizationId,
   onSave,
-  categories,
 }: TransactionEditDialogProps) {
   const [amount, setAmount] = useState(transaction.amount.toString())
   const [description, setDescription] = useState(transaction.description || "")

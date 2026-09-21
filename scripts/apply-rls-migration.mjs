@@ -15,7 +15,7 @@ async function applyMigration() {
     console.log('Applying migration...')
 
     // Execute SQL to drop and recreate policies
-    const { data, error } = await admin.rpc('exec', {
+    const { error } = await admin.rpc('exec', {
       sql: `
         drop policy if exists orgs_select_member on public.organizations;
         drop policy if exists orgs_select_searchable on public.organizations;

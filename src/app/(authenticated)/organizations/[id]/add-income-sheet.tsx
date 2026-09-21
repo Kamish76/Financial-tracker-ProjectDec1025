@@ -33,7 +33,6 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [fundedByUserId, setFundedByUserId] = useState<string | null>(null)
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentUserName, setCurrentUserName] = useState<string | null>(null)
 
   const defaultDate = useMemo(() => new Date().toISOString().slice(0, 10), [])
@@ -61,11 +60,10 @@ export function AddIncomeSheet({ organizationId }: AddIncomeSheetProps) {
     if (!open) return
     supabase.auth.getUser().then(({ data }) => {
       const u = data.user
-      setCurrentUserId(u?.id ?? null)
       const name = (u?.user_metadata?.full_name as string | undefined) || (u?.email as string | undefined) || null
       setCurrentUserName(name)
-      if (!fundedByUserId && u?.id) {
-        setFundedByUserId(u.id)
+      if (u?.id) {
+        setFundedByUserId((prev) => prev ?? u.id)
       }
     })
   }, [open])

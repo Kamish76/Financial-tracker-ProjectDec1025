@@ -62,7 +62,7 @@ export async function updateMemberRole(input: UpdateMemberRoleInput) {
       .eq('organization_id', organizationId)
       .eq('user_id', targetUserId)
       .eq('is_active', true)
-      .single()
+      .maybeSingle()
 
     if (targetError || !targetMembership) {
       return { error: 'Target user is not an active member of this organization' }
@@ -134,7 +134,7 @@ export async function deactivateMember(input: DeactivateMemberInput) {
       .select('role, is_active')
       .eq('organization_id', organizationId)
       .eq('user_id', targetUserId)
-      .single()
+      .maybeSingle()
 
     if (targetError || !targetMembership) {
       return { error: 'Target user is not a member of this organization' }
@@ -193,8 +193,6 @@ export async function reactivateMember(input: ReactivateMemberInput) {
       return auth
     }
 
-    const { user } = auth
-
     const adminClient = createAdminClient()
 
     // Check target member exists and is inactive
@@ -203,7 +201,7 @@ export async function reactivateMember(input: ReactivateMemberInput) {
       .select('is_active')
       .eq('organization_id', organizationId)
       .eq('user_id', targetUserId)
-      .single()
+      .maybeSingle()
 
     if (targetError || !targetMembership) {
       return { error: 'Target user is not a member of this organization' }

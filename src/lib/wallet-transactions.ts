@@ -55,7 +55,7 @@ export async function addWalletTransaction(input: AddWalletTransactionInput): Pr
     if (!hasAccess) {
       const { data: member } = await adminClient
         .from('organization_members')
-        .select('id')
+        .select('organization_id, user_id, is_active')
         .eq('organization_id', input.organizationId)
         .eq('user_id', user.id)
         .eq('is_active', true)
@@ -66,6 +66,33 @@ export async function addWalletTransaction(input: AddWalletTransactionInput): Pr
 
     if (!hasAccess) {
       return { error: 'You do not have permission to add transactions to this wallet.' }
+    }
+
+    // Verify account belongs to organization and is active
+    const { data: sourceAccount } = await adminClient
+      .from('wallet_accounts')
+      .select('id, organization_id, is_active')
+      .eq('id', input.accountId)
+      .eq('organization_id', input.organizationId)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (!sourceAccount) {
+      return { error: 'Invalid source account.' }
+    }
+
+    if (input.type === 'transfer' && input.transferToAccountId) {
+      const { data: destAccount } = await adminClient
+        .from('wallet_accounts')
+        .select('id, organization_id, is_active')
+        .eq('id', input.transferToAccountId)
+        .eq('organization_id', input.organizationId)
+        .eq('is_active', true)
+        .maybeSingle()
+
+      if (!destAccount) {
+        return { error: 'Invalid destination account.' }
+      }
     }
 
     // 3. Resolve category ID if category string was specified and it is not a transfer

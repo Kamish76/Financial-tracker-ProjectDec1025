@@ -160,6 +160,7 @@ export async function updateTransaction(input: UpdateTransactionInput) {
     .from("transactions")
     .update(updatePayload)
     .eq("id", transactionId)
+    .eq("organization_id", organizationId)
 
   if (updateError) {
     console.error("[UPDATE_TRANSACTION] Update failed", updateError.message)
@@ -214,6 +215,7 @@ export async function deleteTransaction(input: DeleteTransactionInput) {
     .from("transactions")
     .delete()
     .eq("id", transactionId)
+    .eq("organization_id", organizationId)
 
   if (deleteError) {
     console.error("[DELETE_TRANSACTION] Delete failed", deleteError.message)
@@ -345,9 +347,10 @@ export async function addInitialTransaction(input: AddInitialTransactionInput) {
   if (assignedToUserId) {
     const { data: memberCheck, error: memberCheckError } = await admin
       .from("organization_members")
-      .select("user_id")
+      .select("organization_id, user_id, is_active")
       .eq("organization_id", organizationId)
       .eq("user_id", assignedToUserId)
+      .eq("is_active", true)
       .maybeSingle()
 
     if (memberCheckError || !memberCheck) {
@@ -468,9 +471,10 @@ export async function updateInitialTransaction(input: UpdateInitialTransactionIn
   if (assignedToUserId) {
     const { data: memberCheck, error: memberCheckError } = await admin
       .from("organization_members")
-      .select("user_id")
+      .select("organization_id, user_id, is_active")
       .eq("organization_id", organizationId)
       .eq("user_id", assignedToUserId)
+      .eq("is_active", true)
       .maybeSingle()
 
     if (memberCheckError || !memberCheck) {
@@ -599,9 +603,10 @@ export async function addIncomeForMember(input: AddIncomeForMemberInput) {
   if (assignedToUserId) {
     const { data: memberCheck, error: memberCheckError } = await admin
       .from("organization_members")
-      .select("user_id")
+      .select("organization_id, user_id, is_active")
       .eq("organization_id", organizationId)
       .eq("user_id", assignedToUserId)
+      .eq("is_active", true)
       .maybeSingle()
 
     if (memberCheckError || !memberCheck) {
@@ -666,9 +671,10 @@ export async function addExpenseForMember(input: AddExpenseForMemberInput) {
   if (assignedToUserId) {
     const { data: memberCheck, error: memberCheckError } = await admin
       .from("organization_members")
-      .select("user_id")
+      .select("organization_id, user_id, is_active")
       .eq("organization_id", organizationId)
       .eq("user_id", assignedToUserId)
+      .eq("is_active", true)
       .maybeSingle()
 
     if (memberCheckError || !memberCheck) {
@@ -727,9 +733,10 @@ export async function setMemberBaseline(input: SetMemberBaselineInput) {
   // Verify target member exists in organization
   const { data: targetMember, error: targetMemberError } = await admin
     .from("organization_members")
-    .select("user_id")
+    .select("organization_id, user_id, is_active")
     .eq("organization_id", organizationId)
     .eq("user_id", userId)
+    .eq("is_active", true)
     .maybeSingle()
 
   if (targetMemberError || !targetMember) {

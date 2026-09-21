@@ -22,7 +22,7 @@ export default async function ProfilePage() {
           <Card>
             <CardHeader>
               <div className="flex items-center gap-3">
-                <div className="rounded-full bg-accent p-3">
+                <div className="rounded-full bg-accent-strong text-white p-3">
                   <User className="h-6 w-6 text-white" />
                 </div>
                 <div>
