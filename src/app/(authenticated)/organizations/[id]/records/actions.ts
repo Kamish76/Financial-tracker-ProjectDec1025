@@ -4,12 +4,22 @@ import {
 	fetchOrganizationCategories as fetchOrganizationCategoriesImpl,
 	fetchOrganizationMembers as fetchOrganizationMembersImpl,
 	fetchTransactionsWithFilters as fetchTransactionsWithFiltersImpl,
+	fetchTransactionAggregates as fetchTransactionAggregatesImpl,
 } from './utils'
 import type { FetchTransactionsResult, TransactionFilters } from './utils'
+import type { FilteredStats } from '@/lib/finance-client'
 import { getAccountsWithBalances } from '@/lib/wallet-accounts'
 import { createAdminClient } from '@/lib/supabase/server'
 import { isWalletOrganization } from '@/lib/wallet'
 import { requireOrgMembership } from '@/lib/auth/guards'
+
+export async function fetchTransactionAggregates(
+	organizationId: string,
+	filters: TransactionFilters = {}
+): Promise<FilteredStats> {
+	await requireOrgMembership(organizationId)
+	return fetchTransactionAggregatesImpl(organizationId, filters)
+}
 
 export async function fetchTransactionsWithFilters(
 	organizationId: string,
@@ -157,6 +167,12 @@ export async function updateTransaction(
 	}
 	if (updateData.category_id !== undefined || updateData.categoryId !== undefined) {
 		updatePayload.category_id = (updateData.category_id ?? updateData.categoryId) as string | null
+	}
+	if (updateData.accountId !== undefined || updateData.account_id !== undefined) {
+		updatePayload.account_id = (updateData.accountId ?? updateData.account_id) as string | null
+	}
+	if (updateData.transferToAccountId !== undefined || updateData.transfer_to_account_id !== undefined) {
+		updatePayload.transfer_to_account_id = (updateData.transferToAccountId ?? updateData.transfer_to_account_id) as string | null
 	}
 	if (updateData.occurredAt || updateData.occurred_at) {
 		updatePayload.occurred_at = new Date(String(updateData.occurredAt || updateData.occurred_at)).toISOString()

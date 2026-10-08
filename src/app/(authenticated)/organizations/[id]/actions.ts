@@ -94,6 +94,8 @@ interface UpdateTransactionInput {
   description?: string
   category?: string
   occurredAt: string
+  accountId?: string | null
+  transferToAccountId?: string | null
 }
 
 export async function updateTransaction(input: UpdateTransactionInput) {
@@ -147,13 +149,20 @@ export async function updateTransaction(input: UpdateTransactionInput) {
   // Normalize category if provided
   const categoryId = category ? await getOrCreateCategory(organizationId, category) : null
 
-  const updatePayload = {
+  const updatePayload: Record<string, unknown> = {
     amount,
     description: description?.trim() || null,
     category: category?.trim() || null,
     category_id: categoryId,
     occurred_at: occurredDate.toISOString(),
     updated_by_user_id: user.id,
+  }
+
+  if (input.accountId !== undefined) {
+    updatePayload.account_id = input.accountId
+  }
+  if (input.transferToAccountId !== undefined) {
+    updatePayload.transfer_to_account_id = input.transferToAccountId
   }
 
   const { error: updateError } = await admin
@@ -167,6 +176,7 @@ export async function updateTransaction(input: UpdateTransactionInput) {
     return { error: "Unable to update transaction" }
   }
 
+  revalidateOrganizationOverview(organizationId)
   revalidateOrganizationSections(organizationId, ['records'])
 
   return { success: true }

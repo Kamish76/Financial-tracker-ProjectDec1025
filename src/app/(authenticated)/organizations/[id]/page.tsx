@@ -9,12 +9,14 @@ import { requireOrgMembership } from '@/lib/auth/guards'
 import { AddIncomeSheet } from './add-income-sheet'
 import { AddExpenseSheet } from './add-expense-sheet'
 import { RefundSheet } from './refund-sheet'
-import { getOrganizationStats } from '@/lib/finance'
+import { getOrganizationStats, type OrganizationStats } from '@/lib/finance'
 import { StatsCards } from '@/components/stats-cards'
 import { MemberBalancesTable } from '@/components/member-balances-table'
 import { DashboardClientWrapper } from './dashboard-client-wrapper'
 import { isWalletOrganization } from '@/lib/wallet'
 import { getAccountsWithBalances } from '@/lib/wallet-accounts'
+import type { AccountWithBalance } from '@/lib/wallet-types'
+import type { ClientTransaction } from '@/lib/finance-client'
 import { WalletFab } from '@/components/wallet/wallet-fab'
 import { WalletTotalBalanceCard } from '@/components/wallet/wallet-total-balance-card'
 
@@ -46,21 +48,38 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 	minute: '2-digit',
 })
 
-function formatAmount(type: string, amount: number, currency?: string) {
+function formatAmount(type: string, amount: number, currency?: string, isWallet?: boolean) {
+	if (isWallet && type === 'transfer') {
+		return formatCurrency(amount, currency)
+	}
 	const sign = type === 'income' ? '+' : type === 'held_allocate' ? '+' : '-'
 	return `${sign} ${formatCurrency(amount, currency)}`
 }
 
-function typeBadge(type: string) {
+function typeBadge(type: string, isWallet?: boolean) {
 	const map: Record<string, { label: string; className: string }> = {
-		income: { label: 'Income', className: 'text-emerald-600 bg-emerald-50' },
-		expense_business: { label: 'Expense (Biz)', className: 'text-rose-600 bg-rose-50' },
-		expense_personal: { label: 'Expense (Personal)', className: 'text-orange-600 bg-orange-50' },
-		held_allocate: { label: 'Allocation +', className: 'text-blue-600 bg-blue-50' },
-		held_return: { label: 'Allocation −', className: 'text-purple-600 bg-purple-50' },
+		income: { label: 'Income', className: 'text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/40' },
+		expense_business: { label: isWallet ? 'Expense' : 'Expense (Biz)', className: 'text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-950/40' },
+		expense_personal: { label: isWallet ? 'Expense' : 'Expense (Personal)', className: isWallet ? 'text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-950/40' : 'text-orange-600 bg-orange-50 dark:text-orange-400 dark:bg-orange-950/40' },
+		expense: { label: 'Expense', className: 'text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-950/40' },
+		held_allocate: { label: 'Allocation +', className: 'text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-950/40' },
+		held_return: { label: 'Allocation −', className: 'text-purple-600 bg-purple-50 dark:text-purple-400 dark:bg-purple-950/40' },
+		transfer: { label: 'Transfer', className: 'text-purple-600 bg-purple-50 dark:text-purple-400 dark:bg-purple-950/40' },
 	}
 
-	return map[type] || { label: type, className: 'text-slate-700 bg-slate-100' }
+	return map[type] || { label: type, className: 'text-slate-700 bg-slate-100 dark:text-slate-300 dark:bg-slate-800' }
+}
+
+type RawTransactionRow = {
+	id: string
+	type: string
+	amount: number | null
+	category: string | null
+	description: string | null
+	created_at: string
+	is_initial?: boolean | null
+	account?: { name?: string | null } | null
+	transfer_to_account?: { name?: string | null } | null
 }
 
 export default async function OrganizationFinancePage({ params }: PageProps) {
@@ -69,45 +88,102 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 
 	const { membership: effectiveMembership } = await requireOrgMembership(id)
 
-	const [
-		organizationResult,
-		transactionsResult,
-		stats
-	] = await Promise.all([
-		adminClient.from('organizations').select('id, name, description, currency').eq('id', id).maybeSingle(),
-		adminClient.from('transactions')
-			.select('id, type, amount, category, description, created_at, is_initial, account_id, transfer_to_account_id, account:wallet_accounts!account_id(id, name), transfer_to_account:wallet_accounts!transfer_to_account_id(id, name)')
-			.eq('organization_id', id)
-			.order('created_at', { ascending: false })
-			.limit(365),
-		getOrganizationStats(id)
-	])
-
-	const organization = organizationResult.data
-	const transactionRows = transactionsResult.data
-	const transactionsError = transactionsResult.error
+	const { data: organization } = await adminClient
+		.from('organizations')
+		.select('id, name, description, currency')
+		.eq('id', id)
+		.maybeSingle()
 
 	const isWallet = isWalletOrganization(organization?.description)
 
-	const accounts = isWallet ? await getAccountsWithBalances(id, false) : []
+	let accounts: AccountWithBalance[] = []
+	let transactionRows: RawTransactionRow[] = []
+	let transactionsError: { message: string } | null = null
+	let periodTransactions: ClientTransaction[] = []
+	let stats: OrganizationStats = {
+		totals: {
+			totalIncome: 0,
+			totalExpensesBusiness: 0,
+			totalExpensesPersonal: 0,
+			expensesCapital: 0,
+			actualExpensesWithoutCapital: 0,
+			cashOnHand: 0,
+			actualExpensesVsIncome: 0,
+		},
+		members: [],
+	}
+
+	if (isWallet) {
+		const now = new Date()
+		const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+		const startOfWeek = new Date(now)
+		startOfWeek.setDate(now.getDate() - now.getDay())
+		startOfWeek.setHours(0, 0, 0, 0)
+		const periodCutoff = startOfMonth < startOfWeek ? startOfMonth : startOfWeek
+
+		// Fast parallel fetching for wallet mode:
+		// 1. Account balances
+		// 2. 10 recent transactions for recent activity
+		// 3. Lightweight period transactions for current week/month stats (no heavy joins)
+		const [accountsData, recentTxResult, periodTxResult] = await Promise.all([
+			getAccountsWithBalances(id, false),
+			adminClient
+				.from('transactions')
+				.select('id, type, amount, category, description, created_at, is_initial, account_id, transfer_to_account_id, account:wallet_accounts!account_id(id, name), transfer_to_account:wallet_accounts!transfer_to_account_id(id, name)')
+				.eq('organization_id', id)
+				.order('created_at', { ascending: false })
+				.limit(10),
+			adminClient
+				.from('transactions')
+				.select('id, type, amount, occurred_at, created_at')
+				.eq('organization_id', id)
+				.gte('occurred_at', periodCutoff.toISOString()),
+		])
+
+		accounts = accountsData
+		transactionRows = (recentTxResult.data || []) as unknown as RawTransactionRow[]
+		transactionsError = recentTxResult.error
+		periodTransactions = ((periodTxResult.data || []) as unknown as Array<{
+			id: string
+			type: string
+			amount: number | null
+			occurred_at: string | null
+			created_at: string
+		}>).map((tx) => ({
+			id: tx.id,
+			amount: Number(tx.amount ?? 0),
+			type: tx.type,
+			occurred_at: tx.occurred_at,
+			created_at: tx.created_at,
+		}))
+	} else {
+		// Business mode: load full stats and ledger
+		const [transactionsResult, statsResult] = await Promise.all([
+			adminClient
+				.from('transactions')
+				.select('id, type, amount, category, description, created_at, is_initial, account_id, transfer_to_account_id, account:wallet_accounts!account_id(id, name), transfer_to_account:wallet_accounts!transfer_to_account_id(id, name)')
+				.eq('organization_id', id)
+				.order('created_at', { ascending: false })
+				.limit(365),
+			getOrganizationStats(id),
+		])
+
+		transactionRows = (transactionsResult.data || []) as unknown as RawTransactionRow[]
+		transactionsError = transactionsResult.error
+		stats = statsResult
+		periodTransactions = transactionRows.map((tx) => ({
+			id: tx.id,
+			amount: Number(tx.amount ?? 0),
+			type: tx.type,
+			created_at: tx.created_at,
+		}))
+	}
 
 	if (transactionsError) {
 		console.error('[ORG_PAGE] Transactions error', { orgId: id, error: transactionsError.message })
 	}
 
-	type RawTransactionRow = {
-		id: string
-		type: string
-		amount: number | null
-		category: string | null
-		description: string | null
-		created_at: string
-		is_initial?: boolean | null
-		account?: { name?: string | null } | null
-		transfer_to_account?: { name?: string | null } | null
-	}
-
-	const transactions: TransactionRecord[] = ((transactionRows as unknown as RawTransactionRow[]) || []).map((row) => ({
+	const transactions: TransactionRecord[] = transactionRows.map((row) => ({
 		id: row.id,
 		type: row.type,
 		amount: Number(row.amount ?? 0),
@@ -151,7 +227,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 			{isWallet && <WalletTotalBalanceCard organizationId={id} accounts={accounts} currency={organization?.currency} />}
 
 		{/* Period Summary Stats */}
-		<DashboardClientWrapper allTransactions={transactions} currency={organization?.currency} />
+		<DashboardClientWrapper allTransactions={periodTransactions} currency={organization?.currency} />
 			{!isWallet && (
 				<Card>
 					<CardHeader>
@@ -279,7 +355,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 						<Button asChild variant="outline" className="w-full sm:w-auto">
 							<Link href={`/organizations/${id}/records`}>
 								<ScrollText className="h-4 w-4 mr-2" />
-								View full records
+								Transaction History
 							</Link>
 						</Button>
 						<Button asChild variant="outline" className="w-full sm:w-auto">
@@ -296,8 +372,12 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 				<Card>
 					<CardHeader className="flex flex-row items-start justify-between">
 						<div className="space-y-1">
-							<CardTitle>Recent activity</CardTitle>
-							<CardDescription>10 most recent changes for this organization.</CardDescription>
+							<CardTitle>{isWallet ? 'Recent Wallet Activity' : 'Recent activity'}</CardTitle>
+							<CardDescription>
+								{isWallet
+									? 'Latest transactions recorded in your personal wallet.'
+									: '10 most recent changes for this organization.'}
+							</CardDescription>
 						</div>
 						<span className="text-xs text-muted-foreground">Auto-refreshed on load</span>
 					</CardHeader>
@@ -312,7 +392,11 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 							<div className="flex items-center justify-between rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
 								<div>
 									No transactions yet.
-									<span className="ml-2 text-foreground">Use the quick actions to create your first one.</span>
+									<span className="ml-2 text-foreground">
+										{isWallet
+											? 'Use the Add Transaction button to record your first one.'
+											: 'Use the quick actions to create your first one.'}
+									</span>
 								</div>
 								<ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
 							</div>
@@ -321,7 +405,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 						{!transactionsError && transactions.length > 0 && (
 							<div className="divide-y divide-border/70 rounded-xl border border-border/70">
 								{transactions.slice(0, 10).map((tx) => {
-									const badge = typeBadge(tx.type)
+									const badge = typeBadge(tx.type, isWallet)
 									const badgeLabel = tx.is_initial ? `${badge.label} (Initial)` : badge.label
 									return (
 										<div key={tx.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -353,8 +437,16 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 													{dateFormatter.format(new Date(tx.created_at))}
 												</p>
 											</div>
-											<div className="text-right text-base font-semibold text-foreground">
-												{formatAmount(tx.type, tx.amount, organization?.currency)}
+											<div className={`text-right text-base font-semibold ${
+												isWallet
+													? tx.type === 'income'
+														? 'text-emerald-600 dark:text-emerald-400'
+														: tx.type === 'transfer'
+														? 'text-purple-600 dark:text-purple-400'
+														: 'text-rose-600 dark:text-rose-400'
+													: 'text-foreground'
+											}`}>
+												{formatAmount(tx.type, tx.amount, organization?.currency, isWallet)}
 											</div>
 										</div>
 									)
@@ -365,7 +457,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 							<div className="pt-2 border-t mt-4">
 								<Button asChild variant="ghost" className="w-full text-muted-foreground hover:text-foreground">
 									<Link href={`/organizations/${id}/records`}>
-										View all transactions &rarr;
+										{isWallet ? 'View full transaction history →' : 'View all transactions →'}
 									</Link>
 								</Button>
 							</div>

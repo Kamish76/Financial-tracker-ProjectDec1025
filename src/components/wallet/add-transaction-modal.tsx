@@ -29,6 +29,8 @@ type AddTransactionModalProps = {
   organizationId: string
   accounts: (WalletAccount | AccountWithBalance)[]
   onTransactionAdded?: () => void
+  initialTab?: TabType
+  initialAccountId?: string
 }
 
 function getDisplayBalance(acc: WalletAccount | AccountWithBalance): string {
@@ -120,10 +122,12 @@ export function AddTransactionModal({
   organizationId,
   accounts,
   onTransactionAdded,
+  initialTab,
+  initialAccountId,
 }: AddTransactionModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
   const previousFocusedElementRef = useRef<HTMLElement | null>(null)
-  const [activeTab, setActiveTab] = useState<TabType>('income')
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'expense')
 
   // Lock body scroll and manage focus when modal is open
   useEffect(() => {
@@ -156,12 +160,12 @@ export function AddTransactionModal({
   }, [isOpen])
 
   const [selectedAccountId, setSelectedAccountId] = useState<string>(
-    accounts[0]?.id ?? ''
+    initialAccountId || accounts[0]?.id || ''
   )
   const [transferToAccountId, setTransferToAccountId] = useState<string>(
     accounts.length > 1 ? accounts[1].id : ''
   )
-  const [category, setCategory] = useState<string>('Salary')
+  const [category, setCategory] = useState<string>('Food & Dining')
   const [customCategoryInput, setCustomCategoryInput] = useState<string>('')
   const [orgCategories, setOrgCategories] = useState<{
     income: string[]
@@ -228,6 +232,31 @@ export function AddTransactionModal({
   const [txTime, setTxTime] = useState<string>(
     new Date().toTimeString().split(' ')[0].substring(0, 5)
   )
+
+  // Reset form values cleanly when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setDisplayExpr('0')
+      setNotes('')
+      setError(null)
+      setShowCategoryDropdown(false)
+      setShowAccountDropdown(null)
+      const tab = initialTab || 'expense'
+      setActiveTab(tab)
+      if (tab === 'expense') {
+        setCategory(orgCategories.expense[0] || 'Food & Dining')
+      } else if (tab === 'income') {
+        setCategory(orgCategories.income[0] || 'Salary')
+      }
+      if (initialAccountId && accounts.some((a) => a.id === initialAccountId)) {
+        setSelectedAccountId(initialAccountId)
+      } else if (accounts.length > 0 && !accounts.some((a) => a.id === selectedAccountId)) {
+        setSelectedAccountId(accounts[0].id)
+      }
+      setTxDate(new Date().toISOString().split('T')[0])
+      setTxTime(new Date().toTimeString().split(' ')[0].substring(0, 5))
+    }
+  }, [isOpen, initialTab, initialAccountId, orgCategories])
 
   // Compute evaluated amount on the fly
   const evaluatedAmount = useMemo(() => {
