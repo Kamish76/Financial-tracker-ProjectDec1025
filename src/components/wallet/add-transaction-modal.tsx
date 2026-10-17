@@ -664,7 +664,7 @@ export function AddTransactionModal({
                   showAccountDropdown === 'from' ? null : 'from'
                 )
               }
-              className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-accent text-foreground font-semibold text-sm transition-all shadow-sm"
+              className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-muted text-foreground font-semibold text-sm transition-all shadow-sm"
             >
               <Wallet className={`h-4 w-4 ${accentText}`} />
               <span className="truncate">
@@ -685,7 +685,7 @@ export function AddTransactionModal({
                     className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between transition-colors ${
                       acc.id === selectedAccountId
                         ? `${accentDropdownActive} font-semibold`
-                        : 'text-foreground hover:bg-accent'
+                        : 'text-foreground hover:bg-muted'
                     }`}
                   >
                     <span>{acc.name}</span>
@@ -713,7 +713,7 @@ export function AddTransactionModal({
                       showAccountDropdown === 'to' ? null : 'to'
                     )
                   }
-                  className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-accent text-foreground font-semibold text-sm transition-all shadow-sm"
+                  className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-muted text-foreground font-semibold text-sm transition-all shadow-sm"
                 >
                   <ArrowRightLeft className={`h-4 w-4 ${accentText}`} />
                   <span className="truncate">
@@ -736,7 +736,7 @@ export function AddTransactionModal({
                             ? 'opacity-40 cursor-not-allowed text-muted-foreground'
                             : acc.id === transferToAccountId
                             ? `${accentDropdownActive} font-semibold`
-                            : 'text-foreground hover:bg-accent'
+                            : 'text-foreground hover:bg-muted'
                         }`}
                       >
                         <span>{acc.name}</span>
@@ -753,7 +753,7 @@ export function AddTransactionModal({
               <>
                 <button
                   onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-                  className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-accent text-foreground font-semibold text-sm transition-all shadow-sm"
+                  className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-muted text-foreground font-semibold text-sm transition-all shadow-sm"
                 >
                   <Tag className={`h-4 w-4 ${accentText}`} />
                   <span className="truncate">{category || 'Category'}</span>
@@ -795,7 +795,7 @@ export function AddTransactionModal({
                         className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                           cat === category
                             ? `${accentDropdownActive} font-semibold`
-                            : 'text-foreground hover:bg-accent'
+                            : 'text-foreground hover:bg-muted'
                         }`}
                       >
                         {cat}
@@ -836,7 +836,7 @@ export function AddTransactionModal({
 
             <button
               onClick={() => handleKeypadPress('BACKSPACE')}
-              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               title="Backspace"
             >
               <Delete className="h-6 w-6" />
@@ -868,19 +868,19 @@ export function AddTransactionModal({
           </button>
           <button
             onClick={() => handleKeypadPress('7')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             7
           </button>
           <button
             onClick={() => handleKeypadPress('8')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             8
           </button>
           <button
             onClick={() => handleKeypadPress('9')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             9
           </button>
@@ -894,19 +894,19 @@ export function AddTransactionModal({
           </button>
           <button
             onClick={() => handleKeypadPress('4')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             4
           </button>
           <button
             onClick={() => handleKeypadPress('5')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             5
           </button>
           <button
             onClick={() => handleKeypadPress('6')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             6
           </button>
@@ -920,19 +920,19 @@ export function AddTransactionModal({
           </button>
           <button
             onClick={() => handleKeypadPress('1')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             1
           </button>
           <button
             onClick={() => handleKeypadPress('2')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             2
           </button>
           <button
             onClick={() => handleKeypadPress('3')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             3
           </button>
@@ -946,13 +946,13 @@ export function AddTransactionModal({
           </button>
           <button
             onClick={() => handleKeypadPress('0')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             0
           </button>
           <button
             onClick={() => handleKeypadPress('.')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             .
           </button>
