@@ -10,6 +10,7 @@ import {
   DEFAULT_INCOME_CATEGORIES,
   DEFAULT_EXPENSE_CATEGORIES,
 } from '@/lib/category-constants'
+import { formatCurrency } from '@/lib/utils'
 import { 
   X, 
   Check, 
@@ -28,21 +29,19 @@ type AddTransactionModalProps = {
   onClose: () => void
   organizationId: string
   accounts: (WalletAccount | AccountWithBalance)[]
+  currency?: string
   onTransactionAdded?: () => void
   initialTab?: TabType
   initialAccountId?: string
 }
 
-function getDisplayBalance(acc: WalletAccount | AccountWithBalance): string {
+function getDisplayBalance(acc: WalletAccount | AccountWithBalance, currency?: string): string {
   const val =
     'current_balance' in acc && typeof (acc as AccountWithBalance).current_balance === 'number'
       ? (acc as AccountWithBalance).current_balance
       : acc.starting_value
 
-  return `$${Number(val).toLocaleString('en-US', {
-    minimumFractionDigits: val % 1 === 0 ? 0 : 2,
-    maximumFractionDigits: 2,
-  })}`
+  return formatCurrency(Number(val), currency)
 }
 
 type TabType = 'income' | 'expense' | 'transfer'
@@ -121,6 +120,7 @@ export function AddTransactionModal({
   onClose,
   organizationId,
   accounts,
+  currency,
   onTransactionAdded,
   initialTab,
   initialAccountId,
@@ -234,6 +234,7 @@ export function AddTransactionModal({
   )
 
   // Reset form values cleanly when modal opens
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
   useEffect(() => {
     if (isOpen) {
       setDisplayExpr('0')
@@ -257,6 +258,7 @@ export function AddTransactionModal({
       setTxTime(new Date().toTimeString().split(' ')[0].substring(0, 5))
     }
   }, [isOpen, initialTab, initialAccountId, orgCategories])
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   // Compute evaluated amount on the fly
   const evaluatedAmount = useMemo(() => {
@@ -690,7 +692,7 @@ export function AddTransactionModal({
                   >
                     <span>{acc.name}</span>
                     <span className="text-xs text-muted-foreground">
-                      {getDisplayBalance(acc)}
+                      {getDisplayBalance(acc, currency)}
                     </span>
                   </button>
                 ))}
@@ -741,7 +743,7 @@ export function AddTransactionModal({
                       >
                         <span>{acc.name}</span>
                         <span className="text-xs text-muted-foreground">
-                          {getDisplayBalance(acc)}
+                          {getDisplayBalance(acc, currency)}
                         </span>
                       </button>
                     ))}
@@ -829,7 +831,7 @@ export function AddTransactionModal({
               {/* Show evaluated value preview if displayExpr is an expression */}
               {displayExpr.match(/[+\-×÷]/) && (
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  = ${evaluatedAmount.toFixed(2)}
+                  = {formatCurrency(evaluatedAmount, currency)}
                 </div>
               )}
             </div>

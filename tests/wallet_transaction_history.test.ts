@@ -74,19 +74,20 @@ describe('Separation of Organization and Wallet Transaction History', () => {
       expect(content).toContain('isWallet={false}')
     })
 
-    it('uses FilteredStatsCard with 3 cards (Total Amount, Transaction Count, Gross Profit)', () => {
+    it('uses FilteredStatsCard with 4 cards (Total Income, Total Expenses, Gross Profit, Transaction Count)', () => {
       expect(content).toContain('<FilteredStatsCard')
       const cardPath = path.join(
         ROOT,
         'src/app/(authenticated)/organizations/[id]/records/filtered-stats-card.tsx'
       )
       const cardContent = fs.readFileSync(cardPath, 'utf8')
-      expect(cardContent).toContain('label: "Total Amount"')
+      expect(cardContent).toContain('label: "Total Income"')
+      expect(cardContent).toContain('label: "Total Expenses"')
       expect(cardContent).toContain('label: "Transaction Count"')
       expect(cardContent).toContain('label: "Gross Profit"')
     })
 
-    it('uses TransactionsList with Member, Funded By, and Create Refund action', () => {
+    it('uses TransactionsList with Member, Funded By, and role-gated actions', () => {
       expect(content).toContain('<TransactionsList')
       const listPath = path.join(
         ROOT,
@@ -95,7 +96,7 @@ describe('Separation of Organization and Wallet Transaction History', () => {
       const listContent = fs.readFileSync(listPath, 'utf8')
       expect(listContent).toContain('th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Member</th>')
       expect(listContent).toContain('th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Funded By</th>')
-      expect(listContent).toContain('<DropdownMenuItem>Create Refund</DropdownMenuItem>')
+      expect(listContent).toContain('canManage')
     })
 
     it('does not render WalletFab or AddTransactionModal in organization mode', () => {

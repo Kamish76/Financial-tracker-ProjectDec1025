@@ -32,6 +32,7 @@ type TransactionRecord = {
 	type: string
 	category: string | null
 	description: string | null
+	occurred_at: string | null
 	created_at: string
 	is_initial: boolean
 	account_name?: string | null
@@ -76,6 +77,7 @@ type RawTransactionRow = {
 	amount: number | null
 	category: string | null
 	description: string | null
+	occurred_at?: string | null
 	created_at: string
 	is_initial?: boolean | null
 	account?: { name?: string | null } | null
@@ -129,7 +131,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 			getAccountsWithBalances(id, false),
 			adminClient
 				.from('transactions')
-				.select('id, type, amount, category, description, created_at, is_initial, account_id, transfer_to_account_id, account:wallet_accounts!account_id(id, name), transfer_to_account:wallet_accounts!transfer_to_account_id(id, name)')
+				.select('id, type, amount, category, description, occurred_at, created_at, is_initial, account_id, transfer_to_account_id, account:wallet_accounts!account_id(id, name), transfer_to_account:wallet_accounts!transfer_to_account_id(id, name)')
 				.eq('organization_id', id)
 				.order('created_at', { ascending: false })
 				.limit(10),
@@ -161,7 +163,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		const [transactionsResult, statsResult] = await Promise.all([
 			adminClient
 				.from('transactions')
-				.select('id, type, amount, category, description, created_at, is_initial, account_id, transfer_to_account_id, account:wallet_accounts!account_id(id, name), transfer_to_account:wallet_accounts!transfer_to_account_id(id, name)')
+				.select('id, type, amount, category, description, occurred_at, created_at, is_initial, account_id, transfer_to_account_id, account:wallet_accounts!account_id(id, name), transfer_to_account:wallet_accounts!transfer_to_account_id(id, name)')
 				.eq('organization_id', id)
 				.order('created_at', { ascending: false })
 				.limit(365),
@@ -175,6 +177,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 			id: tx.id,
 			amount: Number(tx.amount ?? 0),
 			type: tx.type,
+			occurred_at: tx.occurred_at ?? null,
 			created_at: tx.created_at,
 		}))
 	}
@@ -189,6 +192,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		amount: Number(row.amount ?? 0),
 		category: row.category,
 		description: row.description,
+		occurred_at: row.occurred_at ?? null,
 		created_at: row.created_at,
 		is_initial: row.is_initial ?? false,
 		account_name: row.account?.name ?? null,
@@ -434,7 +438,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 													<p className="text-sm text-foreground">{tx.description}</p>
 												)}
 												<p className="text-xs text-muted-foreground">
-													{dateFormatter.format(new Date(tx.created_at))}
+													{dateFormatter.format(new Date(tx.occurred_at || tx.created_at))}
 												</p>
 											</div>
 											<div className={`text-right text-base font-semibold ${
@@ -465,7 +469,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 					</CardContent>
 				</Card>
 			</div>
-			{isWallet && <WalletFab organizationId={id} accounts={accounts} />}
+			{isWallet && <WalletFab organizationId={id} accounts={accounts} currency={organization?.currency} />}
 		</div>
 	)
 }

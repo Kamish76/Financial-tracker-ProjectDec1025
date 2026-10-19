@@ -1,6 +1,6 @@
 'use server'
 
-import { requireUser, requireOrgMembership } from '@/lib/auth/guards'
+import { requireOrgMembership, authorizeOrgAction } from '@/lib/auth/guards'
 import { createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
@@ -129,10 +129,13 @@ export async function createWalletAccount(
   startingValue = 0
 ): Promise<{ success?: boolean; accountId?: string; error?: string }> {
   try {
-    const user = await requireUser()
-    const hasAccess = await verifyOrgAccess(organizationId, user.id)
-    if (!hasAccess) {
-      return { error: 'You do not have permission to create an account in this organization' }
+    const auth = await authorizeOrgAction(
+      organizationId,
+      ['owner', 'admin'],
+      'You do not have permission to create an account in this organization'
+    )
+    if ('error' in auth) {
+      return { error: auth.error }
     }
 
     const trimmedName = name.trim()
@@ -180,22 +183,25 @@ export async function updateWalletAccount(
   startingValue: number
 ): Promise<{ success?: boolean; error?: string }> {
   try {
-    const user = await requireUser()
     const adminClient = createAdminClient()
 
     const { data: account, error: fetchError } = await adminClient
       .from('wallet_accounts')
       .select('organization_id')
       .eq('id', accountId)
-      .single()
+      .maybeSingle()
 
     if (fetchError || !account) {
       return { error: 'Account not found' }
     }
 
-    const hasAccess = await verifyOrgAccess(account.organization_id, user.id)
-    if (!hasAccess) {
-      return { error: 'You do not have permission to modify this account' }
+    const auth = await authorizeOrgAction(
+      account.organization_id,
+      ['owner', 'admin'],
+      'You do not have permission to modify this account'
+    )
+    if ('error' in auth) {
+      return { error: auth.error }
     }
 
     const trimmedName = name.trim()
@@ -232,22 +238,25 @@ export async function toggleArchiveWalletAccount(
   isActive: boolean
 ): Promise<{ success?: boolean; error?: string }> {
   try {
-    const user = await requireUser()
     const adminClient = createAdminClient()
 
     const { data: account, error: fetchError } = await adminClient
       .from('wallet_accounts')
       .select('organization_id')
       .eq('id', accountId)
-      .single()
+      .maybeSingle()
 
     if (fetchError || !account) {
       return { error: 'Account not found' }
     }
 
-    const hasAccess = await verifyOrgAccess(account.organization_id, user.id)
-    if (!hasAccess) {
-      return { error: 'You do not have permission to modify this account' }
+    const auth = await authorizeOrgAction(
+      account.organization_id,
+      ['owner', 'admin'],
+      'You do not have permission to modify this account'
+    )
+    if ('error' in auth) {
+      return { error: auth.error }
     }
 
     const { error: updateError } = await adminClient
@@ -274,22 +283,25 @@ export async function deleteWalletAccount(
   accountId: string
 ): Promise<{ success?: boolean; error?: string }> {
   try {
-    const user = await requireUser()
     const adminClient = createAdminClient()
 
     const { data: account, error: fetchError } = await adminClient
       .from('wallet_accounts')
       .select('organization_id')
       .eq('id', accountId)
-      .single()
+      .maybeSingle()
 
     if (fetchError || !account) {
       return { error: 'Account not found' }
     }
 
-    const hasAccess = await verifyOrgAccess(account.organization_id, user.id)
-    if (!hasAccess) {
-      return { error: 'You do not have permission to delete this account' }
+    const auth = await authorizeOrgAction(
+      account.organization_id,
+      ['owner', 'admin'],
+      'You do not have permission to delete this account'
+    )
+    if ('error' in auth) {
+      return { error: auth.error }
     }
 
     const sanitizedAccountId = sanitizePostgrestFilter(accountId)

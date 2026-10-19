@@ -41,6 +41,7 @@ export interface TransactionRecord {
   funded_by_type: 'business' | 'personal' | null
   funded_by_user_id: string | null
   user_id: string
+  is_initial?: boolean | null
   occurred_at: string
   created_at: string
   updated_at: string | null
@@ -71,16 +72,6 @@ export interface TransactionRecord {
   } | null
 }
 
-type MemberRecord = {
-  user_id: string
-  role: string
-  user?: {
-    id: string
-    full_name: string | null
-    email: string | null
-  } | null
-}
-
 /**
  * Fetch transactions for an organization with filters and cursor-based pagination.
  * Uses nested joins to avoid N+1 profile and category lookups.
@@ -105,6 +96,7 @@ export async function fetchTransactionsWithFilters(
       funded_by_type,
       funded_by_user_id,
       user_id,
+      is_initial,
       account_id,
       transfer_to_account_id,
       occurred_at,
@@ -285,11 +277,11 @@ export async function fetchOrganizationMembers(organizationId: string) {
 
     if (missingNameIds.length > 0) {
       try {
-        const { data: authData } = await admin.auth.admin.listUsers()
-        if (authData?.users) {
-          for (const u of authData.users) {
-            if (missingNameIds.includes(u.id) && u.email) {
-              emailMap.set(u.id, u.email)
+        const { data: emailRows } = await admin.rpc('get_org_member_emails', { p_org_id: organizationId })
+        if (Array.isArray(emailRows)) {
+          for (const row of emailRows as Array<{ user_id: string; email: string }>) {
+            if (missingNameIds.includes(row.user_id) && row.email) {
+              emailMap.set(row.user_id, row.email)
             }
           }
         }

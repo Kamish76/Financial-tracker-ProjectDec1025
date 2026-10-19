@@ -11,7 +11,7 @@ type PageProps = {
 
 export default async function RecordsPage({ params }: PageProps) {
   const { id } = await params
-  await requireOrgMembership(id)
+  const { membership } = await requireOrgMembership(id)
 
   const adminClient = createAdminClient()
   const { data: organization } = await adminClient
@@ -24,7 +24,11 @@ export default async function RecordsPage({ params }: PageProps) {
 
   return (
     <div className="p-6">
-      <RecordsPageContent currency={organization?.currency} isWallet={isWallet} />
+      <RecordsPageContent
+        currency={organization?.currency}
+        isWallet={isWallet}
+        userRole={membership.role}
+      />
     </div>
   )
 }

@@ -69,7 +69,7 @@ export function WalletRecordsView({ currency }: WalletRecordsViewProps) {
   const [walletSummary, setWalletSummary] = useState<WalletSummary | null>(null)
   const [stats, setStats] = useState<FilteredStats | null>(null)
   const [isStatsLoading, setIsStatsLoading] = useState(true)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [hasMore, setHasMore] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
 
@@ -150,8 +150,6 @@ export function WalletRecordsView({ currency }: WalletRecordsViewProps) {
   // Load transactions and accurate server aggregates on filter change
   useEffect(() => {
     let ignore = false
-    setIsLoading(true)
-    setIsStatsLoading(true)
 
     const filters = getFilterParams()
 
@@ -474,12 +472,14 @@ export function WalletRecordsView({ currency }: WalletRecordsViewProps) {
           <WalletFab
             organizationId={organizationId}
             accounts={walletSummary.accounts}
+            currency={currency}
           />
           <AddTransactionModal
             isOpen={isAddModalOpen}
             onClose={() => setIsAddModalOpen(false)}
             organizationId={organizationId}
             accounts={walletSummary.accounts}
+            currency={currency}
             initialAccountId={selectedAccount !== "all" ? selectedAccount : undefined}
             onTransactionAdded={async () => {
               await refreshAll()

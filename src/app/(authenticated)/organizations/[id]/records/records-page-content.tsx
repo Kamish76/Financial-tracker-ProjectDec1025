@@ -9,23 +9,24 @@ import { fetchWalletSummary } from "./actions"
 type RecordsPageContentProps = {
   currency?: string
   isWallet?: boolean
+  userRole?: string
 }
 
-export function RecordsPageContent({ currency, isWallet: initialIsWallet }: RecordsPageContentProps) {
+export function RecordsPageContent({ currency, isWallet: initialIsWallet, userRole }: RecordsPageContentProps) {
   const params = useParams()
   const organizationId = params.id as string
-  const [isWallet, setIsWallet] = useState<boolean | undefined>(initialIsWallet)
+  const [fetchedIsWallet, setFetchedIsWallet] = useState<boolean | undefined>(undefined)
+  const isWallet = initialIsWallet ?? fetchedIsWallet
 
   useEffect(() => {
     if (initialIsWallet !== undefined) {
-      setIsWallet(initialIsWallet)
       return
     }
 
     let ignore = false
     void fetchWalletSummary(organizationId).then((res) => {
       if (!ignore) {
-        setIsWallet(Boolean(res?.isWallet))
+        setFetchedIsWallet(Boolean(res?.isWallet))
       }
     })
 
@@ -46,5 +47,5 @@ export function RecordsPageContent({ currency, isWallet: initialIsWallet }: Reco
     return <WalletRecordsView currency={currency} />
   }
 
-  return <OrganizationRecordsView currency={currency} />
+  return <OrganizationRecordsView currency={currency} userRole={userRole} />
 }

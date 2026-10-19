@@ -14,42 +14,26 @@ export default async function HoldingsPage({
 
   const admin = createAdminClient()
 
-  // Fetch organization stats
-  const stats = await getOrganizationStats(orgId)
-
-  // Fetch all members with emails
-  const { data: members, error: membersError } = await admin
-    .from("organization_members")
-    .select("user_id, role")
-    .eq("organization_id", orgId)
+  // Fetch organization stats and currency in parallel
+  const [stats, { data: organization }, { data: members, error: membersError }] = await Promise.all([
+    getOrganizationStats(orgId),
+    admin.from("organizations").select("currency").eq("id", orgId).maybeSingle(),
+    admin
+      .from("organization_members")
+      .select("user_id, role")
+      .eq("organization_id", orgId)
+      .eq("is_active", true),
+  ])
 
   if (membersError) {
     console.error("Failed to fetch members", membersError.message)
     redirect(`/organizations/${orgId}`)
   }
 
-  // Fetch emails
-  const userIds = members?.map((m) => m.user_id) || []
-  const emailByUserId: Record<string, string | null> = {}
-  
-  if (userIds.length > 0) {
-    try {
-      const { data: authUsers } = await admin
-        .from("auth.users")
-        .select("id, email")
-        .in("id", userIds)
-      for (const u of authUsers || []) {
-        emailByUserId[u.id] = u.email ?? null
-      }
-    } catch (e) {
-      console.error("Failed to fetch emails", e)
-    }
-  }
-
-  // Calculate baseline allocations per member
+  // Calculate baseline allocations per member (excluding Refund withdrawals)
   const { data: allocationRows } = await admin
     .from("transactions")
-    .select("type, amount, funded_by_user_id")
+    .select("type, amount, category, funded_by_user_id")
     .eq("organization_id", orgId)
     .in("type", ["held_allocate", "held_return"])
 
@@ -58,19 +42,20 @@ export default async function HoldingsPage({
     const uid = row.funded_by_user_id as string
     if (!uid) continue
     const amount = Number(row.amount ?? 0)
+    const isRefund = (row.category || "").toLowerCase() === "refund"
     if (row.type === "held_allocate") {
       baselineByUser[uid] = (baselineByUser[uid] ?? 0) + amount
-    } else if (row.type === "held_return") {
+    } else if (row.type === "held_return" && !isRefund) {
       baselineByUser[uid] = (baselineByUser[uid] ?? 0) - amount
     }
   }
 
-  // Merge member data
+  // Merge member data using emails already resolved in getOrganizationStats
   const membersWithData = (members || []).map((m) => {
     const memberBalance = stats.members.find((mb) => mb.user_id === m.user_id)
     return {
       user_id: m.user_id,
-      email: emailByUserId[m.user_id] ?? null,
+      email: memberBalance?.email ?? null,
       role: m.role,
       businessHeld: memberBalance?.businessHeld ?? 0,
       baseline: baselineByUser[m.user_id] ?? 0,
@@ -94,6 +79,7 @@ export default async function HoldingsPage({
         members={membersWithData}
         cashOnHand={stats.totals.cashOnHand}
         totalAllocated={totalAllocated}
+        currency={organization?.currency}
       />
     </div>
   )

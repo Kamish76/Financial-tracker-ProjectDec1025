@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { assertOrgRoleForAction } from '@/lib/auth/guards'
 import { revalidatePath } from 'next/cache'
+import { isWalletOrganization, encodeWalletDescription } from '@/lib/wallet'
+import { revalidateOrganizationSections } from '@/lib/revalidation'
 
 type RouteContext = {
 	params: Promise<{
@@ -33,12 +35,27 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 			return NextResponse.json({ error: 'Organization name is required' }, { status: 400 })
 		}
 
+		const { data: existingOrg } = await adminClient
+			.from('organizations')
+			.select('id, description')
+			.eq('id', id)
+			.maybeSingle()
+
+		if (!existingOrg) {
+			return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
+		}
+
+		const isWallet = isWalletOrganization(existingOrg.description)
+		const normalizedDescription = isWallet
+			? encodeWalletDescription(description)
+			: description?.trim() || null
+
 		// Update organization
 		const { data: updatedOrg, error: updateError } = await adminClient
 			.from('organizations')
 			.update({
 				name: name.trim(),
-				description: description?.trim() || null,
+				description: normalizedDescription,
 				currency: currency || 'USD',
 			})
 			.eq('id', id)
@@ -49,6 +66,9 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 			console.error('Error updating organization:', updateError)
 			return NextResponse.json({ error: 'Failed to update organization' }, { status: 500 })
 		}
+
+		revalidateOrganizationSections(id, ['settings', 'records', 'accounts', 'settings/holdings'])
+		revalidatePath('/', 'layout')
 
 		return NextResponse.json(updatedOrg)
 	} catch (error) {
@@ -80,7 +100,7 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
 			.from('organizations')
 			.select('owner_id')
 			.eq('id', id)
-			.single()
+			.maybeSingle()
 
 		if (!org || org.owner_id !== auth.user.id) {
 			return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })

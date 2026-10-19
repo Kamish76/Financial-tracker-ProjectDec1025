@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { stripWalletMarker } from '@/lib/wallet'
 
 type OrganizationWithRole = {
 	id: string
@@ -40,11 +41,22 @@ export function EditOrganizationDialog({
 }: EditOrganizationDialogProps) {
 	const router = useRouter()
 	const [name, setName] = useState(organization.name)
-	const [description, setDescription] = useState(organization.description || '')
+	const [description, setDescription] = useState(stripWalletMarker(organization.description) || '')
 	const [currency, setCurrency] = useState(organization.currency || 'USD')
 	const [error, setError] = useState<string | null>(null)
 	const [isPending, startTransition] = useTransition()
 	const isWallet = Boolean(organization.is_wallet)
+
+	const [prevOpen, setPrevOpen] = useState(open)
+	if (open !== prevOpen) {
+		setPrevOpen(open)
+		if (open) {
+			setName(organization.name)
+			setDescription(stripWalletMarker(organization.description) || '')
+			setCurrency(organization.currency || 'USD')
+			setError(null)
+		}
+	}
 
 	useEffect(() => {
 		if (!error) return

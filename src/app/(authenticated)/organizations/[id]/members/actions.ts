@@ -14,8 +14,11 @@ import type {
 import { generateInviteCode } from '@/lib/types/invite'
 import {
   revalidateOrganizationMembers,
+  revalidateOrganizationSections,
 } from '@/lib/revalidation'
-import { authorizeOrgAction } from '@/lib/auth/guards'
+import { authorizeOrgAction, requireOrgMembership } from '@/lib/auth/guards'
+import { isWalletOrganization } from '@/lib/wallet'
+import { revalidatePath } from 'next/cache'
 
 // ============================================================================
 // MEMBER ROLE MANAGEMENT
@@ -259,6 +262,16 @@ export async function createInviteCode(input: CreateInviteInput) {
 
     const adminClient = createAdminClient()
 
+    const { data: org } = await adminClient
+      .from('organizations')
+      .select('description')
+      .eq('id', organizationId)
+      .maybeSingle()
+
+    if (isWalletOrganization(org?.description)) {
+      return { error: 'Invite codes are not available for personal wallets.' }
+    }
+
     // Generate unique code
     let code = generateInviteCode()
     let attempts = 0
@@ -270,7 +283,7 @@ export async function createInviteCode(input: CreateInviteInput) {
         .from('invite_codes')
         .select('id')
         .eq('code', code)
-        .single()
+        .maybeSingle()
 
       if (!existing) break
 
@@ -396,6 +409,44 @@ export async function getInviteCodes(
     return { inviteCodes: inviteCodes as InviteCodeWithCreator[] }
   } catch (error) {
     console.error('Error in getInviteCodes:', error)
+    return { error: 'An unexpected error occurred' }
+  }
+}
+
+/**
+ * Leave an organization (self-deactivation for non-owner members)
+ * - Preserves all financial history and transactions
+ * - Owners cannot leave without transferring ownership first
+ */
+export async function leaveOrganization(organizationId: string) {
+  try {
+    const { user, membership } = await requireOrgMembership(organizationId)
+
+    if (membership.role === 'owner') {
+      return {
+        error: 'Organization owners cannot leave. Transfer ownership or delete the organization instead.',
+      }
+    }
+
+    const adminClient = createAdminClient()
+
+    const { error: deactivateError } = await adminClient.rpc('deactivate_member', {
+      p_organization_id: organizationId,
+      p_user_id: user.id,
+    })
+
+    if (deactivateError) {
+      console.error('Error leaving organization:', deactivateError)
+      return { error: 'Failed to leave organization' }
+    }
+
+    revalidateOrganizationSections(organizationId, ['members', 'settings'])
+    revalidatePath('/organizations')
+    revalidatePath('/', 'layout')
+
+    return { success: true }
+  } catch (error) {
+    console.error('Error in leaveOrganization:', error)
     return { error: 'An unexpected error occurred' }
   }
 }

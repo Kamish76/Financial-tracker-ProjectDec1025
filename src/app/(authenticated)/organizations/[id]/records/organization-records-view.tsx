@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Search, Filter, X, ArrowLeft } from "lucide-react"
-import { fetchTransactionsWithFilters, fetchOrganizationMembers, fetchOrganizationCategories } from "./actions"
+import {
+  fetchTransactionsWithFilters,
+  fetchTransactionAggregates,
+  fetchOrganizationMembers,
+  fetchOrganizationCategories,
+} from "./actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -17,7 +22,7 @@ import {
 import { TransactionsList } from "./transactions-list"
 import { TransactionEditDialog } from "./transaction-edit-dialog"
 import { FilteredStatsCard } from "./filtered-stats-card"
-import { calculateFilteredStats } from "@/lib/finance-client"
+import type { FilteredStats } from "@/lib/finance-client"
 import type { TransactionRecord } from "./utils"
 
 type Transaction = TransactionRecord
@@ -43,9 +48,10 @@ const TRANSACTION_TYPES = [
 
 type RecordsPageContentProps = {
   currency?: string
+  userRole?: string
 }
 
-export function OrganizationRecordsView({ currency }: RecordsPageContentProps) {
+export function OrganizationRecordsView({ currency, userRole }: RecordsPageContentProps) {
   const router = useRouter()
   const params = useParams()
   const organizationId = params.id as string
@@ -61,9 +67,11 @@ export function OrganizationRecordsView({ currency }: RecordsPageContentProps) {
 
   // Data states
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [stats, setStats] = useState<FilteredStats | null>(null)
+  const [isStatsLoading, setIsStatsLoading] = useState(true)
   const [members, setMembers] = useState<Member[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [hasMore, setHasMore] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
 
@@ -87,19 +95,24 @@ export function OrganizationRecordsView({ currency }: RecordsPageContentProps) {
     loadFilters()
   }, [organizationId])
 
+  const getFilterParams = useCallback(() => ({
+    searchText,
+    category: selectedCategory === 'all' ? undefined : selectedCategory,
+    type: selectedType === 'all' ? undefined : selectedType,
+    memberId: selectedMember === 'all' ? undefined : selectedMember,
+    fundedByType: fundedByType === 'all' ? undefined : (fundedByType as 'business' | 'personal'),
+    startDate,
+    endDate,
+  }), [searchText, selectedCategory, selectedType, selectedMember, fundedByType, startDate, endDate])
+
   // Load transactions
   const loadTransactions = useCallback(
     async (append = false) => {
       setIsLoading(true)
+      const filters = getFilterParams()
 
       const result = await fetchTransactionsWithFilters(organizationId, {
-        searchText,
-        category: selectedCategory === 'all' ? undefined : selectedCategory,
-        type: selectedType === 'all' ? undefined : selectedType,
-        memberId: selectedMember === 'all' ? undefined : selectedMember,
-        fundedByType: fundedByType === 'all' ? undefined : (fundedByType as 'business' | 'personal'),
-        startDate,
-        endDate,
+        ...filters,
         cursor: append ? (nextCursor ?? undefined) : undefined,
         limit: 20,
       })
@@ -108,31 +121,24 @@ export function OrganizationRecordsView({ currency }: RecordsPageContentProps) {
       setNextCursor(result.nextCursor)
       setHasMore(result.hasMore)
       setIsLoading(false)
+
+      if (!append) {
+        setIsStatsLoading(true)
+        const aggregates = await fetchTransactionAggregates(organizationId, filters)
+        setStats(aggregates)
+        setIsStatsLoading(false)
+      }
     },
-    [
-      organizationId,
-      searchText,
-      selectedCategory,
-      selectedType,
-      selectedMember,
-      fundedByType,
-      startDate,
-      endDate,
-      nextCursor,
-    ]
+    [organizationId, getFilterParams, nextCursor]
   )
 
-  // Load transactions on filter change
+  // Load transactions and server aggregates on filter change
   useEffect(() => {
     let ignore = false
+    const filters = getFilterParams()
+
     void fetchTransactionsWithFilters(organizationId, {
-      searchText,
-      category: selectedCategory === 'all' ? undefined : selectedCategory,
-      type: selectedType === 'all' ? undefined : selectedType,
-      memberId: selectedMember === 'all' ? undefined : selectedMember,
-      fundedByType: fundedByType === 'all' ? undefined : (fundedByType as 'business' | 'personal'),
-      startDate,
-      endDate,
+      ...filters,
       limit: 20,
     }).then((result) => {
       if (!ignore) {
@@ -143,19 +149,17 @@ export function OrganizationRecordsView({ currency }: RecordsPageContentProps) {
       }
     })
 
+    void fetchTransactionAggregates(organizationId, filters).then((aggregates) => {
+      if (!ignore) {
+        setStats(aggregates)
+        setIsStatsLoading(false)
+      }
+    })
+
     return () => {
       ignore = true
     }
-  }, [
-    organizationId,
-    searchText,
-    selectedCategory,
-    selectedType,
-    selectedMember,
-    fundedByType,
-    startDate,
-    endDate,
-  ])
+  }, [organizationId, getFilterParams])
 
   // Infinite scroll observer
   useEffect(() => {
@@ -261,8 +265,8 @@ export function OrganizationRecordsView({ currency }: RecordsPageContentProps) {
 
       {/* Filtered Stats Card */}
       <FilteredStatsCard
-        stats={calculateFilteredStats(transactions)}
-        isLoading={isLoading && transactions.length === 0}
+        stats={stats}
+        isLoading={isStatsLoading && !stats}
         currency={currency}
       />
 
@@ -408,6 +412,7 @@ export function OrganizationRecordsView({ currency }: RecordsPageContentProps) {
         isLoading={isLoading}
         isWallet={false}
         currency={currency}
+        userRole={userRole}
         onEdit={handleEdit}
         onDelete={handleEditSave}
       />

@@ -21,10 +21,11 @@ import {
 
 type EditAccountSheetProps = {
   account: WalletAccount
+  currency?: string
   onSuccess?: () => void
 }
 
-export function EditAccountSheet({ account, onSuccess }: EditAccountSheetProps) {
+export function EditAccountSheet({ account, currency, onSuccess }: EditAccountSheetProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(account.name)
@@ -107,7 +108,7 @@ export function EditAccountSheet({ account, onSuccess }: EditAccountSheetProps) 
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor={`edit-starting-value-${account.id}`}>Starting Value ($)</Label>
+                <Label htmlFor={`edit-starting-value-${account.id}`}>Starting Value ({currency || 'USD'})</Label>
                 <Input
                   id={`edit-starting-value-${account.id}`}
                   type="number"

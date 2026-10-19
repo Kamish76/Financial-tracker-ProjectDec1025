@@ -8,9 +8,10 @@ import { AddTransactionModal } from './add-transaction-modal'
 type WalletFabProps = {
   organizationId: string
   accounts: (WalletAccount | AccountWithBalance)[]
+  currency?: string
 }
 
-export function WalletFab({ organizationId, accounts }: WalletFabProps) {
+export function WalletFab({ organizationId, accounts, currency }: WalletFabProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   if (!accounts || accounts.length === 0) {
@@ -35,6 +36,7 @@ export function WalletFab({ organizationId, accounts }: WalletFabProps) {
         onClose={() => setIsModalOpen(false)}
         organizationId={organizationId}
         accounts={accounts}
+        currency={currency}
       />
     </>
   )

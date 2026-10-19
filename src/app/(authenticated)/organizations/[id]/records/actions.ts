@@ -11,7 +11,9 @@ import type { FilteredStats } from '@/lib/finance-client'
 import { getAccountsWithBalances } from '@/lib/wallet-accounts'
 import { createAdminClient } from '@/lib/supabase/server'
 import { isWalletOrganization } from '@/lib/wallet'
-import { requireOrgMembership } from '@/lib/auth/guards'
+import { requireOrgMembership, authorizeOrgAction } from '@/lib/auth/guards'
+import { getOrCreateCategory } from '@/lib/categories'
+import { revalidateOrganizationSections } from '@/lib/revalidation'
 
 export async function fetchTransactionAggregates(
 	organizationId: string,
@@ -79,18 +81,39 @@ export async function createTransaction(
 		return { error: 'Organization is required' }
 	}
 
-	const { user } = await requireOrgMembership(organizationId)
+	const auth = await authorizeOrgAction(
+		organizationId,
+		['owner', 'admin'],
+		"You don't have permission to create transactions"
+	)
+
+	if ('error' in auth) {
+		return auth
+	}
+
+	const { user } = auth
 	const payload = (typeof organizationIdOrInput === 'object' ? organizationIdOrInput : data || {}) as Record<string, unknown>
 	const admin = createAdminClient()
+
+	const txType = String(payload.type ?? 'expense_business')
+	const categoryStr = payload.category ? String(payload.category).trim() : null
+	let categoryId = (payload.categoryId || payload.category_id || null) as string | null
+	if (!categoryId && categoryStr) {
+		categoryId = await getOrCreateCategory(
+			organizationId,
+			categoryStr,
+			txType === 'income' ? 'income' : 'expense'
+		)
+	}
 
 	const insertPayload = {
 		organization_id: organizationId,
 		user_id: user.id,
 		amount: Number(payload.amount ?? 0),
-		type: String(payload.type ?? 'expense_business'),
+		type: txType,
 		description: payload.description ? String(payload.description).trim() : null,
-		category: payload.category ? String(payload.category).trim() : null,
-		category_id: (payload.categoryId || payload.category_id || null) as string | null,
+		category: categoryStr,
+		category_id: categoryId,
 		account_id: (payload.accountId || payload.account_id || null) as string | null,
 		transfer_to_account_id: (payload.transferToAccountId || payload.transfer_to_account_id || null) as string | null,
 		occurred_at: payload.occurredAt
@@ -112,6 +135,9 @@ export async function createTransaction(
 	if (error) {
 		return { error: error.message }
 	}
+
+	revalidateOrganizationSections(organizationId, ['records', 'settings', 'accounts', 'settings/holdings'])
+
 	return { success: true, transaction: created }
 }
 
@@ -138,19 +164,33 @@ export async function updateTransaction(
 		return { error: 'Organization ID and Transaction ID are required' }
 	}
 
-	const { user } = await requireOrgMembership(organizationId)
+	const auth = await authorizeOrgAction(
+		organizationId,
+		['owner', 'admin'],
+		"You don't have permission to edit transactions"
+	)
+
+	if ('error' in auth) {
+		return auth
+	}
+
+	const { user, membership } = auth
 	const admin = createAdminClient()
 
 	// Verify transaction exists and belongs to organization
 	const { data: existingTx, error: txError } = await admin
 		.from('transactions')
-		.select('id, organization_id')
+		.select('id, organization_id, is_initial, type')
 		.eq('id', transactionId)
 		.eq('organization_id', organizationId)
 		.maybeSingle()
 
 	if (txError || !existingTx) {
 		return { error: 'Transaction not found or does not belong to this organization' }
+	}
+
+	if (existingTx.is_initial && membership.role !== 'owner') {
+		return { error: 'Only organization owners can edit initial transactions' }
 	}
 
 	const updatePayload: Record<string, unknown> = {
@@ -163,7 +203,17 @@ export async function updateTransaction(
 		updatePayload.description = updateData.description ? String(updateData.description).trim() : null
 	}
 	if (updateData.category !== undefined) {
-		updatePayload.category = updateData.category ? String(updateData.category).trim() : null
+		const categoryStr = updateData.category ? String(updateData.category).trim() : null
+		updatePayload.category = categoryStr
+		if (updateData.category_id === undefined && updateData.categoryId === undefined) {
+			updatePayload.category_id = categoryStr
+				? await getOrCreateCategory(
+						organizationId,
+						categoryStr,
+						existingTx.type === 'income' ? 'income' : 'expense'
+					)
+				: null
+		}
 	}
 	if (updateData.category_id !== undefined || updateData.categoryId !== undefined) {
 		updatePayload.category_id = (updateData.category_id ?? updateData.categoryId) as string | null
@@ -190,6 +240,8 @@ export async function updateTransaction(
 		return { error: updateError.message }
 	}
 
+	revalidateOrganizationSections(organizationId, ['records', 'settings', 'accounts', 'settings/holdings'])
+
 	return { success: true, transaction: updated }
 }
 
@@ -212,19 +264,33 @@ export async function deleteTransaction(
 		return { error: 'Organization ID and Transaction ID are required' }
 	}
 
-	await requireOrgMembership(organizationId)
+	const auth = await authorizeOrgAction(
+		organizationId,
+		['owner', 'admin'],
+		"You don't have permission to delete transactions"
+	)
+
+	if ('error' in auth) {
+		return auth
+	}
+
+	const { membership } = auth
 	const admin = createAdminClient()
 
 	// Verify transaction exists and belongs to organization
 	const { data: existingTx, error: txError } = await admin
 		.from('transactions')
-		.select('id, organization_id')
+		.select('id, organization_id, is_initial')
 		.eq('id', transactionId)
 		.eq('organization_id', organizationId)
 		.maybeSingle()
 
 	if (txError || !existingTx) {
 		return { error: 'Transaction not found or does not belong to this organization' }
+	}
+
+	if (existingTx.is_initial && membership.role !== 'owner') {
+		return { error: 'Only organization owners can delete initial transactions' }
 	}
 
 	const { error: deleteError } = await admin
@@ -236,6 +302,8 @@ export async function deleteTransaction(
 	if (deleteError) {
 		return { error: deleteError.message }
 	}
+
+	revalidateOrganizationSections(organizationId, ['records', 'settings', 'accounts', 'settings/holdings'])
 
 	return { success: true }
 }

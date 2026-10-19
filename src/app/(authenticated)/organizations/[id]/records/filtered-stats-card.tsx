@@ -13,6 +13,7 @@ const TRANSACTION_TYPE_LABELS: Record<string, string> = {
   expense_personal: "Personal Expenses",
   held_allocate: "Held Allocations",
   held_return: "Held Returns",
+  transfer: "Transfers",
 }
 
 type FilteredStatsCardProps = {
@@ -27,8 +28,8 @@ export function FilteredStatsCard({ stats, isLoading = false, currency }: Filter
   if (isLoading) {
     return (
       <div className="sticky top-0 z-10 mb-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 py-2">
-        <div className="grid gap-4 sm:grid-cols-3 animate-pulse">
-          {[1, 2, 3].map((i) => (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 animate-pulse">
+          {[1, 2, 3, 4].map((i) => (
             <Card key={i}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">—</CardTitle>
@@ -57,26 +58,35 @@ export function FilteredStatsCard({ stats, isLoading = false, currency }: Filter
     )
   }
 
+  const totalIncome = stats.byType.income || 0
+  const totalExpenses = (stats.byType.expense_business || 0) + (stats.byType.expense_personal || 0)
+
   const mainCards = [
     {
-      label: "Total Amount",
-      value: formatCurrency(stats.totalAmount, currency),
+      label: "Total Income",
+      value: formatCurrency(totalIncome, currency),
+      highlight: "text-emerald-600 dark:text-emerald-400",
     },
     {
-      label: "Transaction Count",
-      value: stats.count.toString(),
+      label: "Total Expenses",
+      value: formatCurrency(totalExpenses, currency),
+      highlight: "text-rose-600 dark:text-rose-400",
     },
     {
       label: "Gross Profit",
       value: formatCurrency(stats.grossProfit, currency),
       highlight: stats.grossProfit > 0 ? "text-green-600" : stats.grossProfit < 0 ? "text-red-600" : "",
     },
+    {
+      label: "Transaction Count",
+      value: stats.count.toString(),
+    },
   ]
 
   return (
     <div className="sticky top-0 z-10 mb-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 py-2 space-y-3">
       {/* Main stats cards */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {mainCards.map((card) => (
           <Card key={card.label}>
             <CardHeader className="pb-2">
@@ -114,11 +124,11 @@ export function FilteredStatsCard({ stats, isLoading = false, currency }: Filter
 
         {showBreakdown && (
           <div className="mt-3 rounded-lg border p-4 bg-muted/50">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
               {Object.entries(stats.byType).map(([type, amount]) => (
                 <div key={type} className="space-y-1">
                   <p className="text-xs text-muted-foreground font-medium">
-                    {TRANSACTION_TYPE_LABELS[type]}
+                    {TRANSACTION_TYPE_LABELS[type] || type}
                   </p>
                   <p className="text-sm font-semibold">{formatCurrency(amount, currency)}</p>
                 </div>
