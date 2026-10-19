@@ -237,5 +237,32 @@ describe('Separation of Organization and Wallet Transaction History', () => {
       expect(monthlyStats.net).toBe(1400)
       expect(monthlyStats.transactionCount).toBe(3)
     })
+
+    it('enforces aggregate query ceiling limit of 10000 rows in utils.ts', () => {
+      const utilsPath = path.join(
+        ROOT,
+        'src/app/(authenticated)/organizations/[id]/records/utils.ts'
+      )
+      const content = fs.readFileSync(utilsPath, 'utf8')
+      expect(content).toContain('.limit(10000)')
+    })
+  })
+
+  describe('8. Category Authorization Guards & Case-Insensitive Invariants', () => {
+    it('verifies categories.ts checks authorizeOrgAction return value on all mutations', () => {
+      const categoriesPath = path.join(ROOT, 'src/lib/categories.ts')
+      const content = fs.readFileSync(categoriesPath, 'utf8')
+      expect(content).toContain("const auth = await authorizeOrgAction(")
+      expect(content).toContain("if ('error' in auth) {")
+      // Ensure no dangling unassigned authorizeOrgAction calls remain
+      expect(content).not.toMatch(/^\s*await authorizeOrgAction\(/m)
+    })
+
+    it('verifies finance.ts cash-on-hand deduction handles refund case-insensitively', () => {
+      const financePath = path.join(ROOT, 'src/lib/finance.ts')
+      const content = fs.readFileSync(financePath, 'utf8')
+      expect(content).toContain("category.toLowerCase() === 'refund'")
+    })
   })
 })
+

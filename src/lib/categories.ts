@@ -204,11 +204,14 @@ export async function addOrganizationCategory(
   type: 'income' | 'expense'
 ): Promise<{ success?: boolean; error?: string; category?: CategoryItem }> {
   try {
-    await authorizeOrgAction(
+    const auth = await authorizeOrgAction(
       organizationId,
       ['owner', 'admin'],
       'Only owners and admins can add categories.'
     )
+    if ('error' in auth) {
+      return { error: auth.error }
+    }
     const admin = createAdminClient()
 
     if (!name?.trim()) {
@@ -263,11 +266,14 @@ export async function updateOrganizationCategory(
   newName: string
 ): Promise<{ success?: boolean; error?: string }> {
   try {
-    await authorizeOrgAction(
+    const auth = await authorizeOrgAction(
       organizationId,
       ['owner', 'admin'],
       'Only owners and admins can update categories.'
     )
+    if ('error' in auth) {
+      return { error: auth.error }
+    }
     const admin = createAdminClient()
 
     if (!newName?.trim()) {
@@ -304,11 +310,14 @@ export async function deleteOrganizationCategory(
   categoryId: string
 ): Promise<{ success?: boolean; error?: string }> {
   try {
-    await authorizeOrgAction(
+    const auth = await authorizeOrgAction(
       organizationId,
       ['owner', 'admin'],
       'Only owners and admins can delete categories.'
     )
+    if ('error' in auth) {
+      return { error: auth.error }
+    }
     const admin = createAdminClient()
 
     const { error } = await admin

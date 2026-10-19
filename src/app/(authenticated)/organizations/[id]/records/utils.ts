@@ -393,6 +393,7 @@ export async function fetchTransactionAggregates(
     .from('transactions')
     .select(selectColumns)
     .eq('organization_id', organizationId)
+    .limit(10000)
 
   if (filters.searchText) {
     const sanitizedSearch = sanitizePostgrestFilter(filters.searchText)
