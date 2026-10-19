@@ -39,7 +39,7 @@ export async function createOrganization(
     .from('profiles')
     .select('id')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
 
   console.log('[CREATE_ORG] Profile check:', { profile, error: profileSelectError?.message })
 

@@ -20,39 +20,42 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 		.from('organizations')
 		.select('id, name, description, owner_id, created_at, currency')
 		.eq('id', id)
-		.single()
+		.maybeSingle()
 
 	if (!organization) {
 		notFound()
 	}
 
-	// Get member count
+	// Get active member count
 	const { count: memberCount } = await adminClient
 		.from('organization_members')
 		.select('*', { count: 'exact', head: true })
 		.eq('organization_id', id)
+		.eq('is_active', true)
 
-	// Fetch all members for transfer ownership dropdown
+	// Fetch all active members for transfer ownership dropdown & transaction sheets
 	const { data: members, error: membersError } = await adminClient
 		.from('organization_members')
 		.select('user_id, role, created_at')
 		.eq('organization_id', id)
+		.eq('is_active', true)
 		.order('created_at', { ascending: true })
 
 	if (membersError) {
 		console.error('[SETTINGS_PAGE] Members query error:', membersError)
 	}
 
-	console.log('[SETTINGS_PAGE] Members fetched:', members?.length ?? 0, 'error:', membersError?.message)
-
-	// Fetch profiles separately for all members
+	// Fetch profiles and emails for all active members
 	let profilesMap: Record<string, { full_name: string | null; email: string | null }> = {}
 	if (members && members.length > 0) {
 		const userIds = (members as Array<{ user_id: string }>).map((m) => m.user_id)
-		const { data: profiles } = await adminClient
-			.from('profiles')
-			.select('id, full_name, avatar_url')
-			.in('id', userIds)
+		const [{ data: profiles }, { data: emailRows, error: rpcError }] = await Promise.all([
+			adminClient
+				.from('profiles')
+				.select('id, full_name, avatar_url')
+				.in('id', userIds),
+			adminClient.rpc('get_org_member_emails', { p_org_id: id }),
+		])
 
 		if (profiles) {
 			profilesMap = profiles.reduce(
@@ -60,27 +63,18 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 					...acc,
 					[p.id]: { full_name: p.full_name, email: null },
 				}),
-				{}
+				{} as Record<string, { full_name: string | null; email: string | null }>
 			)
 		}
 
-		// Fallback: if any member has no email in profiles, try to fetch from auth
-		const missingEmails = userIds.filter((uid) => !profilesMap[uid]?.email)
-		if (missingEmails.length > 0) {
-			try {
-				const { data, error } = await adminClient.auth.admin.listUsers()
-				if (!error && data?.users) {
-					for (const authUser of data.users) {
-						if (missingEmails.includes(authUser.id) && authUser.email) {
-							profilesMap[authUser.id] = {
-								full_name: profilesMap[authUser.id]?.full_name || null,
-								email: authUser.email,
-							}
-						}
+		if (!rpcError && Array.isArray(emailRows)) {
+			for (const row of emailRows as Array<{ user_id: string; email: string | null }>) {
+				if (row.user_id && row.email) {
+					profilesMap[row.user_id] = {
+						full_name: profilesMap[row.user_id]?.full_name || null,
+						email: row.email,
 					}
 				}
-			} catch (e) {
-				console.error('[SETTINGS_PAGE] Failed to fetch auth users:', e)
 			}
 		}
 	}
@@ -90,7 +84,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 		.from('profiles')
 		.select('full_name, avatar_url')
 		.eq('id', organization.owner_id)
-		.single()
+		.maybeSingle()
 
 	const organizationWithRole = {
 		...organization,

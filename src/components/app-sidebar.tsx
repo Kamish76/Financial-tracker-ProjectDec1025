@@ -66,22 +66,26 @@ export function AppSidebar({ walletId }: { walletId?: string | null } = {}) {
   }
 
   useEffect(() => {
-    const stored = window.localStorage.getItem('orgfinance-theme') as 'light' | 'dark' | null
-    const current = document.documentElement.dataset.theme as 'light' | 'dark' | undefined
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    const initialTheme =
-      stored === 'light' || stored === 'dark'
-        ? stored
-        : current === 'light' || current === 'dark'
-        ? current
-        : prefersDark
-        ? 'dark'
-        : 'light'
-    requestAnimationFrame(() => {
-      setTheme(initialTheme)
-      document.documentElement.dataset.theme = initialTheme
-      document.documentElement.classList.toggle('dark', initialTheme === 'dark')
-    })
+    const syncTheme = () => {
+      const stored = window.localStorage.getItem('orgfinance-theme') as 'light' | 'dark' | null
+      const current = document.documentElement.dataset.theme as 'light' | 'dark' | undefined
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      const resolvedTheme =
+        stored === 'light' || stored === 'dark'
+          ? stored
+          : current === 'light' || current === 'dark'
+          ? current
+          : prefersDark
+          ? 'dark'
+          : 'light'
+      setTheme(resolvedTheme)
+      document.documentElement.dataset.theme = resolvedTheme
+      document.documentElement.classList.toggle('dark', resolvedTheme === 'dark')
+    }
+
+    requestAnimationFrame(syncTheme)
+    window.addEventListener('storage', syncTheme)
+    return () => window.removeEventListener('storage', syncTheme)
   }, [])
 
   const handleLogout = async () => {
@@ -99,6 +103,7 @@ export function AppSidebar({ walletId }: { walletId?: string | null } = {}) {
     document.documentElement.classList.toggle('dark', newTheme === 'dark')
     window.localStorage.setItem('orgfinance-theme', newTheme)
     setTheme(newTheme)
+    window.dispatchEvent(new Event('storage'))
   }
 
   return (

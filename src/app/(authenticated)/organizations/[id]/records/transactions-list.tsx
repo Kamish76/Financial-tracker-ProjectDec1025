@@ -31,6 +31,7 @@ type TransactionsListProps = {
   isLoading: boolean
   isWallet?: boolean
   currency?: string
+  userRole?: string
   onEdit: (transaction: Transaction) => void
   onDelete: () => void
 }
@@ -79,12 +80,16 @@ export function TransactionsList({
   isLoading,
   isWallet,
   currency,
+  userRole,
   onEdit,
   onDelete,
 }: TransactionsListProps) {
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null)
   const [isDeleting, startTransition] = useTransition()
   const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  const canManage = isWallet || !userRole || userRole === "owner" || userRole === "admin"
+  const isOwner = isWallet || !userRole || userRole === "owner"
 
   const confirmDelete = () => {
     if (!transactionToDelete) return
@@ -137,11 +142,15 @@ export function TransactionsList({
                 <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Funded By</th>
               )}
               <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Amount</th>
-              <th className="px-6 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
+              {canManage && (
+                <th className="px-6 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {transactions.map((tx) => (
+            {transactions.map((tx) => {
+              const canMutateRow = canManage && (!tx.is_initial || isOwner)
+              return (
               <tr
                 key={tx.id}
                 className={`${getTransactionColor()} transition-colors`}
@@ -188,35 +197,39 @@ export function TransactionsList({
                     {formatCurrency(tx.amount, currency)}
                   </div>
                 </td>
-                <td className="px-6 py-4 text-sm text-center">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => onEdit(tx)}>
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={() => setTransactionToDelete(tx)}
-                        className="text-red-600 focus:text-red-600 focus:bg-red-100 dark:focus:bg-red-950"
-                      >
-                        Delete
-                      </DropdownMenuItem>
-                      {(tx.type === "expense_business" || tx.type === "expense_personal") && (
-                        <DropdownMenuItem>Create Refund</DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </td>
+                {canManage && (
+                  <td className="px-6 py-4 text-sm text-center">
+                    {canMutateRow ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => onEdit(tx)}>
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => setTransactionToDelete(tx)}
+                            className="text-red-600 focus:text-red-600 focus:bg-red-100 dark:focus:bg-red-950"
+                          >
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Owner only</span>
+                    )}
+                  </td>
+                )}
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>

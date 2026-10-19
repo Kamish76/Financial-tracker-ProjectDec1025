@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createAdminClient } from '@/lib/supabase/server'
+import { calculateFilteredStats, type FilteredStats } from '@/lib/finance-client'
 
 export interface TransactionFilters {
   searchText?: string
@@ -12,6 +13,7 @@ export interface TransactionFilters {
   endDate?: string
   cursor?: string
   limit?: number
+  accountId?: string
 }
 
 export interface FetchTransactionsResult {
@@ -39,6 +41,7 @@ export interface TransactionRecord {
   funded_by_type: 'business' | 'personal' | null
   funded_by_user_id: string | null
   user_id: string
+  is_initial?: boolean | null
   occurred_at: string
   created_at: string
   updated_at: string | null
@@ -69,16 +72,6 @@ export interface TransactionRecord {
   } | null
 }
 
-type MemberRecord = {
-  user_id: string
-  role: string
-  user?: {
-    id: string
-    full_name: string | null
-    email: string | null
-  } | null
-}
-
 /**
  * Fetch transactions for an organization with filters and cursor-based pagination.
  * Uses nested joins to avoid N+1 profile and category lookups.
@@ -103,6 +96,7 @@ export async function fetchTransactionsWithFilters(
       funded_by_type,
       funded_by_user_id,
       user_id,
+      is_initial,
       account_id,
       transfer_to_account_id,
       occurred_at,
@@ -127,16 +121,33 @@ export async function fetchTransactionsWithFilters(
     }
   }
 
-  if (filters.category) {
-    query = query.eq('category_ref.normalized_name', filters.category)
+  if (filters.category && filters.category !== 'all') {
+    const sanitizedCategory = sanitizePostgrestFilter(filters.category)
+    if (sanitizedCategory) {
+      query = query.or(`category.eq.${sanitizedCategory},category_ref.normalized_name.eq.${sanitizedCategory}`)
+    }
   }
 
   if (filters.type) {
-    query = query.eq('type', filters.type)
+    if (filters.type === 'expense') {
+      query = query.or('type.eq.expense_personal,type.eq.expense_business,type.eq.expense')
+    } else {
+      query = query.eq('type', filters.type)
+    }
   }
 
-  if (filters.memberId) {
-    query = query.eq('funded_by_user_id', filters.memberId)
+  if (filters.accountId && filters.accountId !== 'all') {
+    const sanitizedAccountId = sanitizePostgrestFilter(filters.accountId)
+    if (sanitizedAccountId) {
+      query = query.or(`account_id.eq.${sanitizedAccountId},transfer_to_account_id.eq.${sanitizedAccountId}`)
+    }
+  }
+
+  if (filters.memberId && filters.memberId !== 'all') {
+    const sanitizedMemberId = sanitizePostgrestFilter(filters.memberId)
+    if (sanitizedMemberId) {
+      query = query.or(`funded_by_user_id.eq.${sanitizedMemberId},user_id.eq.${sanitizedMemberId}`)
+    }
   }
 
   if (filters.fundedByType) {
@@ -147,7 +158,9 @@ export async function fetchTransactionsWithFilters(
     query = query.gte('occurred_at', new Date(filters.startDate).toISOString())
   }
   if (filters.endDate) {
-    query = query.lte('occurred_at', new Date(filters.endDate).toISOString())
+    const end = new Date(filters.endDate)
+    end.setHours(23, 59, 59, 999)
+    query = query.lte('occurred_at', end.toISOString())
   }
 
   if (filters.cursor) {
@@ -176,31 +189,131 @@ export async function fetchTransactionsWithFilters(
 
 /**
  * Fetch all unique members for an organization (for filtering).
+ * Safely resolves organization owner, active members, and historical transaction funders
+ * without relying on ambiguous PostgREST nested profile joins.
  */
 export async function fetchOrganizationMembers(organizationId: string) {
   const admin = createAdminClient()
 
-  const { data, error } = await admin
-    .from('organization_members')
-    .select(
-      `
-      user_id,
-      role,
-      user:profiles(id, full_name, avatar_url)
-      `
-    )
-    .eq('organization_id', organizationId)
+  try {
+    // 1. Fetch organization owner
+    const { data: org, error: orgError } = await admin
+      .from('organizations')
+      .select('owner_id')
+      .eq('id', organizationId)
+      .maybeSingle()
 
-  if (error) {
-    console.error('[fetchOrganizationMembers] Error:', error.message)
+    if (orgError) {
+      console.error('[fetchOrganizationMembers] Error fetching organization:', orgError.message)
+    }
+
+    // 2. Fetch organization members
+    const { data: members, error: membersError } = await admin
+      .from('organization_members')
+      .select('user_id, role, is_active')
+      .eq('organization_id', organizationId)
+
+    if (membersError) {
+      console.error('[fetchOrganizationMembers] Error fetching organization_members:', membersError.message)
+    }
+
+    // 3. Fetch distinct funded_by_user_id and user_id from transactions to ensure any past contributor is included
+    const { data: txUsers, error: txError } = await admin
+      .from('transactions')
+      .select('funded_by_user_id, user_id')
+      .eq('organization_id', organizationId)
+
+    if (txError) {
+      console.error('[fetchOrganizationMembers] Error fetching transaction users:', txError.message)
+    }
+
+    // 4. Map user IDs to their respective roles
+    const userRoleMap = new Map<string, string>()
+
+    if (org?.owner_id) {
+      userRoleMap.set(org.owner_id, 'owner')
+    }
+
+    for (const m of members || []) {
+      if (m.is_active !== false) {
+        if (!userRoleMap.has(m.user_id) || m.role === 'owner') {
+          userRoleMap.set(m.user_id, m.role || 'member')
+        }
+      }
+    }
+
+    for (const tx of txUsers || []) {
+      if (tx.funded_by_user_id && !userRoleMap.has(tx.funded_by_user_id)) {
+        userRoleMap.set(tx.funded_by_user_id, 'member')
+      }
+      if (tx.user_id && !userRoleMap.has(tx.user_id)) {
+        userRoleMap.set(tx.user_id, 'member')
+      }
+    }
+
+    const userIds = Array.from(userRoleMap.keys())
+    if (userIds.length === 0) {
+      return []
+    }
+
+    // 5. Fetch profiles by ID
+    const { data: profiles, error: profilesError } = await admin
+      .from('profiles')
+      .select('id, full_name, avatar_url')
+      .in('id', userIds)
+
+    if (profilesError) {
+      console.error('[fetchOrganizationMembers] Error fetching profiles:', profilesError.message)
+    }
+
+    const profileMap = new Map<string, { full_name: string | null }>()
+    for (const p of profiles || []) {
+      profileMap.set(p.id, { full_name: p.full_name })
+    }
+
+    // 6. Look up auth email fallback for any user missing a profile full_name
+    const missingNameIds = userIds.filter((id) => !profileMap.get(id)?.full_name)
+    const emailMap = new Map<string, string>()
+
+    if (missingNameIds.length > 0) {
+      try {
+        const { data: emailRows } = await admin.rpc('get_org_member_emails', { p_org_id: organizationId })
+        if (Array.isArray(emailRows)) {
+          for (const row of emailRows as Array<{ user_id: string; email: string }>) {
+            if (missingNameIds.includes(row.user_id) && row.email) {
+              emailMap.set(row.user_id, row.email)
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[fetchOrganizationMembers] Auth user list fallback failed:', e)
+      }
+    }
+
+    // 7. Format members
+    const memberList = userIds.map((userId) => {
+      const role = userRoleMap.get(userId) || 'member'
+      const fullName = profileMap.get(userId)?.full_name
+      const email = emailMap.get(userId)
+      const name = fullName || email || (role === 'owner' ? 'Owner' : `Member (${userId.slice(0, 6)})`)
+
+      return {
+        id: userId,
+        name,
+        role,
+      }
+    })
+
+    // Sort: owner first, then alphabetically
+    return memberList.sort((a, b) => {
+      if (a.role === 'owner' && b.role !== 'owner') return -1
+      if (b.role === 'owner' && a.role !== 'owner') return 1
+      return a.name.localeCompare(b.name)
+    })
+  } catch (err) {
+    console.error('[fetchOrganizationMembers] Unexpected error:', err)
     return []
   }
-
-  return ((data || []) as unknown as MemberRecord[]).map((member) => ({
-    id: member.user_id,
-    name: member.user?.full_name || member.user?.email || 'Unknown',
-    role: member.role,
-  }))
 }
 
 /**
@@ -209,16 +322,136 @@ export async function fetchOrganizationMembers(organizationId: string) {
 export async function fetchOrganizationCategories(organizationId: string) {
   const admin = createAdminClient()
 
-  const { data, error } = await admin
-    .from('transaction_categories')
-    .select('id, normalized_name, aliases')
-    .eq('organization_id', organizationId)
-    .order('created_at', { ascending: false })
+  try {
+    const { data: dbCategories, error: catError } = await admin
+      .from('transaction_categories')
+      .select('id, normalized_name, aliases')
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: false })
 
-  if (error) {
-    console.error('[fetchOrganizationCategories] Error:', error.message)
+    if (catError) {
+      console.error('[fetchOrganizationCategories] Error:', catError.message)
+    }
+
+    // Also fetch categories directly from transactions table in case older transactions have uncatalogued categories
+    const { data: txCategories } = await admin
+      .from('transactions')
+      .select('category')
+      .eq('organization_id', organizationId)
+      .not('category', 'is', null)
+
+    const categoryMap = new Map<string, { id: string; normalized_name: string; aliases?: string[] }>()
+
+    for (const cat of dbCategories || []) {
+      if (cat.normalized_name) {
+        categoryMap.set(cat.normalized_name.toLowerCase(), {
+          id: cat.id,
+          normalized_name: cat.normalized_name,
+          aliases: cat.aliases || undefined,
+        })
+      }
+    }
+
+    for (const tx of txCategories || []) {
+      if (tx.category && !categoryMap.has(tx.category.toLowerCase())) {
+        categoryMap.set(tx.category.toLowerCase(), {
+          id: tx.category,
+          normalized_name: tx.category,
+        })
+      }
+    }
+
+    return Array.from(categoryMap.values()).sort((a, b) =>
+      a.normalized_name.localeCompare(b.normalized_name)
+    )
+  } catch (err) {
+    console.error('[fetchOrganizationCategories] Unexpected error:', err)
     return []
   }
+}
 
-  return data || []
+/**
+ * Fetch aggregates (total income, total expenses, net balance, transaction count, breakdown)
+ * across ALL transactions matching the filters in the database, without pagination.
+ *
+ * Performance optimization:
+ * - Only queries `type, amount` (and foreign category normalized name if filtering by category).
+ * - Avoids heavy joins on profiles and wallet accounts.
+ * - Decouples summary card accuracy from table pagination / lazy loading.
+ */
+export async function fetchTransactionAggregates(
+  organizationId: string,
+  filters: TransactionFilters
+): Promise<FilteredStats> {
+  const admin = createAdminClient()
+
+  const selectColumns = filters.category
+    ? 'type, amount, category, category_ref:transaction_categories!category_id(normalized_name)'
+    : 'type, amount'
+
+  let query = admin
+    .from('transactions')
+    .select(selectColumns)
+    .eq('organization_id', organizationId)
+    .limit(10000)
+
+  if (filters.searchText) {
+    const sanitizedSearch = sanitizePostgrestFilter(filters.searchText)
+    if (sanitizedSearch) {
+      const searchLower = `%${sanitizedSearch.toLowerCase()}%`
+      query = query.or(`description.ilike.${searchLower},category.ilike.${searchLower}`)
+    }
+  }
+
+  if (filters.category && filters.category !== 'all') {
+    const sanitizedCategory = sanitizePostgrestFilter(filters.category)
+    if (sanitizedCategory) {
+      query = query.or(`category.eq.${sanitizedCategory},category_ref.normalized_name.eq.${sanitizedCategory}`)
+    }
+  }
+
+  if (filters.type) {
+    if (filters.type === 'expense') {
+      query = query.or('type.eq.expense_personal,type.eq.expense_business,type.eq.expense')
+    } else {
+      query = query.eq('type', filters.type)
+    }
+  }
+
+  if (filters.accountId && filters.accountId !== 'all') {
+    const sanitizedAccountId = sanitizePostgrestFilter(filters.accountId)
+    if (sanitizedAccountId) {
+      query = query.or(`account_id.eq.${sanitizedAccountId},transfer_to_account_id.eq.${sanitizedAccountId}`)
+    }
+  }
+
+  if (filters.memberId && filters.memberId !== 'all') {
+    const sanitizedMemberId = sanitizePostgrestFilter(filters.memberId)
+    if (sanitizedMemberId) {
+      query = query.or(`funded_by_user_id.eq.${sanitizedMemberId},user_id.eq.${sanitizedMemberId}`)
+    }
+  }
+
+  if (filters.fundedByType) {
+    query = query.eq('funded_by_type', filters.fundedByType)
+  }
+
+  if (filters.startDate) {
+    query = query.gte('occurred_at', new Date(filters.startDate).toISOString())
+  }
+
+  if (filters.endDate) {
+    const end = new Date(filters.endDate)
+    end.setHours(23, 59, 59, 999)
+    query = query.lte('occurred_at', end.toISOString())
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('[fetchTransactionAggregates] Error:', error.message)
+    return calculateFilteredStats([])
+  }
+
+  return calculateFilteredStats((data || []) as unknown as { type?: string; amount?: number }[])
 }

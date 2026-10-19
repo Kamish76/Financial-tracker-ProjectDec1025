@@ -20,13 +20,16 @@ export default async function MembersPage({ params }: PageProps) {
     .from('organizations')
     .select('id, name, description')
     .eq('id', id)
-    .single()
+    .maybeSingle()
 
   if (orgError || !organization) {
     redirect('/organizations')
   }
 
   const isWallet = isWalletOrganization(organization.description)
+  if (isWallet) {
+    redirect(`/organizations/${id}`)
+  }
 
   type MemberRow = Omit<MemberWithProfile, 'profile'> & {
     profiles?: Array<MemberWithProfile['profile']>

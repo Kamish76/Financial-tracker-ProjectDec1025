@@ -48,3 +48,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Graphify & ICM Ephemeral Artifacts (Mode A)
+graphify-out/manifest.json
+graphify-out/cache/
+graphify-out/cost.json
+graphify-out/graph.html
+graphify-out/.*
+graphify-out/20*/
+.icm/*/output/
+

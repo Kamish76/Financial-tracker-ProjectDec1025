@@ -1,6 +1,6 @@
 import { revalidatePath } from 'next/cache'
 
-export type OrganizationSection = 'records' | 'settings' | 'members' | 'settings/holdings'
+export type OrganizationSection = 'records' | 'settings' | 'members' | 'settings/holdings' | 'accounts'
 
 export function revalidateOrganizationOverview(organizationId: string) {
   revalidatePath(`/organizations/${organizationId}`)

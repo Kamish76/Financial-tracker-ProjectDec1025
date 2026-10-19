@@ -15,6 +15,7 @@ export async function getUserWalletId(userId: string): Promise<string | null> {
         )
       `)
       .eq('user_id', userId)
+      .eq('is_active', true)
 
     if (!error && memberships) {
       for (const m of memberships) {

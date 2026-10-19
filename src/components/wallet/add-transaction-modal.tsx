@@ -10,6 +10,7 @@ import {
   DEFAULT_INCOME_CATEGORIES,
   DEFAULT_EXPENSE_CATEGORIES,
 } from '@/lib/category-constants'
+import { formatCurrency } from '@/lib/utils'
 import { 
   X, 
   Check, 
@@ -28,19 +29,19 @@ type AddTransactionModalProps = {
   onClose: () => void
   organizationId: string
   accounts: (WalletAccount | AccountWithBalance)[]
+  currency?: string
   onTransactionAdded?: () => void
+  initialTab?: TabType
+  initialAccountId?: string
 }
 
-function getDisplayBalance(acc: WalletAccount | AccountWithBalance): string {
+function getDisplayBalance(acc: WalletAccount | AccountWithBalance, currency?: string): string {
   const val =
     'current_balance' in acc && typeof (acc as AccountWithBalance).current_balance === 'number'
       ? (acc as AccountWithBalance).current_balance
       : acc.starting_value
 
-  return `$${Number(val).toLocaleString('en-US', {
-    minimumFractionDigits: val % 1 === 0 ? 0 : 2,
-    maximumFractionDigits: 2,
-  })}`
+  return formatCurrency(Number(val), currency)
 }
 
 type TabType = 'income' | 'expense' | 'transfer'
@@ -119,11 +120,14 @@ export function AddTransactionModal({
   onClose,
   organizationId,
   accounts,
+  currency,
   onTransactionAdded,
+  initialTab,
+  initialAccountId,
 }: AddTransactionModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
   const previousFocusedElementRef = useRef<HTMLElement | null>(null)
-  const [activeTab, setActiveTab] = useState<TabType>('income')
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'expense')
 
   // Lock body scroll and manage focus when modal is open
   useEffect(() => {
@@ -156,12 +160,12 @@ export function AddTransactionModal({
   }, [isOpen])
 
   const [selectedAccountId, setSelectedAccountId] = useState<string>(
-    accounts[0]?.id ?? ''
+    initialAccountId || accounts[0]?.id || ''
   )
   const [transferToAccountId, setTransferToAccountId] = useState<string>(
     accounts.length > 1 ? accounts[1].id : ''
   )
-  const [category, setCategory] = useState<string>('Salary')
+  const [category, setCategory] = useState<string>('Food & Dining')
   const [customCategoryInput, setCustomCategoryInput] = useState<string>('')
   const [orgCategories, setOrgCategories] = useState<{
     income: string[]
@@ -228,6 +232,33 @@ export function AddTransactionModal({
   const [txTime, setTxTime] = useState<string>(
     new Date().toTimeString().split(' ')[0].substring(0, 5)
   )
+
+  // Reset form values cleanly when modal opens
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (isOpen) {
+      setDisplayExpr('0')
+      setNotes('')
+      setError(null)
+      setShowCategoryDropdown(false)
+      setShowAccountDropdown(null)
+      const tab = initialTab || 'expense'
+      setActiveTab(tab)
+      if (tab === 'expense') {
+        setCategory(orgCategories.expense[0] || 'Food & Dining')
+      } else if (tab === 'income') {
+        setCategory(orgCategories.income[0] || 'Salary')
+      }
+      if (initialAccountId && accounts.some((a) => a.id === initialAccountId)) {
+        setSelectedAccountId(initialAccountId)
+      } else if (accounts.length > 0 && !accounts.some((a) => a.id === selectedAccountId)) {
+        setSelectedAccountId(accounts[0].id)
+      }
+      setTxDate(new Date().toISOString().split('T')[0])
+      setTxTime(new Date().toTimeString().split(' ')[0].substring(0, 5))
+    }
+  }, [isOpen, initialTab, initialAccountId, orgCategories])
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   // Compute evaluated amount on the fly
   const evaluatedAmount = useMemo(() => {
@@ -635,7 +666,7 @@ export function AddTransactionModal({
                   showAccountDropdown === 'from' ? null : 'from'
                 )
               }
-              className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-accent text-foreground font-semibold text-sm transition-all shadow-sm"
+              className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-muted text-foreground font-semibold text-sm transition-all shadow-sm"
             >
               <Wallet className={`h-4 w-4 ${accentText}`} />
               <span className="truncate">
@@ -656,12 +687,12 @@ export function AddTransactionModal({
                     className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between transition-colors ${
                       acc.id === selectedAccountId
                         ? `${accentDropdownActive} font-semibold`
-                        : 'text-foreground hover:bg-accent'
+                        : 'text-foreground hover:bg-muted'
                     }`}
                   >
                     <span>{acc.name}</span>
                     <span className="text-xs text-muted-foreground">
-                      {getDisplayBalance(acc)}
+                      {getDisplayBalance(acc, currency)}
                     </span>
                   </button>
                 ))}
@@ -684,7 +715,7 @@ export function AddTransactionModal({
                       showAccountDropdown === 'to' ? null : 'to'
                     )
                   }
-                  className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-accent text-foreground font-semibold text-sm transition-all shadow-sm"
+                  className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-muted text-foreground font-semibold text-sm transition-all shadow-sm"
                 >
                   <ArrowRightLeft className={`h-4 w-4 ${accentText}`} />
                   <span className="truncate">
@@ -707,12 +738,12 @@ export function AddTransactionModal({
                             ? 'opacity-40 cursor-not-allowed text-muted-foreground'
                             : acc.id === transferToAccountId
                             ? `${accentDropdownActive} font-semibold`
-                            : 'text-foreground hover:bg-accent'
+                            : 'text-foreground hover:bg-muted'
                         }`}
                       >
                         <span>{acc.name}</span>
                         <span className="text-xs text-muted-foreground">
-                          {getDisplayBalance(acc)}
+                          {getDisplayBalance(acc, currency)}
                         </span>
                       </button>
                     ))}
@@ -724,7 +755,7 @@ export function AddTransactionModal({
               <>
                 <button
                   onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-                  className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-accent text-foreground font-semibold text-sm transition-all shadow-sm"
+                  className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-muted text-foreground font-semibold text-sm transition-all shadow-sm"
                 >
                   <Tag className={`h-4 w-4 ${accentText}`} />
                   <span className="truncate">{category || 'Category'}</span>
@@ -766,7 +797,7 @@ export function AddTransactionModal({
                         className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                           cat === category
                             ? `${accentDropdownActive} font-semibold`
-                            : 'text-foreground hover:bg-accent'
+                            : 'text-foreground hover:bg-muted'
                         }`}
                       >
                         {cat}
@@ -800,14 +831,14 @@ export function AddTransactionModal({
               {/* Show evaluated value preview if displayExpr is an expression */}
               {displayExpr.match(/[+\-×÷]/) && (
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  = ${evaluatedAmount.toFixed(2)}
+                  = {formatCurrency(evaluatedAmount, currency)}
                 </div>
               )}
             </div>
 
             <button
               onClick={() => handleKeypadPress('BACKSPACE')}
-              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               title="Backspace"
             >
               <Delete className="h-6 w-6" />
@@ -839,19 +870,19 @@ export function AddTransactionModal({
           </button>
           <button
             onClick={() => handleKeypadPress('7')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             7
           </button>
           <button
             onClick={() => handleKeypadPress('8')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             8
           </button>
           <button
             onClick={() => handleKeypadPress('9')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             9
           </button>
@@ -865,19 +896,19 @@ export function AddTransactionModal({
           </button>
           <button
             onClick={() => handleKeypadPress('4')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             4
           </button>
           <button
             onClick={() => handleKeypadPress('5')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             5
           </button>
           <button
             onClick={() => handleKeypadPress('6')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             6
           </button>
@@ -891,19 +922,19 @@ export function AddTransactionModal({
           </button>
           <button
             onClick={() => handleKeypadPress('1')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             1
           </button>
           <button
             onClick={() => handleKeypadPress('2')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             2
           </button>
           <button
             onClick={() => handleKeypadPress('3')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             3
           </button>
@@ -917,13 +948,13 @@ export function AddTransactionModal({
           </button>
           <button
             onClick={() => handleKeypadPress('0')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             0
           </button>
           <button
             onClick={() => handleKeypadPress('.')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             .
           </button>

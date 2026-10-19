@@ -105,7 +105,7 @@ export async function getOrganizationStats(organizationId: string): Promise<Orga
     if (type === 'income') totalIncome += amount
     if (type === 'expense_business') totalExpensesBusiness += amount
     if (type === 'expense_personal') totalExpensesPersonal += amount
-    if (type === 'held_return' && category === 'Refund') totalRefundWithdrawals += amount
+    if (type === 'held_return' && category.toLowerCase() === 'refund') totalRefundWithdrawals += amount
     if (category && category.toLowerCase() === 'capital') expensesCapital += amount
   }
 

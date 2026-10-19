@@ -1,12 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { Github, Linkedin, Mail } from 'lucide-react'
+import { Github, Linkedin, Mail, ShieldCheck } from 'lucide-react'
 
 const footerLinks = {
   Product: [
+    { label: 'Workspace Modes', href: '#modes' },
     { label: 'Features', href: '#features' },
-    { label: 'Sign In', href: '/auth' },
+    { label: 'Sign In / Register', href: '/auth' },
   ],
   Legal: [
     { label: 'Privacy Policy', href: '/privacy' },
@@ -36,18 +37,22 @@ export function Footer() {
   const currentYear = new Date().getFullYear()
 
   return (
-    <footer className="border-t border-border/70 bg-card/50 py-12">
+    <footer className="border-t border-border/70 bg-card/40 py-12 mt-12">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Main Footer Content */}
         <div className="grid gap-8 md:grid-cols-3 mb-8">
           {/* Brand Section */}
-          <div className="col-span-1">
-            <div className="inline-flex items-center gap-2 rounded-lg border border-border/70 bg-background/50 px-3 py-2 mb-4">
-              <div className="h-6 w-6 rounded bg-accent-strong"></div>
-              <span className="font-semibold text-foreground">OrgFinance</span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Multi-tenant financial tracking for modern teams.
+          <div className="col-span-1 space-y-3">
+            <Link href="/" className="inline-flex items-center gap-2.5 rounded-xl border border-border/80 bg-background/60 px-3 py-1.5 hover:border-accent/50 transition-colors">
+              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-accent/15 text-accent-strong">
+                <ShieldCheck className="h-4 w-4" aria-hidden />
+              </div>
+              <span className="font-semibold tracking-tight text-foreground text-sm">
+                OrgFinance
+              </span>
+            </Link>
+            <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
+              Multi-tenant organization treasuries and personal wallet tracking built for clarity and accountability.
             </p>
           </div>
 
@@ -57,7 +62,7 @@ export function Footer() {
               <h3 className="text-sm font-semibold text-foreground mb-4">
                 {category}
               </h3>
-              <ul className="space-y-3">
+              <ul className="space-y-2.5">
                 {links.map((link) => (
                   <li key={link.label}>
                     <Link
@@ -74,7 +79,7 @@ export function Footer() {
         </div>
 
         {/* Divider */}
-        <div className="border-t border-border/50 my-8"></div>
+        <div className="border-t border-border/50 my-8" />
 
         {/* Bottom Section */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
@@ -84,17 +89,17 @@ export function Footer() {
           </p>
 
           {/* Social Links */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {socialLinks.map(({ icon: Icon, href, label }) => (
               <a
                 key={label}
                 href={href}
                 target={href.startsWith('http') ? '_blank' : undefined}
                 rel={href.startsWith('http') ? 'noreferrer' : undefined}
-                className="text-muted-foreground hover:text-accent transition-colors"
+                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 aria-label={label}
               >
-                <Icon className="h-5 w-5" />
+                <Icon className="h-4 w-4" />
               </a>
             ))}
           </div>
@@ -103,3 +108,4 @@ export function Footer() {
     </footer>
   )
 }
+

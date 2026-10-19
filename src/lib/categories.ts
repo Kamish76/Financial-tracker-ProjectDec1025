@@ -1,7 +1,7 @@
 "use server"
 
 import { createAdminClient } from "./supabase/server"
-import { requireOrgMembership } from "@/lib/auth/guards"
+import { requireOrgMembership, authorizeOrgAction } from "@/lib/auth/guards"
 import { revalidatePath } from "next/cache"
 
 import {
@@ -92,7 +92,7 @@ export async function getOrCreateCategory(
       .from("transaction_categories")
       .select("aliases")
       .eq("id", categoryId)
-      .single()
+      .maybeSingle()
 
     if (existing) {
       const typeTag = type === 'income' ? 'type:income' : 'type:expense'
@@ -204,7 +204,14 @@ export async function addOrganizationCategory(
   type: 'income' | 'expense'
 ): Promise<{ success?: boolean; error?: string; category?: CategoryItem }> {
   try {
-    await requireOrgMembership(organizationId)
+    const auth = await authorizeOrgAction(
+      organizationId,
+      ['owner', 'admin'],
+      'Only owners and admins can add categories.'
+    )
+    if ('error' in auth) {
+      return { error: auth.error }
+    }
     const admin = createAdminClient()
 
     if (!name?.trim()) {
@@ -259,7 +266,14 @@ export async function updateOrganizationCategory(
   newName: string
 ): Promise<{ success?: boolean; error?: string }> {
   try {
-    await requireOrgMembership(organizationId)
+    const auth = await authorizeOrgAction(
+      organizationId,
+      ['owner', 'admin'],
+      'Only owners and admins can update categories.'
+    )
+    if ('error' in auth) {
+      return { error: auth.error }
+    }
     const admin = createAdminClient()
 
     if (!newName?.trim()) {
@@ -296,7 +310,14 @@ export async function deleteOrganizationCategory(
   categoryId: string
 ): Promise<{ success?: boolean; error?: string }> {
   try {
-    await requireOrgMembership(organizationId)
+    const auth = await authorizeOrgAction(
+      organizationId,
+      ['owner', 'admin'],
+      'Only owners and admins can delete categories.'
+    )
+    if ('error' in auth) {
+      return { error: auth.error }
+    }
     const admin = createAdminClient()
 
     const { error } = await admin

@@ -33,34 +33,79 @@ export default async function OrganizationsPage() {
   // Using admin client to bypass RLS issues
   const adminClient = createAdminClient()
   
-  const { data: memberships, error } = await adminClient
-    .from('organization_members')
-    .select(`
-      role,
-      organization_id,
-      organizations (
-        id,
-        name,
-        description,
-        created_at
-      )
-    `)
-    .eq('user_id', user.id)
+  const [membershipsResult, ownedOrgsResult] = await Promise.all([
+    adminClient
+      .from('organization_members')
+      .select(`
+        role,
+        organization_id,
+        organizations (
+          id,
+          name,
+          description,
+          created_at
+        )
+      `)
+      .eq('user_id', user.id)
+      .eq('is_active', true),
+    adminClient
+      .from('organizations')
+      .select('id, name, description, created_at')
+      .eq('owner_id', user.id),
+  ])
 
-  if (error) {
-    console.error('[ORGS_PAGE] Failed to fetch organizations:', error.message)
+  if (membershipsResult.error) {
+    console.error('[ORGS_PAGE] Failed to fetch organizations:', membershipsResult.error.message)
   }
 
-  const validMemberships = (memberships || []).filter((m) => m.organizations)
-  
-  const orgIds = validMemberships
-    .map((m) => {
-      const organizationData = Array.isArray(m.organizations)
-        ? m.organizations[0]
-        : m.organizations
-      return organizationData ? (organizationData as { id: string }).id : null
+  const orgMap = new Map<
+    string,
+    {
+      id: string
+      name: string
+      description: string | null
+      created_at: string
+      role: string
+    }
+  >()
+
+  for (const m of membershipsResult.data || []) {
+    const organizationData = Array.isArray(m.organizations)
+      ? m.organizations[0]
+      : m.organizations
+    if (!organizationData) continue
+    const org = organizationData as {
+      id: string
+      name: string
+      description: string | null
+      created_at: string
+    }
+    orgMap.set(org.id, {
+      id: org.id,
+      name: org.name,
+      description: org.description,
+      created_at: org.created_at,
+      role: m.role,
     })
-    .filter(Boolean) as string[]
+  }
+
+  // Fallback for owners whose organization_members row is missing or inactive (Rule 1)
+  for (const ownedOrg of ownedOrgsResult.data || []) {
+    if (!orgMap.has(ownedOrg.id)) {
+      orgMap.set(ownedOrg.id, {
+        id: ownedOrg.id,
+        name: ownedOrg.name,
+        description: ownedOrg.description,
+        created_at: ownedOrg.created_at,
+        role: 'owner',
+      })
+    } else {
+      const existing = orgMap.get(ownedOrg.id)!
+      existing.role = 'owner'
+    }
+  }
+
+  const orgIds = Array.from(orgMap.keys())
 
   let memberCounts: Record<string, number> = {}
   if (orgIds.length > 0) {
@@ -68,42 +113,18 @@ export default async function OrganizationsPage() {
       .from('organization_members')
       .select('organization_id')
       .in('organization_id', orgIds)
-      
+      .eq('is_active', true)
+
     memberCounts = (allMembers || []).reduce((acc, curr) => {
       acc[curr.organization_id] = (acc[curr.organization_id] || 0) + 1
       return acc
     }, {} as Record<string, number>)
   }
 
-  const organizations = validMemberships.map((m) => {
-    const organizationData = Array.isArray(m.organizations)
-      ? m.organizations[0]
-      : m.organizations
-
-    if (!organizationData) {
-      return null
-    }
-
-    const org = organizationData as unknown as {
-      id: string
-      name: string
-      description: string | null
-      created_at: string
-    }
-
-    return {
-      id: org.id,
-      name: org.name,
-      description: org.description,
-      created_at: org.created_at,
-      role: m.role,
-      member_count: memberCounts[org.id] || 0,
-    }
-  })
-
-  const validOrganizations = organizations.filter(
-    (org): org is NonNullable<typeof org> => org !== null
-  )
+  const validOrganizations = Array.from(orgMap.values()).map((org) => ({
+    ...org,
+    member_count: Math.max(memberCounts[org.id] || 0, 1),
+  }))
 
   const walletOrganizations = validOrganizations.filter((org) => isWalletOrganization(org.description))
 

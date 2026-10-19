@@ -20,8 +20,12 @@ export type FilteredStats = {
     expense_personal: number
     held_allocate: number
     held_return: number
+    transfer: number
   }
   grossProfit: number
+  netBalance: number
+  totalIncome: number
+  totalExpenses: number
 }
 
 export type PeriodStats = {
@@ -46,6 +50,7 @@ export function calculateFilteredStats(transactions: ClientTransaction[]): Filte
     expense_personal: 0,
     held_allocate: 0,
     held_return: 0,
+    transfer: 0,
   }
 
   for (const tx of transactions) {
@@ -57,17 +62,27 @@ export function calculateFilteredStats(transactions: ClientTransaction[]): Filte
 
     if (type in byType) {
       byType[type as keyof typeof byType] += amount
+    } else if (type === 'expense') {
+      byType.expense_personal += amount
     }
   }
 
-  // Gross profit = income - business expenses (before salaries/personal)
+  // Gross profit = income - business expenses (for organizations)
   const grossProfit = byType.income - byType.expense_business
+
+  // Total income and expenses (including personal expenses for wallets)
+  const totalIncome = byType.income
+  const totalExpenses = byType.expense_personal + byType.expense_business
+  const netBalance = totalIncome - totalExpenses
 
   return {
     totalAmount,
     count,
     byType,
     grossProfit,
+    netBalance,
+    totalIncome,
+    totalExpenses,
   }
 }
 
@@ -125,7 +140,7 @@ export function calculatePeriodStats(transactions: ClientTransaction[], periodTy
 
       if (type === "income") {
         income += amount
-      } else if (type === "expense_business" || type === "expense_personal") {
+      } else if (type === "expense_business" || type === "expense_personal" || type === "expense") {
         expenses += amount
       }
       // Note: held_allocate and held_return are not included in period stats

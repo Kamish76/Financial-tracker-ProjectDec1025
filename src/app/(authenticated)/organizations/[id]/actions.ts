@@ -4,9 +4,9 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { getOrCreateCategory } from "@/lib/categories"
 import { authorizeOrgAction } from "@/lib/auth/guards"
 import {
-  revalidateOrganizationOverview,
   revalidateOrganizationSections,
 } from "@/lib/revalidation"
+import { formatCurrency } from "@/lib/utils"
 
 interface AddIncomeInput {
   organizationId: string
@@ -58,7 +58,7 @@ export async function addIncome(input: AddIncomeInput) {
   const admin = createAdminClient()
 
   // Normalize and get category ID
-  const categoryId = category ? await getOrCreateCategory(organizationId, category) : null
+  const categoryId = category ? await getOrCreateCategory(organizationId, category, 'income') : null
 
   const insertPayload = {
     organization_id: organizationId,
@@ -82,7 +82,7 @@ export async function addIncome(input: AddIncomeInput) {
     return { error: "Unable to add income right now" }
   }
 
-  revalidateOrganizationOverview(organizationId)
+  revalidateOrganizationSections(organizationId, ['records', 'settings', 'settings/holdings'])
 
   return { success: true }
 }
@@ -94,6 +94,8 @@ interface UpdateTransactionInput {
   description?: string
   category?: string
   occurredAt: string
+  accountId?: string | null
+  transferToAccountId?: string | null
 }
 
 export async function updateTransaction(input: UpdateTransactionInput) {
@@ -126,13 +128,13 @@ export async function updateTransaction(input: UpdateTransactionInput) {
     return auth
   }
 
-  const { user } = auth
+  const { user, membership } = auth
   const admin = createAdminClient()
 
   // Verify transaction belongs to organization
   const { data: existingTx, error: txError } = await admin
     .from("transactions")
-    .select("id, organization_id")
+    .select("id, organization_id, is_initial, type")
     .eq("id", transactionId)
     .maybeSingle()
 
@@ -144,16 +146,28 @@ export async function updateTransaction(input: UpdateTransactionInput) {
     return { error: "Transaction does not belong to this organization" }
   }
 
-  // Normalize category if provided
-  const categoryId = category ? await getOrCreateCategory(organizationId, category) : null
+  if (existingTx.is_initial && membership.role !== 'owner') {
+    return { error: "Only organization owners can edit initial transactions" }
+  }
 
-  const updatePayload = {
+  // Normalize category if provided
+  const categoryType = existingTx.type === 'income' ? 'income' : 'expense'
+  const categoryId = category ? await getOrCreateCategory(organizationId, category, categoryType) : null
+
+  const updatePayload: Record<string, unknown> = {
     amount,
     description: description?.trim() || null,
     category: category?.trim() || null,
     category_id: categoryId,
     occurred_at: occurredDate.toISOString(),
     updated_by_user_id: user.id,
+  }
+
+  if (input.accountId !== undefined) {
+    updatePayload.account_id = input.accountId
+  }
+  if (input.transferToAccountId !== undefined) {
+    updatePayload.transfer_to_account_id = input.transferToAccountId
   }
 
   const { error: updateError } = await admin
@@ -167,7 +181,7 @@ export async function updateTransaction(input: UpdateTransactionInput) {
     return { error: "Unable to update transaction" }
   }
 
-  revalidateOrganizationSections(organizationId, ['records'])
+  revalidateOrganizationSections(organizationId, ['records', 'settings', 'accounts', 'settings/holdings'])
 
   return { success: true }
 }
@@ -194,12 +208,13 @@ export async function deleteTransaction(input: DeleteTransactionInput) {
     return auth
   }
 
+  const { membership } = auth
   const admin = createAdminClient()
 
   // Verify transaction belongs to organization
   const { data: existingTx, error: txError } = await admin
     .from("transactions")
-    .select("id, organization_id")
+    .select("id, organization_id, is_initial")
     .eq("id", transactionId)
     .maybeSingle()
 
@@ -209,6 +224,10 @@ export async function deleteTransaction(input: DeleteTransactionInput) {
 
   if (existingTx.organization_id !== organizationId) {
     return { error: "Transaction does not belong to this organization" }
+  }
+
+  if (existingTx.is_initial && membership.role !== 'owner') {
+    return { error: "Only organization owners can delete initial transactions" }
   }
 
   const { error: deleteError } = await admin
@@ -222,7 +241,7 @@ export async function deleteTransaction(input: DeleteTransactionInput) {
     return { error: "Unable to delete transaction" }
   }
 
-  revalidateOrganizationSections(organizationId, ['records'])
+  revalidateOrganizationSections(organizationId, ['records', 'settings', 'accounts', 'settings/holdings'])
 
   return { success: true }
 }
@@ -275,7 +294,7 @@ export async function addExpense(input: AddExpenseInput) {
   const fundedByUserId = user.id // Current user is always the payer/holder
 
   // Normalize and get category ID
-  const categoryId = category ? await getOrCreateCategory(organizationId, category) : null
+  const categoryId = category ? await getOrCreateCategory(organizationId, category, 'expense') : null
 
   const insertPayload = {
     organization_id: organizationId,
@@ -299,7 +318,7 @@ export async function addExpense(input: AddExpenseInput) {
     return { error: "Unable to add expense right now" }
   }
 
-  revalidateOrganizationOverview(organizationId)
+  revalidateOrganizationSections(organizationId, ['records', 'settings', 'settings/holdings'])
 
   return { success: true }
 }
@@ -374,7 +393,9 @@ export async function addInitialTransaction(input: AddInitialTransactionInput) {
   }
 
   // Normalize and get category ID
-  const categoryId = category ? await getOrCreateCategory(organizationId, category) : null
+  const categoryId = category
+    ? await getOrCreateCategory(organizationId, category, transactionType === 'income' ? 'income' : 'expense')
+    : null
 
   const insertPayload = {
     organization_id: organizationId,
@@ -399,7 +420,7 @@ export async function addInitialTransaction(input: AddInitialTransactionInput) {
     return { error: "Unable to add initial transaction right now" }
   }
 
-  revalidateOrganizationSections(organizationId, ['settings'])
+  revalidateOrganizationSections(organizationId, ['settings', 'records', 'settings/holdings'])
 
   return { success: true }
 }
@@ -489,7 +510,9 @@ export async function updateInitialTransaction(input: UpdateInitialTransactionIn
   }
 
   // Normalize and get category ID
-  const categoryId = category ? await getOrCreateCategory(organizationId, category) : null
+  const categoryId = category
+    ? await getOrCreateCategory(organizationId, category, existingTx.type === 'income' ? 'income' : 'expense')
+    : null
 
   const updatePayload = {
     amount,
@@ -513,7 +536,7 @@ export async function updateInitialTransaction(input: UpdateInitialTransactionIn
     return { error: "Unable to update transaction right now" }
   }
 
-  revalidateOrganizationSections(organizationId, ['settings'])
+  revalidateOrganizationSections(organizationId, ['settings', 'records', 'settings/holdings'])
 
   return { success: true }
 }
@@ -560,7 +583,7 @@ export async function deleteInitialTransaction(input: DeleteInitialTransactionIn
     return { error: "Unable to delete transaction right now" }
   }
 
-  revalidateOrganizationSections(organizationId, ['settings'])
+  revalidateOrganizationSections(organizationId, ['settings', 'records', 'settings/holdings'])
 
   return { success: true }
 }
@@ -621,7 +644,7 @@ export async function addIncomeForMember(input: AddIncomeForMemberInput) {
     amount,
     description: description?.trim() || null,
     category: category?.trim() || null,
-    category_id: category ? await getOrCreateCategory(organizationId, category) : null,
+    category_id: category ? await getOrCreateCategory(organizationId, category, 'income') : null,
     occurred_at: occurredDate.toISOString(),
     funded_by_type: "business" as const,
     funded_by_user_id: assignedToUserId || null,
@@ -635,7 +658,7 @@ export async function addIncomeForMember(input: AddIncomeForMemberInput) {
     return { error: "Unable to add income right now" }
   }
 
-  revalidateOrganizationSections(organizationId, ['settings'])
+  revalidateOrganizationSections(organizationId, ['settings', 'records', 'settings/holdings'])
   return { success: true }
 }
 
@@ -692,7 +715,7 @@ export async function addExpenseForMember(input: AddExpenseForMemberInput) {
     amount,
     description: description?.trim() || null,
     category: category?.trim() || null,
-    category_id: category ? await getOrCreateCategory(organizationId, category) : null,
+    category_id: category ? await getOrCreateCategory(organizationId, category, 'expense') : null,
     occurred_at: occurredDate.toISOString(),
     funded_by_type: fundedByType,
     funded_by_user_id: assignedToUserId || null,
@@ -706,7 +729,7 @@ export async function addExpenseForMember(input: AddExpenseForMemberInput) {
     return { error: "Unable to add expense right now" }
   }
 
-  revalidateOrganizationSections(organizationId, ['settings'])
+  revalidateOrganizationSections(organizationId, ['settings', 'records', 'settings/holdings'])
   return { success: true }
 }
 
@@ -743,10 +766,10 @@ export async function setMemberBaseline(input: SetMemberBaselineInput) {
     return { error: "Target member is not part of this organization" }
   }
 
-  // Get current baseline allocation for this member (sum of held_allocate - held_return)
+  // Get current baseline allocation for this member (sum of held_allocate - held_return, excluding Refund withdrawals)
   const { data: allocationRows, error: allocationError } = await admin
     .from("transactions")
-    .select("type, amount")
+    .select("type, amount, category")
     .eq("organization_id", organizationId)
     .eq("funded_by_user_id", userId)
     .in("type", ["held_allocate", "held_return"])
@@ -759,9 +782,10 @@ export async function setMemberBaseline(input: SetMemberBaselineInput) {
   let currentBaseline = 0
   for (const row of allocationRows || []) {
     const amount = Number(row.amount ?? 0)
+    const isRefund = (row.category || "").toLowerCase() === "refund"
     if (row.type === "held_allocate") {
       currentBaseline += amount
-    } else if (row.type === "held_return") {
+    } else if (row.type === "held_return" && !isRefund) {
       currentBaseline -= amount
     }
   }
@@ -780,7 +804,7 @@ export async function setMemberBaseline(input: SetMemberBaselineInput) {
   // Get cash on hand to validate allocation limit
   const { data: txRows, error: txError } = await admin
     .from("transactions")
-    .select("type, amount")
+    .select("type, amount, category")
     .eq("organization_id", organizationId)
 
   if (txError) {
@@ -790,17 +814,21 @@ export async function setMemberBaseline(input: SetMemberBaselineInput) {
 
   let totalIncome = 0
   let totalExpensesBusiness = 0
+  let totalRefundWithdrawals = 0
   for (const r of txRows || []) {
     const amount = Number(r.amount ?? 0)
     if (r.type === "income") totalIncome += amount
     if (r.type === "expense_business") totalExpensesBusiness += amount
+    if (r.type === "held_return" && (r.category || "").toLowerCase() === "refund") {
+      totalRefundWithdrawals += amount
+    }
   }
-  const cashOnHand = totalIncome - totalExpensesBusiness
+  const cashOnHand = totalIncome - totalExpensesBusiness - totalRefundWithdrawals
 
-  // Calculate total allocated baseline across all members
+  // Calculate total allocated baseline across all members (excluding Refund withdrawals)
   const { data: allAllocations, error: allAllocationsError } = await admin
     .from("transactions")
-    .select("type, amount, funded_by_user_id")
+    .select("type, amount, category, funded_by_user_id")
     .eq("organization_id", organizationId)
     .in("type", ["held_allocate", "held_return"])
 
@@ -814,9 +842,10 @@ export async function setMemberBaseline(input: SetMemberBaselineInput) {
     const uid = row.funded_by_user_id as string
     if (!uid) continue
     const amount = Number(row.amount ?? 0)
+    const isRefund = (row.category || "").toLowerCase() === "refund"
     if (row.type === "held_allocate") {
       baselineByUser[uid] = (baselineByUser[uid] ?? 0) + amount
-    } else if (row.type === "held_return") {
+    } else if (row.type === "held_return" && !isRefund) {
       baselineByUser[uid] = (baselineByUser[uid] ?? 0) - amount
     }
   }
@@ -853,7 +882,7 @@ export async function setMemberBaseline(input: SetMemberBaselineInput) {
     return { error: "Unable to set baseline allocation right now" }
   }
 
-  revalidateOrganizationSections(organizationId, ['settings', 'settings/holdings'])
+  revalidateOrganizationSections(organizationId, ['settings', 'settings/holdings', 'records'])
 
   return { success: true }
 }
@@ -888,11 +917,18 @@ export async function createRefund(input: CreateRefundInput) {
   const { user } = auth
   const admin = createAdminClient()
 
-  // Get current user's outstanding reimbursable amount
-  const { data: txRows, error: txError } = await admin
-    .from("transactions")
-    .select("type, amount, funded_by_type, funded_by_user_id")
-    .eq("organization_id", organizationId)
+  // Get current user's outstanding reimbursable amount and org currency
+  const [{ data: txRows, error: txError }, { data: org }] = await Promise.all([
+    admin
+      .from("transactions")
+      .select("type, amount, funded_by_type, funded_by_user_id")
+      .eq("organization_id", organizationId),
+    admin
+      .from("organizations")
+      .select("currency")
+      .eq("id", organizationId)
+      .maybeSingle(),
+  ])
 
   if (txError) {
     console.error("[CREATE_REFUND] Transactions fetch error", txError.message)
@@ -937,11 +973,13 @@ export async function createRefund(input: CreateRefundInput) {
   }
 
   if (amount > outstanding) {
-    return { error: `Amount exceeds outstanding balance of $${outstanding.toFixed(2)}` }
+    return {
+      error: `Amount exceeds outstanding balance of ${formatCurrency(outstanding, org?.currency)}`,
+    }
   }
 
   // Create reimbursement request with status = 'paid' (no approval needed)
-  const { error: insertError } = await admin
+  const { data: createdReimbursement, error: insertError } = await admin
     .from("reimbursement_requests")
     .insert({
       organization_id: organizationId,
@@ -951,9 +989,11 @@ export async function createRefund(input: CreateRefundInput) {
       approval_required: false,
       notes: description?.trim() || null,
     })
+    .select("id")
+    .single()
 
-  if (insertError) {
-    console.error("[CREATE_REFUND] Reimbursement insert failed", insertError.message)
+  if (insertError || !createdReimbursement) {
+    console.error("[CREATE_REFUND] Reimbursement insert failed", insertError?.message)
     return { error: "Unable to create refund right now" }
   }
 
@@ -975,11 +1015,12 @@ export async function createRefund(input: CreateRefundInput) {
     })
 
   if (txInsertError) {
-    console.error("[CREATE_REFUND] Transaction insert failed", txInsertError.message)
+    console.error("[CREATE_REFUND] Transaction insert failed, rolling back reimbursement", txInsertError.message)
+    await admin.from("reimbursement_requests").delete().eq("id", createdReimbursement.id)
     return { error: "Unable to record refund transaction" }
   }
 
-  revalidateOrganizationOverview(organizationId)
+  revalidateOrganizationSections(organizationId, ['records', 'settings', 'settings/holdings'])
 
   return { success: true }
 }
