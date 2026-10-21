@@ -336,11 +336,7 @@ describe('Unit Tests: Financial Accounting Calculations & Precision', () => {
       })
 
       const { DELETE } = await import('@/app/api/delete-account/route')
-      const fakeRequest = new Request('http://localhost/api/delete-account', {
-        method: 'DELETE',
-      })
-
-      const response = await DELETE(fakeRequest as unknown as import('next/server').NextRequest)
+      const response = await DELETE()
       expect(response.status).toBe(401)
     })
   })
