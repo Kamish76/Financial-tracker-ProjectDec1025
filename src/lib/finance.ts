@@ -53,11 +53,13 @@ type ReimbursementRow = {
 export async function getOrganizationStats(organizationId: string): Promise<OrganizationStats> {
   const admin = createAdminClient()
 
-  const [transactionsResult, membersResult, reimbursementsResult] = await Promise.all([
+  const [totalsRpcResult, transactionsResult, membersResult, reimbursementsResult] = await Promise.all([
+    admin.rpc('get_organization_financial_totals', { p_org_id: organizationId }),
     admin
       .from('transactions')
       .select('type, amount, category, funded_by_type, funded_by_user_id')
-      .eq('organization_id', organizationId),
+      .eq('organization_id', organizationId)
+      .limit(10000),
     admin
       .from('organization_members')
       .select('user_id, role, is_active')
@@ -66,7 +68,8 @@ export async function getOrganizationStats(organizationId: string): Promise<Orga
       .from('reimbursement_requests')
       .select('from_user_id, amount')
       .eq('organization_id', organizationId)
-      .eq('status', 'paid'),
+      .eq('status', 'paid')
+      .limit(10000),
   ])
 
   if (transactionsResult.error) {
@@ -97,16 +100,28 @@ export async function getOrganizationStats(organizationId: string): Promise<Orga
   let expensesCapital = 0
   let totalRefundWithdrawals = 0
 
-  for (const transaction of transactions) {
-    const amount = Number(transaction.amount ?? 0)
-    const type = transaction.type
-    const category = transaction.category ?? ''
+  const rpcData = totalsRpcResult.data as Record<string, unknown>[] | Record<string, unknown> | null
+  const rpcRow = Array.isArray(rpcData) ? rpcData[0] : rpcData
 
-    if (type === 'income') totalIncome += amount
-    if (type === 'expense_business') totalExpensesBusiness += amount
-    if (type === 'expense_personal') totalExpensesPersonal += amount
-    if (type === 'held_return' && category.toLowerCase() === 'refund') totalRefundWithdrawals += amount
-    if (category && category.toLowerCase() === 'capital') expensesCapital += amount
+  if (rpcRow && !totalsRpcResult.error) {
+    totalIncome = Number(rpcRow.total_income ?? 0)
+    totalExpensesBusiness = Number(rpcRow.total_expenses_business ?? 0)
+    totalExpensesPersonal = Number(rpcRow.total_expenses_personal ?? 0)
+    expensesCapital = Number(rpcRow.expenses_capital ?? 0)
+    totalRefundWithdrawals = Number(rpcRow.total_refund_withdrawals ?? 0)
+  } else {
+    // Fallback if RPC is unavailable
+    for (const transaction of transactions) {
+      const amount = Number(transaction.amount ?? 0)
+      const type = transaction.type
+      const category = (transaction.category ?? '').trim()
+
+      if (type === 'income') totalIncome += amount
+      if (type === 'expense_business') totalExpensesBusiness += amount
+      if (type === 'expense_personal') totalExpensesPersonal += amount
+      if (type === 'held_return' && category.toLowerCase() === 'refund') totalRefundWithdrawals += amount
+      if (category && category.toLowerCase() === 'capital') expensesCapital += amount
+    }
   }
 
   const actualExpensesWithoutCapital =

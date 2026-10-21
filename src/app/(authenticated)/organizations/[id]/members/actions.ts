@@ -272,46 +272,44 @@ export async function createInviteCode(input: CreateInviteInput) {
       return { error: 'Invite codes are not available for personal wallets.' }
     }
 
-    // Generate unique code
-    let code = generateInviteCode()
+    // Generate unique code with retry loop handling unique violation code 23505 (Phase 6)
+    let inviteCode = null
     let attempts = 0
     const maxAttempts = 10
 
-    // Ensure code is unique
     while (attempts < maxAttempts) {
-      const { data: existing } = await adminClient
+      const code = generateInviteCode()
+
+      const { data, error: createError } = await adminClient
         .from('invite_codes')
-        .select('id')
-        .eq('code', code)
-        .maybeSingle()
+        .insert({
+          organization_id: organizationId,
+          code,
+          max_uses: maxUses || null,
+          current_uses: 0,
+          is_active: true,
+          created_by: user.id,
+        })
+        .select()
+        .single()
 
-      if (!existing) break
+      if (!createError && data) {
+        inviteCode = data
+        break
+      }
 
-      code = generateInviteCode()
-      attempts++
-    }
+      // 23505 = unique_violation in PostgreSQL
+      if (createError && createError.code === '23505') {
+        attempts++
+        continue
+      }
 
-    if (attempts >= maxAttempts) {
-      return { error: 'Failed to generate unique invite code. Please try again.' }
-    }
-
-    // Create the invite code
-    const { data: inviteCode, error: createError } = await adminClient
-      .from('invite_codes')
-      .insert({
-        organization_id: organizationId,
-        code,
-        max_uses: maxUses || null,
-        current_uses: 0,
-        is_active: true,
-        created_by: user.id,
-      })
-      .select()
-      .single()
-
-    if (createError) {
       console.error('Error creating invite code:', createError)
       return { error: 'Failed to create invite code' }
+    }
+
+    if (!inviteCode) {
+      return { error: 'Failed to generate unique invite code. Please try again.' }
     }
 
     revalidateOrganizationMembers(organizationId)

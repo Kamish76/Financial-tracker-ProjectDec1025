@@ -52,14 +52,20 @@ export async function GET(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY!
     );
 
-    // Query database to keep it active
-    const [orgsResult, transactionsResult] = await Promise.all([
+    // Query database to keep it active and purge expired account deletion requests (Phase 2)
+    const [orgsResult, transactionsResult, purgeResult] = await Promise.all([
       supabase.from('organizations').select('id', { count: 'exact', head: true }),
-      supabase.from('transactions').select('id', { count: 'exact', head: true })
+      supabase.from('transactions').select('id', { count: 'exact', head: true }),
+      supabase.rpc('process_due_account_deletions'),
     ]);
+
+    if (purgeResult.error) {
+      console.warn('Notice: process_due_account_deletions RPC notice:', purgeResult.error.message);
+    }
 
     const organizationCount = orgsResult.count || 0;
     const transactionCount = transactionsResult.count || 0;
+    const purgedAccountsCount = purgeResult.data?.[0]?.deleted_count ?? 0;
     const responseTime = Date.now() - startTime;
 
     // Log execution to audit table
@@ -87,6 +93,7 @@ export async function GET(request: NextRequest) {
       stats: {
         organizations: organizationCount,
         transactions: transactionCount,
+        purgedAccounts: purgedAccountsCount,
         responseTimeMs: responseTime
       },
       message: 'Database keep-alive successful'
