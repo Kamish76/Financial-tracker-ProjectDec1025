@@ -133,6 +133,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 				.from('transactions')
 				.select('id, type, amount, category, description, occurred_at, created_at, is_initial, account_id, transfer_to_account_id, account:wallet_accounts!account_id(id, name), transfer_to_account:wallet_accounts!transfer_to_account_id(id, name)')
 				.eq('organization_id', id)
+				.order('occurred_at', { ascending: false, nullsFirst: false })
 				.order('created_at', { ascending: false })
 				.limit(10),
 			adminClient
@@ -165,6 +166,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 				.from('transactions')
 				.select('id, type, amount, category, description, occurred_at, created_at, is_initial, account_id, transfer_to_account_id, account:wallet_accounts!account_id(id, name), transfer_to_account:wallet_accounts!transfer_to_account_id(id, name)')
 				.eq('organization_id', id)
+				.order('occurred_at', { ascending: false, nullsFirst: false })
 				.order('created_at', { ascending: false })
 				.limit(365),
 			getOrganizationStats(id),

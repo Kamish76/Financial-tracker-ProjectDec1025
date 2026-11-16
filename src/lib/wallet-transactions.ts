@@ -115,7 +115,7 @@ export async function addWalletTransaction(input: AddWalletTransactionInput): Pr
         category_id: categoryId,
         category: input.category || null,
         description: input.notes || '',
-        created_at: input.createdAt || new Date().toISOString(),
+        created_at: new Date().toISOString(),
         occurred_at: input.createdAt || new Date().toISOString(),
         funded_by_type: input.type === 'expense_personal' ? 'personal' : 'business',
         funded_by_user_id: user.id,

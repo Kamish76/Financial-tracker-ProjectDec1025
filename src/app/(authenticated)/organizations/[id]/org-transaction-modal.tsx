@@ -355,7 +355,10 @@ export function OrgTransactionModal({
     }
 
     setIsSubmitting(true)
-    const fullDate = new Date(`${txDate}T${txTime}:00`).toISOString()
+    const now = new Date()
+    const sec = String(now.getSeconds()).padStart(2, '0')
+    const ms = String(now.getMilliseconds()).padStart(3, '0')
+    const fullDate = new Date(`${txDate}T${txTime}:${sec}.${ms}`).toISOString()
 
     const result =
       activeTab === 'income'
