@@ -15,9 +15,11 @@ import {
   Plus,
   AlertCircle,
   Briefcase,
+  Settings2,
 } from 'lucide-react'
 
 import { addIncome, addExpense, createRefund } from './actions'
+import { ManageCategoriesDialog } from './settings/manage-categories-dialog'
 import { getOrganizationCategoriesByType } from '@/lib/categories'
 import {
   DEFAULT_INCOME_CATEGORIES,
@@ -142,6 +144,7 @@ export function OrgTransactionModal({
 
   const [showTypeDropdown, setShowTypeDropdown] = useState<boolean>(false)
   const [showCategoryDropdown, setShowCategoryDropdown] = useState<boolean>(false)
+  const [manageCategoriesOpen, setManageCategoriesOpen] = useState<boolean>(false)
   const [notes, setNotes] = useState<string>('')
   const [displayExpr, setDisplayExpr] = useState<string>('0')
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
@@ -187,6 +190,21 @@ export function OrgTransactionModal({
       }
     }
   }, [isOpen])
+
+  const refreshCategories = useCallback(async () => {
+    if (!organizationId) return
+    try {
+      const res = await getOrganizationCategoriesByType(organizationId)
+      const incomeNames = res.income.map((c) => c.display_name || c.normalized_name)
+      const expenseNames = res.expense.map((c) => c.display_name || c.normalized_name)
+      setOrgCategories({
+        income: incomeNames.length > 0 ? incomeNames : DEFAULT_INCOME_CATEGORIES,
+        expense: expenseNames.length > 0 ? expenseNames : DEFAULT_EXPENSE_CATEGORIES,
+      })
+    } catch {
+      // Ignore transient fetch errors
+    }
+  }, [organizationId])
 
   // Load current user and organization categories when modal opens
   useEffect(() => {
@@ -389,7 +407,7 @@ export function OrgTransactionModal({
 
   // Keyboard support (Escape, Tab trap, calculator keys, Enter)
   useEffect(() => {
-    if (!isOpen || showRefundConfirm) return
+    if (!isOpen || showRefundConfirm || manageCategoriesOpen) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -480,6 +498,7 @@ export function OrgTransactionModal({
   }, [
     isOpen,
     showRefundConfirm,
+    manageCategoriesOpen,
     displayExpr,
     isAmountValid,
     isSubmitting,
@@ -796,6 +815,20 @@ export function OrgTransactionModal({
                         {cat}
                       </button>
                     ))}
+
+                    <div className="pt-1 mt-1 border-t border-border">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCategoryDropdown(false)
+                          setManageCategoriesOpen(true)
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                      >
+                        <Settings2 className="h-3.5 w-3.5" />
+                        <span>Manage &amp; unify categories</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -916,6 +949,13 @@ export function OrgTransactionModal({
           )}
         </div>
       </div>
+
+      <ManageCategoriesDialog
+        open={manageCategoriesOpen}
+        onOpenChange={setManageCategoriesOpen}
+        organizationId={organizationId}
+        onCategoriesChanged={refreshCategories}
+      />
 
       <Dialog open={showRefundConfirm} onOpenChange={setShowRefundConfirm}>
         <DialogContent>

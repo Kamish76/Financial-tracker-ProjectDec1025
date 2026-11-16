@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache"
 import {
   DEFAULT_INCOME_CATEGORIES,
   type CategoryItem,
+  type UnlinkedCategoryItem,
 } from "./category-constants"
 
 function formatCategoryName(normalized: string): string {
@@ -280,10 +281,12 @@ export async function updateOrganizationCategory(
       return { error: 'Category name cannot be empty.' }
     }
 
+    const normalized = newName.trim().toLowerCase()
+
     const { error } = await admin
       .from('transaction_categories')
       .update({
-        normalized_name: newName.trim().toLowerCase(),
+        normalized_name: normalized,
       })
       .eq('id', categoryId)
       .eq('organization_id', organizationId)
@@ -295,7 +298,14 @@ export async function updateOrganizationCategory(
       return { error: error.message }
     }
 
+    await admin
+      .from('transactions')
+      .update({ category: formatCategoryName(normalized) })
+      .eq('organization_id', organizationId)
+      .eq('category_id', categoryId)
+
     revalidatePath(`/organizations/${organizationId}/settings`)
+    revalidatePath(`/organizations/${organizationId}/records`)
     return { success: true }
   } catch (err: unknown) {
     return { error: err instanceof Error ? err.message : 'Failed to update category' }
@@ -331,9 +341,122 @@ export async function deleteOrganizationCategory(
     }
 
     revalidatePath(`/organizations/${organizationId}/settings`)
+    revalidatePath(`/organizations/${organizationId}/records`)
     return { success: true }
   } catch (err: unknown) {
     return { error: err instanceof Error ? err.message : 'Failed to delete category' }
+  }
+}
+
+/**
+ * List distinct raw transaction categories where category_id is null.
+ */
+export async function getUnlinkedTransactionCategories(
+  organizationId: string
+): Promise<UnlinkedCategoryItem[]> {
+  await requireOrgMembership(organizationId)
+  const admin = createAdminClient()
+
+  const { data, error } = await admin
+    .from('transactions')
+    .select('category')
+    .eq('organization_id', organizationId)
+    .is('category_id', null)
+    .not('category', 'is', null)
+
+  if (error || !data) {
+    if (error) console.error('[getUnlinkedTransactionCategories] Error:', error.message)
+    return []
+  }
+
+  const counts = new Map<string, number>()
+  for (const row of data) {
+    const raw = (row.category ?? '').trim()
+    if (!raw || raw.toLowerCase() === 'transfer') continue
+    counts.set(raw, (counts.get(raw) ?? 0) + 1)
+  }
+
+  return Array.from(counts.entries())
+    .map(([raw_name, count]) => ({ raw_name, count }))
+    .sort((a, b) => b.count - a.count || a.raw_name.localeCompare(b.raw_name))
+}
+
+/**
+ * Merge a catalogued category or unlinked raw category string into a target category.
+ */
+export async function mergeOrganizationCategories(
+  organizationId: string,
+  source: { categoryId?: string; rawName?: string },
+  targetCategoryId: string
+): Promise<{ success?: boolean; error?: string }> {
+  try {
+    const auth = await authorizeOrgAction(
+      organizationId,
+      ['owner', 'admin'],
+      'Only owners and admins can unify categories.'
+    )
+    if ('error' in auth) {
+      return { error: auth.error }
+    }
+    const admin = createAdminClient()
+
+    const { data: target, error: targetError } = await admin
+      .from('transaction_categories')
+      .select('id, normalized_name')
+      .eq('id', targetCategoryId)
+      .eq('organization_id', organizationId)
+      .maybeSingle()
+
+    if (targetError || !target) {
+      return { error: 'Target category not found.' }
+    }
+
+    const targetDisplay = formatCategoryName(target.normalized_name)
+
+    if (source.categoryId) {
+      if (source.categoryId === targetCategoryId) {
+        return { error: 'Source and target categories must be different.' }
+      }
+
+      const { error: txUpdateError } = await admin
+        .from('transactions')
+        .update({ category_id: targetCategoryId, category: targetDisplay })
+        .eq('organization_id', organizationId)
+        .eq('category_id', source.categoryId)
+
+      if (txUpdateError) {
+        return { error: txUpdateError.message }
+      }
+
+      const { error: deleteError } = await admin
+        .from('transaction_categories')
+        .delete()
+        .eq('id', source.categoryId)
+        .eq('organization_id', organizationId)
+
+      if (deleteError) {
+        return { error: deleteError.message }
+      }
+    } else if (source.rawName) {
+      const { error: txUpdateError } = await admin
+        .from('transactions')
+        .update({ category_id: targetCategoryId, category: targetDisplay })
+        .eq('organization_id', organizationId)
+        .is('category_id', null)
+        .eq('category', source.rawName)
+
+      if (txUpdateError) {
+        return { error: txUpdateError.message }
+      }
+    } else {
+      return { error: 'Source category is required.' }
+    }
+
+    revalidatePath(`/organizations/${organizationId}/settings`)
+    revalidatePath(`/organizations/${organizationId}/records`)
+    return { success: true }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : 'Failed to unify categories' }
   }
 }
 
