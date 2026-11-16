@@ -345,7 +345,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 			</CardContent>
 		</Card>
 	) : (
-		<WalletQuickActions organizationId={id} />
+		<WalletQuickActions organizationId={id} canManage={canManage} />
 	)
 
 	const recentActivityNode = (
