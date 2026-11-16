@@ -442,8 +442,8 @@ export function OrganizationSettings({
 					</Card>
 				)}
 
-				{/* Personal Wallet Categories Card */}
-				{isWallet && (
+				{/* Transaction Categories Card */}
+				{canEdit && (
 					<Card>
 						<CardHeader>
 							<div className="flex items-center justify-between">
@@ -454,7 +454,7 @@ export function OrganizationSettings({
 									<div>
 										<CardTitle>Transaction Categories</CardTitle>
 										<CardDescription>
-											Manage and organize categories separated by income and expense
+											Manage, rename, and unify categories separated by income and expense
 										</CardDescription>
 									</div>
 								</div>
@@ -466,44 +466,46 @@ export function OrganizationSettings({
 						</CardHeader>
 						<CardContent className="space-y-4">
 							<p className="text-sm text-muted-foreground">
-								Categories are separated into Income and Expense so you only see relevant options when recording transactions. Core categories are automatically included and can be customized.
+								Categories are separated into Income and Expense so you only see relevant options when recording transactions. You can also unify duplicate or misspelled categories across existing records.
 							</p>
 
-							<div className="space-y-2">
-								<div>
-									<span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block mb-1.5">
-										Income Categories
-									</span>
-									<div className="flex flex-wrap gap-1.5">
-										{['Salary', 'Freelance', 'Investments', 'Gifts', 'Other Income'].map((cat) => (
-											<Badge
-												key={cat}
-												variant="secondary"
-												className="text-xs font-normal bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
-											>
-												{cat}
-											</Badge>
-										))}
+							{isWallet && (
+								<div className="space-y-2">
+									<div>
+										<span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block mb-1.5">
+											Income Categories
+										</span>
+										<div className="flex flex-wrap gap-1.5">
+											{['Salary', 'Freelance', 'Investments', 'Gifts', 'Other Income'].map((cat) => (
+												<Badge
+													key={cat}
+													variant="secondary"
+													className="text-xs font-normal bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+												>
+													{cat}
+												</Badge>
+											))}
+										</div>
 									</div>
-								</div>
 
-								<div className="pt-2 border-t border-border/50">
-									<span className="text-xs font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider block mb-1.5">
-										Expense Categories
-									</span>
-									<div className="flex flex-wrap gap-1.5">
-										{['Food & Dining', 'Housing', 'Transportation', 'Utilities', 'Other Expense'].map((cat) => (
-											<Badge
-												key={cat}
-												variant="secondary"
-												className="text-xs font-normal bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
-											>
-												{cat}
-											</Badge>
-										))}
+									<div className="pt-2 border-t border-border/50">
+										<span className="text-xs font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider block mb-1.5">
+											Expense Categories
+										</span>
+										<div className="flex flex-wrap gap-1.5">
+											{['Food & Dining', 'Housing', 'Transportation', 'Utilities', 'Other Expense'].map((cat) => (
+												<Badge
+													key={cat}
+													variant="secondary"
+													className="text-xs font-normal bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+												>
+													{cat}
+												</Badge>
+											))}
+										</div>
 									</div>
 								</div>
-							</div>
+							)}
 
 							<ManageCategoriesDialog
 								open={manageCategoriesOpen}

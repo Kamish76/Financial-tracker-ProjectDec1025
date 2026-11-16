@@ -86,6 +86,7 @@ export async function getAccountsWithBalances(
     .select('id, account_id, transfer_to_account_id, type, amount')
     .eq('organization_id', organizationId)
     .or('account_id.not.is.null,transfer_to_account_id.not.is.null')
+    .limit(10000)
 
   if (error) {
     console.error('[getAccountsWithBalances] Error fetching transactions:', error.message)

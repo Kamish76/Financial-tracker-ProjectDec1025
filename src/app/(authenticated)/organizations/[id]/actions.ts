@@ -6,7 +6,6 @@ import { authorizeOrgAction } from "@/lib/auth/guards"
 import {
   revalidateOrganizationSections,
 } from "@/lib/revalidation"
-import { formatCurrency } from "@/lib/utils"
 
 interface AddIncomeInput {
   organizationId: string
@@ -87,163 +86,25 @@ export async function addIncome(input: AddIncomeInput) {
   return { success: true }
 }
 
-interface UpdateTransactionInput {
-  organizationId: string
-  transactionId: string
-  amount: number
-  description?: string
-  category?: string
-  occurredAt: string
-  accountId?: string | null
-  transferToAccountId?: string | null
+import {
+  updateTransaction as updateTransactionImpl,
+  deleteTransaction as deleteTransactionImpl,
+} from './records/actions'
+
+// Delegate transaction mutations to records/actions to eliminate duplicate code (Phase 6)
+export async function updateTransaction(
+  organizationIdOrInput: string | { organizationId: string; transactionId?: string; id?: string; [key: string]: unknown },
+  idOrData?: string | Record<string, unknown>,
+  data?: Record<string, unknown>
+) {
+  return updateTransactionImpl(organizationIdOrInput, idOrData, data)
 }
 
-export async function updateTransaction(input: UpdateTransactionInput) {
-  const { organizationId, transactionId, amount, description, category, occurredAt } = input
-
-  if (!organizationId || !transactionId) {
-    return { error: "Organization and transaction are required" }
-  }
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return { error: "Amount must be greater than 0" }
-  }
-
-  if (!occurredAt) {
-    return { error: "Date is required" }
-  }
-
-  const occurredDate = new Date(occurredAt)
-  if (Number.isNaN(occurredDate.getTime())) {
-    return { error: "Invalid date" }
-  }
-
-  const auth = await authorizeOrgAction(
-    organizationId,
-    ['owner', 'admin'],
-    "You don't have permission to edit transactions"
-  )
-
-  if ('error' in auth) {
-    return auth
-  }
-
-  const { user, membership } = auth
-  const admin = createAdminClient()
-
-  // Verify transaction belongs to organization
-  const { data: existingTx, error: txError } = await admin
-    .from("transactions")
-    .select("id, organization_id, is_initial, type")
-    .eq("id", transactionId)
-    .maybeSingle()
-
-  if (txError || !existingTx) {
-    return { error: "Transaction not found" }
-  }
-
-  if (existingTx.organization_id !== organizationId) {
-    return { error: "Transaction does not belong to this organization" }
-  }
-
-  if (existingTx.is_initial && membership.role !== 'owner') {
-    return { error: "Only organization owners can edit initial transactions" }
-  }
-
-  // Normalize category if provided
-  const categoryType = existingTx.type === 'income' ? 'income' : 'expense'
-  const categoryId = category ? await getOrCreateCategory(organizationId, category, categoryType) : null
-
-  const updatePayload: Record<string, unknown> = {
-    amount,
-    description: description?.trim() || null,
-    category: category?.trim() || null,
-    category_id: categoryId,
-    occurred_at: occurredDate.toISOString(),
-    updated_by_user_id: user.id,
-  }
-
-  if (input.accountId !== undefined) {
-    updatePayload.account_id = input.accountId
-  }
-  if (input.transferToAccountId !== undefined) {
-    updatePayload.transfer_to_account_id = input.transferToAccountId
-  }
-
-  const { error: updateError } = await admin
-    .from("transactions")
-    .update(updatePayload)
-    .eq("id", transactionId)
-    .eq("organization_id", organizationId)
-
-  if (updateError) {
-    console.error("[UPDATE_TRANSACTION] Update failed", updateError.message)
-    return { error: "Unable to update transaction" }
-  }
-
-  revalidateOrganizationSections(organizationId, ['records', 'settings', 'accounts', 'settings/holdings'])
-
-  return { success: true }
-}
-
-interface DeleteTransactionInput {
-  organizationId: string
-  transactionId: string
-}
-
-export async function deleteTransaction(input: DeleteTransactionInput) {
-  const { organizationId, transactionId } = input
-
-  if (!organizationId || !transactionId) {
-    return { error: "Organization and transaction are required" }
-  }
-
-  const auth = await authorizeOrgAction(
-    organizationId,
-    ['owner', 'admin'],
-    "You don't have permission to delete transactions"
-  )
-
-  if ('error' in auth) {
-    return auth
-  }
-
-  const { membership } = auth
-  const admin = createAdminClient()
-
-  // Verify transaction belongs to organization
-  const { data: existingTx, error: txError } = await admin
-    .from("transactions")
-    .select("id, organization_id, is_initial")
-    .eq("id", transactionId)
-    .maybeSingle()
-
-  if (txError || !existingTx) {
-    return { error: "Transaction not found" }
-  }
-
-  if (existingTx.organization_id !== organizationId) {
-    return { error: "Transaction does not belong to this organization" }
-  }
-
-  if (existingTx.is_initial && membership.role !== 'owner') {
-    return { error: "Only organization owners can delete initial transactions" }
-  }
-
-  const { error: deleteError } = await admin
-    .from("transactions")
-    .delete()
-    .eq("id", transactionId)
-    .eq("organization_id", organizationId)
-
-  if (deleteError) {
-    console.error("[DELETE_TRANSACTION] Delete failed", deleteError.message)
-    return { error: "Unable to delete transaction" }
-  }
-
-  revalidateOrganizationSections(organizationId, ['records', 'settings', 'accounts', 'settings/holdings'])
-
-  return { success: true }
+export async function deleteTransaction(
+  organizationIdOrInput: string | { organizationId: string; transactionId?: string; id?: string },
+  idArg?: string
+) {
+  return deleteTransactionImpl(organizationIdOrInput, idArg)
 }
 
 interface AddExpenseInput {
@@ -917,107 +778,22 @@ export async function createRefund(input: CreateRefundInput) {
   const { user } = auth
   const admin = createAdminClient()
 
-  // Get current user's outstanding reimbursable amount and org currency
-  const [{ data: txRows, error: txError }, { data: org }] = await Promise.all([
-    admin
-      .from("transactions")
-      .select("type, amount, funded_by_type, funded_by_user_id")
-      .eq("organization_id", organizationId),
-    admin
-      .from("organizations")
-      .select("currency")
-      .eq("id", organizationId)
-      .maybeSingle(),
-  ])
+  // Atomic stored procedure execution with row-level locks (AGENTS.md Rule 5)
+  const { data, error } = await admin.rpc('process_member_refund', {
+    p_org_id: organizationId,
+    p_user_id: user.id,
+    p_amount: amount,
+    p_description: description?.trim() || null,
+  })
 
-  if (txError) {
-    console.error("[CREATE_REFUND] Transactions fetch error", txError.message)
-    return { error: "Unable to fetch transaction data" }
+  if (error) {
+    console.error("[CREATE_REFUND] Stored procedure error:", error.message)
+    return { error: error.message || "Unable to process refund" }
   }
 
-  // Calculate current user's personal contributions
-  let contributedPersonal = 0
-  for (const r of txRows || []) {
-    const txAmount = Number(r.amount ?? 0)
-    const type = r.type as string
-    const isPersonalFunded = (r.funded_by_type as string | null) === 'personal'
-    const fundedByUserId = r.funded_by_user_id as string | null
-
-    if (isPersonalFunded && fundedByUserId === user.id && type === 'expense_personal') {
-      contributedPersonal += txAmount
-    }
-  }
-
-  // Get current user's reimbursements paid
-  const { data: reimbursementRows, error: reimbError } = await admin
-    .from("reimbursement_requests")
-    .select("amount, status")
-    .eq("organization_id", organizationId)
-    .eq("from_user_id", user.id)
-    .eq("status", "paid")
-
-  if (reimbError) {
-    console.error("[CREATE_REFUND] Reimbursements fetch error", reimbError.message)
-    return { error: "Unable to fetch reimbursement data" }
-  }
-
-  let reimbursementsPaid = 0
-  for (const r of reimbursementRows || []) {
-    reimbursementsPaid += Number(r.amount ?? 0)
-  }
-
-  const outstanding = Math.max(contributedPersonal - reimbursementsPaid, 0)
-
-  if (outstanding <= 0) {
-    return { error: "You have no outstanding balance to refund" }
-  }
-
-  if (amount > outstanding) {
-    return {
-      error: `Amount exceeds outstanding balance of ${formatCurrency(outstanding, org?.currency)}`,
-    }
-  }
-
-  // Create reimbursement request with status = 'paid' (no approval needed)
-  const { data: createdReimbursement, error: insertError } = await admin
-    .from("reimbursement_requests")
-    .insert({
-      organization_id: organizationId,
-      from_user_id: user.id,
-      amount,
-      status: "paid",
-      approval_required: false,
-      notes: description?.trim() || null,
-    })
-    .select("id")
-    .single()
-
-  if (insertError || !createdReimbursement) {
-    console.error("[CREATE_REFUND] Reimbursement insert failed", insertError?.message)
-    return { error: "Unable to create refund right now" }
-  }
-
-  // Also create a held_return transaction to deduct from user's business held balance
-  const { error: txInsertError } = await admin
-    .from("transactions")
-    .insert({
-      organization_id: organizationId,
-      user_id: user.id,
-      type: "held_return",
-      amount,
-      description: `Refund withdrawal${description ? ': ' + description : ''}`,
-      category: "Refund",
-      occurred_at: new Date().toISOString(),
-      funded_by_type: "business" as const,
-      funded_by_user_id: user.id,
-      updated_by_user_id: user.id,
-      is_initial: false,
-    })
-
-  if (txInsertError) {
-    console.error("[CREATE_REFUND] Transaction insert failed, rolling back reimbursement", txInsertError.message)
-    await admin.from("reimbursement_requests").delete().eq("id", createdReimbursement.id)
-    return { error: "Unable to record refund transaction" }
+  const result = data as { success?: boolean; error?: string } | null
+  if (!result || !result.success) {
+    return { error: result?.error || "Unable to process refund" }
   }
 
   revalidateOrganizationSections(organizationId, ['records', 'settings', 'settings/holdings'])

@@ -111,7 +111,7 @@ export async function fetchTransactionsWithFilters(
     )
     .eq('organization_id', organizationId)
     .order('occurred_at', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
 
   if (filters.searchText) {
     const sanitizedSearch = sanitizePostgrestFilter(filters.searchText)
@@ -164,7 +164,25 @@ export async function fetchTransactionsWithFilters(
   }
 
   if (filters.cursor) {
-    query = query.lt('occurred_at', filters.cursor)
+    if (filters.cursor.includes('___')) {
+      const [rawTime, rawId] = filters.cursor.split('___')
+      const timeMs = rawTime ? Date.parse(rawTime) : NaN
+      const parsedTime = !isNaN(timeMs) ? new Date(timeMs).toISOString() : null
+      const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId || '')
+
+      if (parsedTime && isValidUuid) {
+        query = query.or(
+          `occurred_at.lt.${parsedTime},and(occurred_at.eq.${parsedTime},id.lt.${rawId})`
+        )
+      } else if (parsedTime) {
+        query = query.lt('occurred_at', parsedTime)
+      }
+    } else {
+      const timeMs = Date.parse(filters.cursor)
+      if (!isNaN(timeMs)) {
+        query = query.lt('occurred_at', new Date(timeMs).toISOString())
+      }
+    }
   }
 
   const { data, error } = await query.limit(limit + 1)
@@ -181,7 +199,8 @@ export async function fetchTransactionsWithFilters(
   if (transactions.length > limit) {
     hasMore = true
     transactions.pop()
-    nextCursor = transactions[transactions.length - 1]?.occurred_at || null
+    const lastItem = transactions[transactions.length - 1]
+    nextCursor = lastItem ? `${lastItem.occurred_at}___${lastItem.id}` : null
   }
 
   return { transactions, nextCursor, hasMore }

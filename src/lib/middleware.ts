@@ -9,6 +9,7 @@ const publicRoutes = [
   '/privacy',
   '/delete-account',
   '/account-deletion',
+  '/api/health-check',
 ]
 
 // Define auth routes that should redirect to authenticated area if user is already logged in
