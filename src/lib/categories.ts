@@ -168,7 +168,9 @@ export async function getOrganizationCategoriesByType(organizationId: string): P
       .from('transactions')
       .select('category_id')
       .eq('organization_id', organizationId)
-      .not('category_id', 'is', null),
+      .not('category_id', 'is', null)
+      // shortcut: caps usage count scan at 10,000 rows; switch to RPC GROUP BY if an org exceeds 10k transactions
+      .limit(10000),
   ])
 
   if (error) {
@@ -383,6 +385,7 @@ export async function getUnlinkedTransactionCategories(
     .eq('organization_id', organizationId)
     .is('category_id', null)
     .not('category', 'is', null)
+    .limit(10000)
 
   if (error || !data) {
     if (error) console.error('[getUnlinkedTransactionCategories] Error:', error.message)
