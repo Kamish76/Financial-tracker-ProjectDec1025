@@ -9,6 +9,7 @@ import { requireOrgMembership } from '@/lib/auth/guards'
 import { AddIncomeSheet } from './add-income-sheet'
 import { AddExpenseSheet } from './add-expense-sheet'
 import { RefundSheet } from './refund-sheet'
+import { RecentActivityActions } from './recent-activity-actions'
 import { getOrganizationStats, type OrganizationStats } from '@/lib/finance'
 import { StatsCards } from '@/components/stats-cards'
 import { MemberBalancesTable } from '@/components/member-balances-table'
@@ -35,6 +36,8 @@ type TransactionRecord = {
 	occurred_at: string | null
 	created_at: string
 	is_initial: boolean
+	account_id?: string | null
+	transfer_to_account_id?: string | null
 	account_name?: string | null
 	transfer_to_account_name?: string | null
 }
@@ -80,6 +83,8 @@ type RawTransactionRow = {
 	occurred_at?: string | null
 	created_at: string
 	is_initial?: boolean | null
+	account_id?: string | null
+	transfer_to_account_id?: string | null
 	account?: { name?: string | null } | null
 	transfer_to_account?: { name?: string | null } | null
 }
@@ -197,6 +202,8 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 		occurred_at: row.occurred_at ?? null,
 		created_at: row.created_at,
 		is_initial: row.is_initial ?? false,
+		account_id: row.account_id ?? null,
+		transfer_to_account_id: row.transfer_to_account_id ?? null,
 		account_name: row.account?.name ?? null,
 		transfer_to_account_name: row.transfer_to_account?.name ?? null,
 	}))
@@ -451,16 +458,27 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 													{dateFormatter.format(new Date(tx.occurred_at || tx.created_at))}
 												</p>
 											</div>
-											<div className={`text-right text-base font-semibold ${
-												isWallet
-													? tx.type === 'income'
-														? 'text-emerald-600 dark:text-emerald-400'
-														: tx.type === 'transfer'
-														? 'text-purple-600 dark:text-purple-400'
-														: 'text-rose-600 dark:text-rose-400'
-													: 'text-foreground'
-											}`}>
-												{formatAmount(tx.type, tx.amount, organization?.currency, isWallet)}
+											<div className="flex items-center justify-between sm:justify-end gap-3">
+												<div className={`text-right text-base font-semibold ${
+													isWallet
+														? tx.type === 'income'
+															? 'text-emerald-600 dark:text-emerald-400'
+															: tx.type === 'transfer'
+															? 'text-purple-600 dark:text-purple-400'
+															: 'text-rose-600 dark:text-rose-400'
+														: 'text-foreground'
+												}`}>
+													{formatAmount(tx.type, tx.amount, organization?.currency, isWallet)}
+												</div>
+												{canManage && (
+													<RecentActivityActions
+														organizationId={id}
+														isWallet={isWallet}
+														currency={organization?.currency}
+														accounts={accounts}
+														transaction={tx}
+													/>
+												)}
 											</div>
 										</div>
 									)
