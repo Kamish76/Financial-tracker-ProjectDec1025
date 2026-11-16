@@ -132,33 +132,34 @@ export function RecentActivityActions({
         </Button>
       </div>
 
-      {isWallet ? (
-        <WalletTransactionEditDialog
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          transaction={recordForDialog}
-          organizationId={organizationId}
-          categories={categories}
-          accounts={accounts}
-          currency={currency}
-          onSave={() => {
-            setEditOpen(false)
-            router.refresh()
-          }}
-        />
-      ) : (
-        <TransactionEditDialog
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          transaction={recordForDialog}
-          organizationId={organizationId}
-          categories={categories}
-          onSave={() => {
-            setEditOpen(false)
-            router.refresh()
-          }}
-        />
-      )}
+      {editOpen &&
+        (isWallet ? (
+          <WalletTransactionEditDialog
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            transaction={recordForDialog}
+            organizationId={organizationId}
+            categories={categories}
+            accounts={accounts}
+            currency={currency}
+            onSave={() => {
+              setEditOpen(false)
+              router.refresh()
+            }}
+          />
+        ) : (
+          <TransactionEditDialog
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            transaction={recordForDialog}
+            organizationId={organizationId}
+            categories={categories}
+            onSave={() => {
+              setEditOpen(false)
+              router.refresh()
+            }}
+          />
+        ))}
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>

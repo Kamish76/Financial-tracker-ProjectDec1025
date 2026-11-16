@@ -340,4 +340,54 @@ describe('Unit Tests: Financial Accounting Calculations & Precision', () => {
       expect(response.status).toBe(401)
     })
   })
+
+  describe('Transaction Modal & Period Insights Helpers', () => {
+    it('evaluates math expressions with BODMAS and safe division by zero', async () => {
+      const { evaluateMathExpression } = await import('@/lib/utils')
+      expect(evaluateMathExpression('100+25×2')).toBe(150)
+      expect(evaluateMathExpression('150÷3-10')).toBe(40)
+      expect(evaluateMathExpression('50÷0')).toBe(0)
+    })
+
+    it('preserves exact timestamp when date is unchanged and local time when date changes', async () => {
+      const { formatLocalDateInput, mergeDateWithOriginalTime } = await import('@/lib/utils')
+      const orig = new Date(2026, 10, 16, 14, 35, 22, 450).toISOString()
+      const localDate = formatLocalDateInput(orig)
+      expect(mergeDateWithOriginalTime(localDate, orig)).toBe(orig)
+
+      const shifted = new Date(mergeDateWithOriginalTime('2026-11-10', orig))
+      expect(shifted.getFullYear()).toBe(2026)
+      expect(shifted.getMonth()).toBe(10)
+      expect(shifted.getDate()).toBe(10)
+      expect(shifted.getHours()).toBe(14)
+      expect(shifted.getMinutes()).toBe(35)
+    })
+
+    it('computes period deltas, savings rate, and top expense categories', async () => {
+      const { calculatePeriodComparison, calculateTopExpenseCategories } = await import('@/lib/finance-client')
+      const now = new Date()
+      const thisMonthTxDate = new Date(now.getFullYear(), now.getMonth(), Math.min(15, now.getDate()), 10, 0, 0).toISOString()
+      const lastMonthTxDate = new Date(now.getFullYear(), now.getMonth() - 1, 10, 10, 0, 0).toISOString()
+
+      const txs = [
+        { type: 'income', amount: 1000, occurred_at: thisMonthTxDate },
+        { type: 'expense_business', amount: 300, category: 'Materials', occurred_at: thisMonthTxDate },
+        { type: 'expense_personal', amount: 100, category: 'Shipping', occurred_at: thisMonthTxDate },
+        { type: 'income', amount: 500, occurred_at: lastMonthTxDate },
+        { type: 'expense_business', amount: 200, category: 'Materials', occurred_at: lastMonthTxDate },
+      ]
+
+      const comp = calculatePeriodComparison(txs, 'monthly')
+      expect(comp.current.income).toBe(1000)
+      expect(comp.current.expenses).toBe(400)
+      expect(comp.incomeDeltaPct).toBe(100)
+      expect(comp.expenseDeltaPct).toBe(100)
+      expect(comp.savingsRatePct).toBe(60)
+
+      const top = calculateTopExpenseCategories(txs, 'monthly', 5)
+      expect(top.totalExpenses).toBe(400)
+      expect(top.items[0]).toEqual({ category: 'Materials', amount: 300, pct: 75 })
+      expect(top.items[1]).toEqual({ category: 'Shipping', amount: 100, pct: 25 })
+    })
+  })
 })
