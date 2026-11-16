@@ -12,6 +12,7 @@ import { RefundSheet } from './refund-sheet'
 import { RecentActivityActions } from './recent-activity-actions'
 import { CustomizableDashboard, type DashboardSection } from './customizable-dashboard'
 import { WalletQuickActions } from './wallet-quick-actions'
+import { ManageCategoriesButton } from './manage-categories-button'
 import { getOrganizationStats, type OrganizationStats } from '@/lib/finance'
 import { StatsCards } from '@/components/stats-cards'
 import { MemberBalancesTable } from '@/components/member-balances-table'
@@ -318,17 +319,20 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 					</Link>
 				</Button>
 				{!isWallet && (
-					<Button
-						asChild
-						variant="outline"
-						className="w-full justify-start gap-2 md:col-span-2"
-						aria-label="Manage organization settings"
-					>
-						<Link href={`/organizations/${id}/settings`}>
-							<Settings className="h-4 w-4" />
-							Manage Settings
-						</Link>
-					</Button>
+					<>
+						<Button
+							asChild
+							variant="outline"
+							className="w-full justify-start gap-2"
+							aria-label="Manage organization settings"
+						>
+							<Link href={`/organizations/${id}/settings`}>
+								<Settings className="h-4 w-4" />
+								Manage Settings
+							</Link>
+						</Button>
+						<ManageCategoriesButton organizationId={id} disabled={!canManage} />
+					</>
 				)}
 			</CardContent>
 		</Card>
