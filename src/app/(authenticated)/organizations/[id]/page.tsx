@@ -11,6 +11,7 @@ import { AddExpenseSheet } from './add-expense-sheet'
 import { RefundSheet } from './refund-sheet'
 import { RecentActivityActions } from './recent-activity-actions'
 import { CustomizableDashboard, type DashboardSection } from './customizable-dashboard'
+import { WalletQuickActions } from './wallet-quick-actions'
 import { getOrganizationStats, type OrganizationStats } from '@/lib/finance'
 import { StatsCards } from '@/components/stats-cards'
 import { MemberBalancesTable } from '@/components/member-balances-table'
@@ -344,40 +345,12 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 			</CardContent>
 		</Card>
 	) : (
-		<Card>
-			<CardHeader>
-				<div className="flex items-start justify-between gap-3">
-					<div className="space-y-1">
-						<CardTitle>Wallet Sub Accounts</CardTitle>
-						<CardDescription>
-							Organize your personal funds across custom cash, checking, and savings accounts.
-						</CardDescription>
-					</div>
-					<div className="rounded-full bg-accent-strong text-white p-2">
-						<ArrowLeftRight className="h-5 w-5" />
-					</div>
-				</div>
-			</CardHeader>
-			<CardContent className="flex flex-col sm:flex-row flex-wrap gap-3">
-				<Button asChild className="w-full sm:w-auto">
-					<Link href={`/organizations/${id}/accounts`}>
-						Manage Sub Accounts
-					</Link>
-				</Button>
-				<Button asChild variant="outline" className="w-full sm:w-auto">
-					<Link href={`/organizations/${id}/records`}>
-						<ScrollText className="h-4 w-4 mr-2" />
-						Transaction History
-					</Link>
-				</Button>
-				<Button asChild variant="outline" className="w-full sm:w-auto">
-					<Link href={`/organizations/${id}/settings`}>
-						<Settings className="h-4 w-4 mr-2" />
-						Wallet Settings
-					</Link>
-				</Button>
-			</CardContent>
-		</Card>
+		<WalletQuickActions
+			organizationId={id}
+			accounts={accounts}
+			currency={organization?.currency}
+			canManage={canManage}
+		/>
 	)
 
 	const recentActivityNode = (
@@ -499,7 +472,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 			: []),
 		{
 			id: isWallet ? 'wallet-accounts' : 'member-balances',
-			label: isWallet ? 'Wallet Sub Accounts' : 'Member Balances',
+			label: isWallet ? 'Quick Actions' : 'Member Balances',
 			node: secondarySectionNode,
 		},
 		{
