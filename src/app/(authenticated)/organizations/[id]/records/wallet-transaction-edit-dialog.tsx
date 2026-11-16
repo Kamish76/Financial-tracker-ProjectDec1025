@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { updateTransaction } from "../actions"
+import { formatLocalDateInput, mergeDateWithOriginalTime } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -65,7 +66,7 @@ export function WalletTransactionEditDialog({
     transaction.transfer_to_account_id || ""
   )
   const [occurredAt, setOccurredAt] = useState(
-    transaction.occurred_at?.split("T")[0] || ""
+    formatLocalDateInput(transaction.occurred_at)
   )
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -93,7 +94,7 @@ export function WalletTransactionEditDialog({
         category: category.trim() || undefined,
         accountId: accountId || null,
         transferToAccountId: transaction.type === 'transfer' ? transferToAccountId || null : null,
-        occurredAt,
+        occurredAt: mergeDateWithOriginalTime(occurredAt, transaction.occurred_at),
       })
 
       if ('error' in result) {

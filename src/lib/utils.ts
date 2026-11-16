@@ -29,3 +29,35 @@ export function formatDate(isoString: string): string {
     day: 'numeric',
   })
 }
+
+export function formatLocalDateInput(isoString?: string | null): string {
+  if (!isoString) return ''
+  const date = new Date(isoString)
+  if (Number.isNaN(date.getTime())) return ''
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+export function mergeDateWithOriginalTime(dateStr: string, originalIso?: string | null): string {
+  if (!dateStr) return originalIso || ''
+  if (originalIso && formatLocalDateInput(originalIso) === dateStr) {
+    return originalIso
+  }
+  const [y, m, d] = dateStr.split('-').map(Number)
+  if (!y || !m || !d) return originalIso || dateStr
+
+  const orig = originalIso ? new Date(originalIso) : null
+  const hasValidOrig = orig && !Number.isNaN(orig.getTime())
+  const merged = new Date(
+    y,
+    m - 1,
+    d,
+    hasValidOrig ? orig.getHours() : 12,
+    hasValidOrig ? orig.getMinutes() : 0,
+    hasValidOrig ? orig.getSeconds() : 0,
+    hasValidOrig ? orig.getMilliseconds() : 0
+  )
+  return merged.toISOString()
+}

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { updateTransaction } from "../actions"
+import { formatLocalDateInput, mergeDateWithOriginalTime } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -58,7 +59,7 @@ export function TransactionEditDialog({
     (c) => c.normalized_name.toLowerCase() === category.toLowerCase()
   )
   const [occurredAt, setOccurredAt] = useState(
-    transaction.occurred_at?.split("T")[0] || ""
+    formatLocalDateInput(transaction.occurred_at)
   )
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -79,7 +80,7 @@ export function TransactionEditDialog({
         amount: parsedAmount,
         description: description.trim() || undefined,
         category: category.trim() || undefined,
-        occurredAt,
+        occurredAt: mergeDateWithOriginalTime(occurredAt, transaction.occurred_at),
       })
 
       if ('error' in result) {
