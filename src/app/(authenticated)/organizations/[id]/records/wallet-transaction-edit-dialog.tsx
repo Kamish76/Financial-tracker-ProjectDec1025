@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { updateTransaction } from "../actions"
+import { formatLocalDateInput, mergeDateWithOriginalTime } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -30,6 +31,7 @@ type Transaction = TransactionRecord
 type Category = {
   id: string
   normalized_name: string
+  display_name?: string
   aliases?: string[]
 }
 
@@ -64,7 +66,7 @@ export function WalletTransactionEditDialog({
     transaction.transfer_to_account_id || ""
   )
   const [occurredAt, setOccurredAt] = useState(
-    transaction.occurred_at?.split("T")[0] || ""
+    formatLocalDateInput(transaction.occurred_at)
   )
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -92,7 +94,7 @@ export function WalletTransactionEditDialog({
         category: category.trim() || undefined,
         accountId: accountId || null,
         transferToAccountId: transaction.type === 'transfer' ? transferToAccountId || null : null,
-        occurredAt,
+        occurredAt: mergeDateWithOriginalTime(occurredAt, transaction.occurred_at),
       })
 
       if ('error' in result) {
@@ -215,7 +217,10 @@ export function WalletTransactionEditDialog({
               {categories.length > 0 ? (
                 <div className="space-y-1.5">
                   <Select
-                    value={categories.some((c) => c.normalized_name === category) ? category : 'custom'}
+                    value={
+                      categories.find((c) => c.normalized_name.toLowerCase() === category.toLowerCase())
+                        ?.normalized_name ?? 'custom'
+                    }
                     onValueChange={(val) => {
                       if (val !== 'custom') {
                         setCategory(val)
@@ -229,13 +234,13 @@ export function WalletTransactionEditDialog({
                     <SelectContent>
                       {categories.map((cat) => (
                         <SelectItem key={cat.id} value={cat.normalized_name}>
-                          {cat.normalized_name}
+                          {cat.display_name || cat.normalized_name}
                         </SelectItem>
                       ))}
                       <SelectItem value="custom">Custom / Other</SelectItem>
                     </SelectContent>
                   </Select>
-                  {(!categories.some((c) => c.normalized_name === category) || category === '') && (
+                  {(!categories.some((c) => c.normalized_name.toLowerCase() === category.toLowerCase()) || category === '') && (
                     <Input
                       id="category"
                       value={category}

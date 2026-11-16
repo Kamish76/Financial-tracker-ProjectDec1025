@@ -329,8 +329,11 @@ export function AddTransactionModal({
 
     setIsSubmitting(true)
 
-    // Build ISO timestamp from date and time
-    const fullDate = new Date(`${txDate}T${txTime}:00`).toISOString()
+    // Build ISO timestamp from date and time, preserving current seconds/ms
+    const now = new Date()
+    const sec = String(now.getSeconds()).padStart(2, '0')
+    const ms = String(now.getMilliseconds()).padStart(3, '0')
+    const fullDate = new Date(`${txDate}T${txTime}:${sec}.${ms}`).toISOString()
 
     const typeParam =
       activeTab === 'income'
