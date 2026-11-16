@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { Search, Filter, X, ArrowLeft, Plus, SlidersHorizontal } from "lucide-react"
+import { Search, Filter, X, ArrowLeft } from "lucide-react"
 import {
   fetchTransactionsWithFilters,
   fetchTransactionAggregates,
@@ -22,7 +22,6 @@ import {
 import { TransactionsList } from "./transactions-list"
 import { TransactionEditDialog } from "./transaction-edit-dialog"
 import { FilteredStatsCard } from "./filtered-stats-card"
-import { OrgTransactionDrawer } from "../org-transaction-drawer"
 import type { FilteredStats } from "@/lib/finance-client"
 import type { TransactionRecord } from "./utils"
 
@@ -47,14 +46,6 @@ const TRANSACTION_TYPES = [
   { value: "transfer", label: "Transfer" },
 ]
 
-const QUICK_TYPE_PILLS = [
-  { value: "all", label: "All" },
-  { value: "income", label: "Income" },
-  { value: "expense_business", label: "Business Exp" },
-  { value: "expense_personal", label: "Personal Exp" },
-  { value: "held_return", label: "Refund / Return" },
-]
-
 type RecordsPageContentProps = {
   currency?: string
   userRole?: string
@@ -65,8 +56,6 @@ export function OrganizationRecordsView({ currency, userRole }: RecordsPageConte
   const params = useParams()
   const organizationId = params.id as string
 
-  const canManage = !userRole || userRole === "owner" || userRole === "admin"
-
   // Filter states
   const [searchText, setSearchText] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
@@ -75,7 +64,6 @@ export function OrganizationRecordsView({ currency, userRole }: RecordsPageConte
   const [fundedByType, setFundedByType] = useState("all")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(true)
 
   // Data states
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -87,8 +75,7 @@ export function OrganizationRecordsView({ currency, userRole }: RecordsPageConte
   const [hasMore, setHasMore] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
 
-  // Add & Edit dialog states
-  const [isAddDrawerOpen, setIsAddDrawerOpen] = useState(false)
+  // Edit dialog state
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [showEditDialog, setShowEditDialog] = useState(false)
 
@@ -271,22 +258,9 @@ export function OrganizationRecordsView({ currency, userRole }: RecordsPageConte
         </Button>
       </div>
 
-      {/* Header Row */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Transaction Records</h1>
-          <p className="text-muted-foreground mt-1">View, search, and manage all transactions</p>
-        </div>
-
-        {canManage && (
-          <Button
-            onClick={() => setIsAddDrawerOpen(true)}
-            className="gap-2 shrink-0 self-start sm:self-auto shadow-xs"
-          >
-            <Plus className="h-4 w-4" aria-hidden />
-            Add Transaction
-          </Button>
-        )}
+      <div>
+        <h1 className="text-3xl font-bold text-foreground">Transaction Records</h1>
+        <p className="text-muted-foreground mt-1">View, search, and manage all transactions</p>
       </div>
 
       {/* Filtered Stats Card */}
@@ -296,196 +270,123 @@ export function OrganizationRecordsView({ currency, userRole }: RecordsPageConte
         currency={currency}
       />
 
-      {/* Command & Filter Bar */}
-      <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-2xs space-y-4">
-        {/* Search + Quick Type Pills + Collapse Toggle */}
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden />
-            <Input
-              placeholder="Search transactions by description or category..."
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              className="pl-9 pr-9"
-            />
-            {searchText && (
-              <button
-                type="button"
-                aria-label="Clear search"
-                onClick={() => setSearchText("")}
-                className="absolute right-2.5 top-2.5 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+        <Input
+          placeholder="Search transactions by description or category..."
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
+      {/* Filter Controls */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium text-foreground">Filters</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Category Filter */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground block mb-2">Category</label>
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger>
+                <SelectValue placeholder="All categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.normalized_name}>
+                    {cat.normalized_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
-            {QUICK_TYPE_PILLS.map((pill) => {
-              const active = selectedType === pill.value
-              return (
-                <button
-                  key={pill.value}
-                  type="button"
-                  onClick={() => setSelectedType(pill.value)}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                    active
-                      ? "border-accent-strong bg-accent/15 text-accent-strong font-semibold"
-                      : "border-border/70 bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
-                >
-                  {pill.label}
-                </button>
-              )
-            })}
+          {/* Type Filter */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground block mb-2">Type</label>
+            <Select value={selectedType} onValueChange={setSelectedType}>
+              <SelectTrigger>
+                <SelectValue placeholder="All types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                {TRANSACTION_TYPES.map((type) => (
+                  <SelectItem key={type.value} value={type.value}>
+                    {type.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setShowAdvancedFilters((prev) => !prev)}
-              className="ml-auto sm:ml-1 h-7 gap-1.5 rounded-full px-3 text-xs"
-            >
-              <SlidersHorizontal className="h-3 w-3" aria-hidden />
-              <span>{showAdvancedFilters ? "Hide filters" : "More filters"}</span>
-            </Button>
+          {/* Member Filter */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground block mb-2">Member</label>
+            <Select value={selectedMember} onValueChange={setSelectedMember}>
+              <SelectTrigger>
+                <SelectValue placeholder="All members" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All members</SelectItem>
+                {members.map((member) => (
+                  <SelectItem key={member.id} value={member.id}>
+                    {member.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Funded By Filter */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground block mb-2">Funded By</label>
+            <Select value={fundedByType} onValueChange={setFundedByType}>
+              <SelectTrigger>
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="business">Business</SelectItem>
+                <SelectItem value="personal">Personal</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Start Date */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground block mb-2">From</label>
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+
+          {/* End Date */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground block mb-2">To</label>
+            <Input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
           </div>
         </div>
 
-        {/* Detailed Filter Controls */}
-        {showAdvancedFilters && (
-          <div className="space-y-3 pt-3 border-t border-border/60">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Filter className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Filters
-                </span>
-              </div>
-              {activeFilters.length > 0 && (
-                <button
-                  type="button"
-                  onClick={clearAllFilters}
-                  className="text-xs font-medium text-accent-strong hover:underline"
-                >
-                  Reset all ({activeFilters.length})
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-              {/* Category Filter */}
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground block mb-1.5">
-                  Category
-                </label>
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All categories" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All categories</SelectItem>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.normalized_name}>
-                        {cat.normalized_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Type Filter */}
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground block mb-1.5">
-                  Type
-                </label>
-                <Select value={selectedType} onValueChange={setSelectedType}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All types" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All types</SelectItem>
-                    {TRANSACTION_TYPES.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        {type.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Member Filter */}
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground block mb-1.5">
-                  Member
-                </label>
-                <Select value={selectedMember} onValueChange={setSelectedMember}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All members" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All members</SelectItem>
-                    {members.map((member) => (
-                      <SelectItem key={member.id} value={member.id}>
-                        {member.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Funded By Filter */}
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground block mb-1.5">
-                  Funded By
-                </label>
-                <Select value={fundedByType} onValueChange={setFundedByType}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="business">Business</SelectItem>
-                    <SelectItem value="personal">Personal</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Start Date */}
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground block mb-1.5">
-                  From
-                </label>
-                <Input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                />
-              </div>
-
-              {/* End Date */}
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground block mb-1.5">
-                  To
-                </label>
-                <Input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Active Filters */}
         {activeFilters.length > 0 && (
-          <div className="flex flex-wrap gap-2 items-center pt-1">
+          <div className="flex flex-wrap gap-2 items-center">
             {activeFilters.map((filter) => (
               <Badge
                 key={filter.key}
                 variant="secondary"
-                className="flex items-center gap-1.5 rounded-full cursor-pointer hover:bg-muted px-3 py-1"
+                className="flex items-center gap-2 cursor-pointer hover:bg-gray-300"
                 onClick={() => clearFilter(filter.key)}
               >
                 {filter.label}
@@ -496,7 +397,7 @@ export function OrganizationRecordsView({ currency, userRole }: RecordsPageConte
               variant="outline"
               size="sm"
               onClick={clearAllFilters}
-              className="h-7 rounded-full text-xs"
+              className="text-xs"
             >
               Clear All
             </Button>
@@ -518,30 +419,15 @@ export function OrganizationRecordsView({ currency, userRole }: RecordsPageConte
 
       {/* Infinite scroll target */}
       <div ref={observerTarget} className="h-8 flex items-center justify-center">
-        {isLoading && <div className="text-sm text-muted-foreground">Loading...</div>}
+        {isLoading && <div className="text-sm text-gray-500">Loading...</div>}
         {!hasMore && transactions.length > 0 && (
-          <div className="text-xs text-muted-foreground">All matching transactions loaded</div>
+          <div className="text-sm text-gray-500">No more transactions</div>
         )}
       </div>
-
-      {/* Add Transaction Drawer */}
-      {canManage && (
-        <OrgTransactionDrawer
-          organizationId={organizationId}
-          currency={currency}
-          initialTab="income"
-          open={isAddDrawerOpen}
-          onOpenChange={setIsAddDrawerOpen}
-          onSuccess={() => {
-            loadTransactions(false)
-          }}
-        />
-      )}
 
       {/* Edit Dialog */}
       {editingTransaction && (
         <TransactionEditDialog
-          key={editingTransaction.id}
           open={showEditDialog}
           onOpenChange={setShowEditDialog}
           transaction={editingTransaction}

@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { AlertCircle } from "lucide-react"
 import { updateTransaction } from "../actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,7 +39,6 @@ export function TransactionEditDialog({
   transaction,
   organizationId,
   onSave,
-  categories = [],
 }: TransactionEditDialogProps) {
   const [amount, setAmount] = useState(transaction.amount.toString())
   const [description, setDescription] = useState(transaction.description || "")
@@ -72,7 +70,7 @@ export function TransactionEditDialog({
         occurredAt,
       })
 
-      if ("error" in result) {
+      if ('error' in result) {
         setError(result.error ?? "Unable to update transaction")
       } else {
         onSave()
@@ -93,8 +91,8 @@ export function TransactionEditDialog({
 
         <div className="space-y-4">
           {/* Amount */}
-          <div className="space-y-1.5">
-            <Label htmlFor="amount" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <div>
+            <Label htmlFor="amount" className="text-sm font-semibold">
               Amount
             </Label>
             <Input
@@ -106,13 +104,12 @@ export function TransactionEditDialog({
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
               disabled={isPending}
-              className="font-mono text-lg font-bold tabular-nums h-11"
             />
           </div>
 
           {/* Description */}
-          <div className="space-y-1.5">
-            <Label htmlFor="description" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <div>
+            <Label htmlFor="description" className="text-sm font-semibold">
               Description
             </Label>
             <Textarea
@@ -126,32 +123,10 @@ export function TransactionEditDialog({
           </div>
 
           {/* Category */}
-          <div className="space-y-2">
-            <Label htmlFor="category" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <div>
+            <Label htmlFor="category" className="text-sm font-semibold">
               Category
             </Label>
-            {categories.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
-                {categories.slice(0, 10).map((cat) => {
-                  const selected = category.trim().toLowerCase() === cat.normalized_name.toLowerCase()
-                  return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      disabled={isPending}
-                      onClick={() => setCategory(cat.normalized_name)}
-                      className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
-                        selected
-                          ? "border-accent-strong bg-accent/15 text-accent-strong font-semibold"
-                          : "border-border/70 bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
-                      }`}
-                    >
-                      {cat.normalized_name}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
             <Input
               id="category"
               value={category}
@@ -162,8 +137,8 @@ export function TransactionEditDialog({
           </div>
 
           {/* Date */}
-          <div className="space-y-1.5">
-            <Label htmlFor="occurredAt" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <div>
+            <Label htmlFor="occurredAt" className="text-sm font-semibold">
               Date
             </Label>
             <Input
@@ -177,24 +152,28 @@ export function TransactionEditDialog({
 
           {/* Error */}
           {error && (
-            <div className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
-              <span>{error}</span>
+            <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+              {error}
             </div>
           )}
         </div>
 
-        <DialogFooter className="flex gap-2 justify-end pt-2">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isPending}
-          >
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={isPending}>
-            {isPending ? "Saving..." : "Save"}
-          </Button>
+        <DialogFooter className="flex gap-2 justify-between">
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={isPending}
+            >
+              {isPending ? "Saving..." : "Save"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
