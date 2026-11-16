@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Pencil, Trash2 } from 'lucide-react'
 
@@ -13,6 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { getOrganizationCategoriesByType } from '@/lib/categories'
+import type { CategoryItem } from '@/lib/category-constants'
 import type { AccountWithBalance } from '@/lib/wallet-types'
 import { deleteTransaction } from './records/actions'
 import type { TransactionRecord as RecordsTransactionRecord } from './records/utils'
@@ -48,7 +50,22 @@ export function RecentActivityActions({
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [categories, setCategories] = useState<CategoryItem[]>([])
   const [isPending, startTransition] = useTransition()
+
+  useEffect(() => {
+    if (!editOpen || !organizationId) return
+    let isMounted = true
+    getOrganizationCategoriesByType(organizationId)
+      .then((res) => {
+        if (!isMounted) return
+        setCategories(transaction.type === 'income' ? res.income : res.expense)
+      })
+      .catch(() => {})
+    return () => {
+      isMounted = false
+    }
+  }, [editOpen, organizationId, transaction.type])
 
   const recordForDialog: RecordsTransactionRecord = {
     id: transaction.id,
@@ -121,6 +138,7 @@ export function RecentActivityActions({
           onOpenChange={setEditOpen}
           transaction={recordForDialog}
           organizationId={organizationId}
+          categories={categories}
           accounts={accounts}
           currency={currency}
           onSave={() => {
@@ -134,6 +152,7 @@ export function RecentActivityActions({
           onOpenChange={setEditOpen}
           transaction={recordForDialog}
           organizationId={organizationId}
+          categories={categories}
           onSave={() => {
             setEditOpen(false)
             router.refresh()

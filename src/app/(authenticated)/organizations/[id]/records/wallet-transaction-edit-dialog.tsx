@@ -30,6 +30,7 @@ type Transaction = TransactionRecord
 type Category = {
   id: string
   normalized_name: string
+  display_name?: string
   aliases?: string[]
 }
 
@@ -215,7 +216,10 @@ export function WalletTransactionEditDialog({
               {categories.length > 0 ? (
                 <div className="space-y-1.5">
                   <Select
-                    value={categories.some((c) => c.normalized_name === category) ? category : 'custom'}
+                    value={
+                      categories.find((c) => c.normalized_name.toLowerCase() === category.toLowerCase())
+                        ?.normalized_name ?? 'custom'
+                    }
                     onValueChange={(val) => {
                       if (val !== 'custom') {
                         setCategory(val)
@@ -229,13 +233,13 @@ export function WalletTransactionEditDialog({
                     <SelectContent>
                       {categories.map((cat) => (
                         <SelectItem key={cat.id} value={cat.normalized_name}>
-                          {cat.normalized_name}
+                          {cat.display_name || cat.normalized_name}
                         </SelectItem>
                       ))}
                       <SelectItem value="custom">Custom / Other</SelectItem>
                     </SelectContent>
                   </Select>
-                  {(!categories.some((c) => c.normalized_name === category) || category === '') && (
+                  {(!categories.some((c) => c.normalized_name.toLowerCase() === category.toLowerCase()) || category === '') && (
                     <Input
                       id="category"
                       value={category}

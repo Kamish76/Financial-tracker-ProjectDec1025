@@ -7,6 +7,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -21,6 +28,7 @@ type Transaction = TransactionRecord
 type Category = {
   id: string
   normalized_name: string
+  display_name?: string
   aliases?: string[]
 }
 
@@ -39,11 +47,15 @@ export function TransactionEditDialog({
   transaction,
   organizationId,
   onSave,
+  categories = [],
 }: TransactionEditDialogProps) {
   const [amount, setAmount] = useState(transaction.amount.toString())
   const [description, setDescription] = useState(transaction.description || "")
   const [category, setCategory] = useState(
     transaction.category_ref?.normalized_name || transaction.category || ""
+  )
+  const matchedCategory = categories.find(
+    (c) => c.normalized_name.toLowerCase() === category.toLowerCase()
   )
   const [occurredAt, setOccurredAt] = useState(
     transaction.occurred_at?.split("T")[0] || ""
@@ -127,13 +139,49 @@ export function TransactionEditDialog({
             <Label htmlFor="category" className="text-sm font-semibold">
               Category
             </Label>
-            <Input
-              id="category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder="Enter category..."
-              disabled={isPending}
-            />
+            {categories.length > 0 ? (
+              <div className="space-y-1.5">
+                <Select
+                  value={matchedCategory ? matchedCategory.normalized_name : "custom"}
+                  onValueChange={(val) => {
+                    if (val !== "custom") {
+                      setCategory(val)
+                    }
+                  }}
+                  disabled={isPending}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.normalized_name}>
+                        {cat.display_name || cat.normalized_name}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">Custom / Other</SelectItem>
+                  </SelectContent>
+                </Select>
+                {(!matchedCategory || category === "") && (
+                  <Input
+                    id="category"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    placeholder="Type custom category..."
+                    disabled={isPending}
+                    className="mt-1.5"
+                  />
+                )}
+              </div>
+            ) : (
+              <Input
+                id="category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="Enter category..."
+                disabled={isPending}
+              />
+            )}
           </div>
 
           {/* Date */}
