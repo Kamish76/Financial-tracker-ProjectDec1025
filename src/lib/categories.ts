@@ -158,11 +158,18 @@ export async function getOrganizationCategoriesByType(organizationId: string): P
   await requireOrgMembership(organizationId)
   const admin = createAdminClient()
 
-  const { data, error } = await admin
-    .from('transaction_categories')
-    .select('id, normalized_name, aliases, is_custom')
-    .eq('organization_id', organizationId)
-    .order('created_at', { ascending: true })
+  const [{ data, error }, { data: usageRows }] = await Promise.all([
+    admin
+      .from('transaction_categories')
+      .select('id, normalized_name, aliases, is_custom')
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: true }),
+    admin
+      .from('transactions')
+      .select('category_id')
+      .eq('organization_id', organizationId)
+      .not('category_id', 'is', null),
+  ])
 
   if (error) {
     console.error('[getOrganizationCategoriesByType] Error:', error.message)
@@ -171,6 +178,13 @@ export async function getOrganizationCategoriesByType(organizationId: string): P
 
   if (!data || data.length === 0) {
     return { income: [], expense: [] }
+  }
+
+  const usageCounts = new Map<string, number>()
+  for (const tx of usageRows || []) {
+    if (tx.category_id) {
+      usageCounts.set(tx.category_id, (usageCounts.get(tx.category_id) ?? 0) + 1)
+    }
   }
 
   const income: CategoryItem[] = []
@@ -192,6 +206,12 @@ export async function getOrganizationCategoriesByType(organizationId: string): P
       expense.push(item)
     }
   }
+
+  const byMostUsed = (a: CategoryItem, b: CategoryItem) =>
+    (usageCounts.get(b.id) ?? 0) - (usageCounts.get(a.id) ?? 0)
+
+  income.sort(byMostUsed)
+  expense.sort(byMostUsed)
 
   return { income, expense }
 }
