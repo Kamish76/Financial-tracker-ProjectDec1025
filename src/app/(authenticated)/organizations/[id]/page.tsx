@@ -251,14 +251,22 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 					</CardHeader>
 					<CardContent className="grid gap-3 md:grid-cols-2">
 						{canManage ? (
-							<AddIncomeSheet organizationId={id} />
+							<AddIncomeSheet
+								organizationId={id}
+								organizationDescription={organization?.description}
+								currency={organization?.currency}
+							/>
 						) : (
 							<Button type="button" className="w-full justify-start gap-2" disabled aria-disabled>
 								Add income (insufficient permissions)
 							</Button>
 						)}
 						{canManage ? (
-							<AddExpenseSheet organizationId={id} organizationDescription={organization?.description} />
+							<AddExpenseSheet
+								organizationId={id}
+								organizationDescription={organization?.description}
+								currency={organization?.currency}
+							/>
 						) : (
 							<Button
 								type="button"
