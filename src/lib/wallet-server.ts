@@ -1,21 +1,31 @@
+import { cache } from 'react'
 import { createAdminClient } from '@/lib/supabase/server'
 import { isWalletOrganization } from '@/lib/wallet'
 
-export async function getUserWalletId(userId: string): Promise<string | null> {
+export const getUserWalletId = cache(async (userId: string): Promise<string | null> => {
   try {
     const adminClient = createAdminClient()
 
-    const { data: memberships, error } = await adminClient
-      .from('organization_members')
-      .select(`
-        organization_id,
-        organizations (
-          id,
-          description
-        )
-      `)
-      .eq('user_id', userId)
-      .eq('is_active', true)
+    const [
+      { data: memberships, error },
+      { data: ownedWallets, error: ownerError },
+    ] = await Promise.all([
+      adminClient
+        .from('organization_members')
+        .select(`
+          organization_id,
+          organizations (
+            id,
+            description
+          )
+        `)
+        .eq('user_id', userId)
+        .eq('is_active', true),
+      adminClient
+        .from('organizations')
+        .select('id, description')
+        .eq('owner_id', userId),
+    ])
 
     if (!error && memberships) {
       for (const m of memberships) {
@@ -25,11 +35,6 @@ export async function getUserWalletId(userId: string): Promise<string | null> {
         }
       }
     }
-
-    const { data: ownedWallets, error: ownerError } = await adminClient
-      .from('organizations')
-      .select('id, description')
-      .eq('owner_id', userId)
 
     if (!ownerError && ownedWallets) {
       for (const org of ownedWallets) {
@@ -44,4 +49,4 @@ export async function getUserWalletId(userId: string): Promise<string | null> {
     console.error('[GET_USER_WALLET_ID] Error checking wallet organization:', error)
     return null
   }
-}
+})

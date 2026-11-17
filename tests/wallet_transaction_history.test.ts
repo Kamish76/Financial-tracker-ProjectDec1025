@@ -205,13 +205,14 @@ describe('Separation of Organization and Wallet Transaction History', () => {
     })
   })
 
-  describe('6. Organization Main Page (page.tsx)', () => {
+  describe('6. Organization Main Page (page.tsx & dashboard-sections.tsx)', () => {
     const pagePath = path.join(ROOT, 'src/app/(authenticated)/organizations/[id]/page.tsx')
-    const content = fs.readFileSync(pagePath, 'utf8')
+    const sectionsPath = path.join(ROOT, 'src/app/(authenticated)/organizations/[id]/dashboard-sections.tsx')
+    const content = fs.readFileSync(pagePath, 'utf8') + '\n' + fs.readFileSync(sectionsPath, 'utf8')
 
     it('preserves original organization recent activity styling and curates wallet mode', () => {
       expect(content).toContain("isWallet ? 'Recent Wallet Activity' : 'Recent activity'")
-      expect(content).toContain("formatAmount(tx.type, tx.amount, organization?.currency, isWallet)")
+      expect(content).toContain("formatAmount(tx.type, tx.amount, currency, isWallet)")
     })
 
     it('skips getOrganizationStats and limits recent transactions to 10 in wallet mode', () => {
