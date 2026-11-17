@@ -2,23 +2,15 @@ import { cn } from '@/lib/utils'
 
 interface OrgFinanceLogoMarkProps {
   className?: string
-  /** Optional tone override for surfaces with a fixed dark background (e.g. auth aside). */
-  tone?: 'auto' | 'light' | 'dark'
+  /** Force light wallet fill on fixed-dark surfaces such as the auth sidebar. */
+  dark?: boolean
 }
 
 /**
  * 1:1 OrgFinance wallet-and-growth emblem matching the mobile brand palette.
  */
-export function OrgFinanceLogoMark({
-  className,
-  tone = 'auto',
-}: OrgFinanceLogoMarkProps) {
-  const walletFillClass =
-    tone === 'dark'
-      ? 'fill-slate-50'
-      : tone === 'light'
-        ? 'fill-slate-900'
-        : 'fill-slate-900 dark:fill-slate-50'
+export function OrgFinanceLogoMark({ className, dark }: OrgFinanceLogoMarkProps) {
+  const walletFillClass = dark ? 'fill-slate-50' : 'fill-slate-900 dark:fill-slate-50'
 
   return (
     <svg
@@ -51,31 +43,18 @@ export function OrgFinanceLogoMark({
 }
 
 interface BrandLogoProps {
-  className?: string
   markClassName?: string
   textClassName?: string
-  tone?: 'auto' | 'light' | 'dark'
 }
 
 /**
  * Horizontal OrgFinance lockup pairing the 1:1 mark with the wordmark.
  */
-export function BrandLogo({
-  className,
-  markClassName,
-  textClassName,
-  tone = 'auto',
-}: BrandLogoProps) {
+export function BrandLogo({ markClassName, textClassName }: BrandLogoProps) {
   return (
-    <span className={cn('inline-flex items-center gap-2', className)}>
-      <OrgFinanceLogoMark className={cn('h-6 w-6', markClassName)} tone={tone} />
-      <span
-        className={cn(
-          'tracking-tight text-sm',
-          tone === 'dark' ? 'text-white' : 'text-foreground',
-          textClassName
-        )}
-      >
+    <span className="inline-flex items-center gap-2">
+      <OrgFinanceLogoMark className={cn('h-6 w-6', markClassName)} />
+      <span className={cn('tracking-tight text-sm text-foreground', textClassName)}>
         <span className="font-bold">Org</span>
         <span className="font-medium">Finance</span>
       </span>
