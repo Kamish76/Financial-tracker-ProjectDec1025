@@ -9,18 +9,58 @@ type PageProps = {
   params: Promise<{ id: string }>
 }
 
+type MemberRow = Omit<MemberWithProfile, 'profile'> & {
+  profiles?: Array<MemberWithProfile['profile']>
+}
+
+const MEMBER_SELECT = `
+  organization_id,
+  user_id,
+  role,
+  invited_by,
+  created_at,
+  is_active,
+  deactivated_at,
+  profiles (
+    id,
+    full_name,
+    avatar_url,
+    created_at
+  )
+`
+
+function mapMemberProfiles(rows: MemberRow[] | null): MemberWithProfile[] {
+  return (rows || []).map((member) => ({
+    ...member,
+    profile:
+      member.profiles && member.profiles.length > 0
+        ? member.profiles[0]
+        : { id: member.user_id, full_name: null, avatar_url: null, created_at: new Date().toISOString() },
+  }))
+}
+
 export default async function MembersPage({ params }: PageProps) {
   const { id } = await params
-  const { user, membership } = await requireOrgMembership(id)
-
   const adminClient = createAdminClient()
 
-  // Fetch organization details
-  const { data: organization, error: orgError } = await adminClient
-    .from('organizations')
-    .select('id, name, description')
-    .eq('id', id)
-    .maybeSingle()
+  const [
+    { user, membership },
+    { data: organization, error: orgError },
+    { data: activeMembers, error: activeMembersError },
+  ] = await Promise.all([
+    requireOrgMembership(id),
+    adminClient
+      .from('organizations')
+      .select('id, name, description')
+      .eq('id', id)
+      .maybeSingle(),
+    adminClient
+      .from('organization_members')
+      .select(MEMBER_SELECT)
+      .eq('organization_id', id)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true }),
+  ])
 
   if (orgError || !organization) {
     redirect('/organizations')
@@ -31,46 +71,11 @@ export default async function MembersPage({ params }: PageProps) {
     redirect(`/organizations/${id}`)
   }
 
-  type MemberRow = Omit<MemberWithProfile, 'profile'> & {
-    profiles?: Array<MemberWithProfile['profile']>
-  }
-
-  // Fetch all active members with profiles
-  const { data: activeMembers, error: activeMembersError } = await adminClient
-    .from('organization_members')
-    .select(
-      `
-      organization_id,
-      user_id,
-      role,
-      invited_by,
-      created_at,
-      is_active,
-      deactivated_at,
-      profiles (
-        id,
-        full_name,
-        avatar_url,
-        created_at
-      )
-    `
-    )
-    .eq('organization_id', id)
-    .eq('is_active', true)
-    .order('created_at', { ascending: true })
-
   if (activeMembersError) {
     console.error('Error fetching active members:', activeMembersError)
   }
 
-  // Transform activeMembers to handle profile array (Supabase returns as array)
-  const transformedActiveMembers: MemberWithProfile[] = (activeMembers || []).map((member: MemberRow) => ({
-    ...member,
-    profile:
-      member.profiles && member.profiles.length > 0
-        ? member.profiles[0]
-        : { id: member.user_id, full_name: null, avatar_url: null, created_at: new Date().toISOString() },
-  }))
+  const transformedActiveMembers = mapMemberProfiles(activeMembers as MemberRow[] | null)
 
   // Fetch inactive members (only for admins/owners)
   let inactiveMembers: MemberWithProfile[] = []
@@ -78,23 +83,7 @@ export default async function MembersPage({ params }: PageProps) {
     const { data: inactiveMembersData, error: inactiveMembersError } =
       await adminClient
         .from('organization_members')
-        .select(
-          `
-        organization_id,
-        user_id,
-        role,
-        invited_by,
-        created_at,
-        is_active,
-        deactivated_at,
-        profiles (
-          id,
-          full_name,
-          avatar_url,
-          created_at
-        )
-      `
-        )
+        .select(MEMBER_SELECT)
         .eq('organization_id', id)
         .eq('is_active', false)
         .order('deactivated_at', { ascending: false })
@@ -102,14 +91,7 @@ export default async function MembersPage({ params }: PageProps) {
     if (inactiveMembersError) {
       console.error('Error fetching inactive members:', inactiveMembersError)
     } else {
-      // Transform inactiveMembers to handle profile array (Supabase returns as array)
-      inactiveMembers = (inactiveMembersData || []).map((member: MemberRow) => ({
-        ...member,
-        profile:
-          member.profiles && member.profiles.length > 0
-            ? member.profiles[0]
-            : { id: member.user_id, full_name: null, avatar_url: null, created_at: new Date().toISOString() },
-      }))
+      inactiveMembers = mapMemberProfiles(inactiveMembersData as MemberRow[] | null)
     }
   }
 

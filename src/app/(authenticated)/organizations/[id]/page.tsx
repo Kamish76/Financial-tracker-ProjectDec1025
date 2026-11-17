@@ -96,13 +96,14 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 	const { id } = await params
 	const adminClient = createAdminClient()
 
-	const { membership: effectiveMembership } = await requireOrgMembership(id)
-
-	const { data: organization } = await adminClient
-		.from('organizations')
-		.select('id, name, description, currency')
-		.eq('id', id)
-		.maybeSingle()
+	const [{ membership: effectiveMembership }, { data: organization }] = await Promise.all([
+		requireOrgMembership(id),
+		adminClient
+			.from('organizations')
+			.select('id, name, description, currency')
+			.eq('id', id)
+			.maybeSingle(),
+	])
 
 	const isWallet = isWalletOrganization(organization?.description)
 
