@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { Building2, User, LogOut, Settings, Moon, Sun, WalletCards } from 'lucide-react'
+import { OrgFinanceLogoMark } from '@/components/brand-logo'
 import {
   Sidebar,
   SidebarContent,
@@ -104,13 +105,21 @@ export function AppSidebar({ walletId }: { walletId?: string | null } = {}) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
+            <SidebarMenuButton
+              size="lg"
+              asChild
+              tooltip="OrgFinance"
+              className="group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:justify-center"
+            >
               <Link href="/organizations">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-accent text-white">
-                  <Building2 className="size-4" />
+                <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-card shadow-2xs">
+                  <OrgFinanceLogoMark className="size-5" />
                 </div>
-                <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-semibold">OrgFinance</span>
+                <div className="flex flex-col gap-0.5 leading-none group-data-[collapsible=icon]:hidden">
+                  <span className="tracking-tight">
+                    <span className="font-bold">Org</span>
+                    <span className="font-medium">Finance</span>
+                  </span>
                   <span className="text-xs text-muted-foreground">Tracker</span>
                 </div>
               </Link>
