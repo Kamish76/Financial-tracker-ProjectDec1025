@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ShieldCheck, Menu, X } from 'lucide-react'
+import { Menu, X } from 'lucide-react'
 import { useState } from 'react'
+import { BrandLogo } from '@/components/brand-logo'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
 
@@ -22,9 +23,8 @@ export function Header() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 shrink-0">
-            <div className="inline-flex items-center gap-2 rounded-lg border border-border/70 bg-background/50 px-3 py-1.5 hover:bg-background transition-colors">
-              <ShieldCheck className="h-5 w-5 text-accent" aria-hidden />
-              <span className="font-semibold text-foreground text-sm">OrgFinance</span>
+            <div className="inline-flex items-center rounded-lg border border-border/70 bg-background/50 px-3 py-1.5 hover:bg-background transition-colors">
+              <BrandLogo markClassName="h-5 w-5" />
             </div>
           </Link>
 

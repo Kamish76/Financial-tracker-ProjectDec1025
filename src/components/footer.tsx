@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { Github, Linkedin, Mail } from 'lucide-react'
+import { BrandLogo } from '@/components/brand-logo'
 
 const footerLinks = {
   Product: [
@@ -55,9 +56,8 @@ export function Footer() {
         <div className="grid gap-8 md:grid-cols-5 mb-8">
           {/* Brand Section */}
           <div className="col-span-1">
-            <div className="inline-flex items-center gap-2 rounded-lg border border-border/70 bg-background/50 px-3 py-2 mb-4">
-              <div className="h-6 w-6 rounded bg-accent"></div>
-              <span className="font-semibold text-foreground">OrgFinance</span>
+            <div className="inline-flex items-center rounded-lg border border-border/70 bg-background/50 px-3 py-2 mb-4">
+              <BrandLogo textClassName="text-base" />
             </div>
             <p className="text-sm text-muted-foreground">
               Multi-tenant financial tracking for modern teams.

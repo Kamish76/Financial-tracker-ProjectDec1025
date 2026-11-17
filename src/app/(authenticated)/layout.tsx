@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/app-sidebar'
+import { OrgFinanceLogoMark } from '@/components/brand-logo'
 import { Separator } from '@/components/ui/separator'
 import { getCachedUser } from '@/lib/supabase/server'
 import { getUserWalletId } from '@/lib/wallet-server'
@@ -24,6 +25,7 @@ export default async function AuthenticatedLayout({
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
           <div className="flex items-center gap-2">
+            <OrgFinanceLogoMark className="size-6" />
             <h1 className="text-lg font-semibold">OrgFinance</h1>
           </div>
         </header>
