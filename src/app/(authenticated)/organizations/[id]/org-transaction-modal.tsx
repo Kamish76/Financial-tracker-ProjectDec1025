@@ -27,7 +27,7 @@ import {
 } from '@/lib/category-constants'
 import { isWalletOrganization } from '@/lib/wallet'
 import { supabase } from '@/lib/supabaseClient'
-import { formatCurrency, evaluateMathExpression } from '@/lib/utils'
+import { formatCurrency, evaluateMathExpression, formatLocalDateInput } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -91,7 +91,7 @@ export function OrgTransactionModal({
   const [showRefundConfirm, setShowRefundConfirm] = useState<boolean>(false)
 
   const [txDate, setTxDate] = useState<string>(
-    () => new Date().toISOString().split('T')[0]
+    () => formatLocalDateInput(new Date().toISOString())
   )
   const [txTime, setTxTime] = useState<string>(
     () => new Date().toTimeString().split(' ')[0].substring(0, 5)
@@ -199,7 +199,7 @@ export function OrgTransactionModal({
     } else if (tab === 'expense') {
       setCategory(orgCategories.expense[0] || 'Food & Dining')
     }
-    setTxDate(new Date().toISOString().split('T')[0])
+    setTxDate(formatLocalDateInput(new Date().toISOString()))
     setTxTime(new Date().toTimeString().split(' ')[0].substring(0, 5))
   }, [isOpen, initialTab, isWallet, orgCategories])
   /* eslint-enable react-hooks/set-state-in-effect */
