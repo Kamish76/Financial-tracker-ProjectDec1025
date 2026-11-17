@@ -10,7 +10,7 @@ import {
   DEFAULT_INCOME_CATEGORIES,
   DEFAULT_EXPENSE_CATEGORIES,
 } from '@/lib/category-constants'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatLocalDateInput } from '@/lib/utils'
 import { 
   X, 
   Check, 
@@ -227,7 +227,7 @@ export function AddTransactionModal({
 
   // Date/time state
   const [txDate, setTxDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
+    formatLocalDateInput(new Date().toISOString())
   )
   const [txTime, setTxTime] = useState<string>(
     new Date().toTimeString().split(' ')[0].substring(0, 5)
@@ -254,7 +254,7 @@ export function AddTransactionModal({
       } else if (accounts.length > 0 && !accounts.some((a) => a.id === selectedAccountId)) {
         setSelectedAccountId(accounts[0].id)
       }
-      setTxDate(new Date().toISOString().split('T')[0])
+      setTxDate(formatLocalDateInput(new Date().toISOString()))
       setTxTime(new Date().toTimeString().split(' ')[0].substring(0, 5))
     }
   }, [isOpen, initialTab, initialAccountId, orgCategories])

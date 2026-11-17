@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { CircleDollarSign } from "lucide-react"
 
 import { addIncomeForMember } from "../actions"
+import { formatLocalDateInput } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -62,7 +63,7 @@ export function AddRegularIncomeSheet({
     return () => clearTimeout(timer)
   }, [error])
 
-  const defaultDate = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const defaultDate = useMemo(() => formatLocalDateInput(new Date().toISOString()), [])
 
   const onOpenChange = (next: boolean) => {
     setOpen(next)

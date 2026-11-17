@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Receipt } from "lucide-react"
 
 import { addExpenseForMember } from "../actions"
+import { formatLocalDateInput } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -55,7 +56,7 @@ export function AddRegularExpenseSheet({
   const [assignedToUserId, setAssignedToUserId] = useState<string>("")
   const [expenseType, setExpenseType] = useState<'business' | 'personal'>('business')
 
-  const defaultDate = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const defaultDate = useMemo(() => formatLocalDateInput(new Date().toISOString()), [])
 
   const onOpenChange = (next: boolean) => {
     setOpen(next)
