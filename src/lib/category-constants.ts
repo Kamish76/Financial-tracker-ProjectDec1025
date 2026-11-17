@@ -22,3 +22,8 @@ export type CategoryItem = {
   is_custom: boolean
   type: 'income' | 'expense'
 }
+
+export type UnlinkedCategoryItem = {
+  raw_name: string
+  count: number
+}

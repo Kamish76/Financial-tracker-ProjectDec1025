@@ -1,13 +1,13 @@
 "use server"
 
 import { createAdminClient } from "./supabase/server"
-import { requireOrgMembership } from "@/lib/auth/guards"
+import { requireOrgMembership, authorizeOrgAction } from "@/lib/auth/guards"
 import { revalidatePath } from "next/cache"
 
 import {
   DEFAULT_INCOME_CATEGORIES,
-  DEFAULT_EXPENSE_CATEGORIES,
   type CategoryItem,
+  type UnlinkedCategoryItem,
 } from "./category-constants"
 
 function formatCategoryName(normalized: string): string {
@@ -39,6 +39,7 @@ function getCategoryType(
  * Fetch top N categories for an organization, sorted by usage frequency
  */
 export async function getTopCategories(organizationId: string, limit: number = 10) {
+  await requireOrgMembership(organizationId)
   const admin = createAdminClient()
   
   const { data, error } = await admin
@@ -65,11 +66,12 @@ export async function getOrCreateCategory(
   categoryName: string,
   type: 'income' | 'expense' = 'expense'
 ) {
-  const admin = createAdminClient()
-
   if (!categoryName?.trim()) {
     return null
   }
+
+  await requireOrgMembership(organizationId)
+  const admin = createAdminClient()
 
   // Call the Supabase function for fuzzy matching
   const { data, error } = await admin.rpc("get_or_create_category", {
@@ -91,7 +93,7 @@ export async function getOrCreateCategory(
       .from("transaction_categories")
       .select("aliases")
       .eq("id", categoryId)
-      .single()
+      .maybeSingle()
 
     if (existing) {
       const typeTag = type === 'income' ? 'type:income' : 'type:expense'
@@ -105,7 +107,7 @@ export async function getOrCreateCategory(
           .eq("id", categoryId)
       }
     }
-  } catch (err) {
+  } catch {
     // Non-fatal if alias update fails
   }
 
@@ -119,6 +121,7 @@ export async function searchCategories(
   organizationId: string,
   searchText: string
 ) {
+  await requireOrgMembership(organizationId)
   const admin = createAdminClient()
 
   if (!searchText?.trim()) {
@@ -152,43 +155,37 @@ export async function getOrganizationCategoriesByType(organizationId: string): P
   income: CategoryItem[]
   expense: CategoryItem[]
 }> {
+  await requireOrgMembership(organizationId)
   const admin = createAdminClient()
 
-  let { data, error } = await admin
-    .from('transaction_categories')
-    .select('id, normalized_name, aliases, is_custom')
-    .eq('organization_id', organizationId)
-    .order('created_at', { ascending: true })
+  const [{ data, error }, { data: usageRows }] = await Promise.all([
+    admin
+      .from('transaction_categories')
+      .select('id, normalized_name, aliases, is_custom')
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: true }),
+    admin
+      .from('transactions')
+      .select('category_id')
+      .eq('organization_id', organizationId)
+      .not('category_id', 'is', null)
+      // shortcut: caps usage count scan at 10,000 rows; switch to RPC GROUP BY if an org exceeds 10k transactions
+      .limit(10000),
+  ])
 
   if (error) {
     console.error('[getOrganizationCategoriesByType] Error:', error.message)
     return { income: [], expense: [] }
   }
 
-  // If no categories exist for this organization yet, seed the default 5 income + 5 expense categories
   if (!data || data.length === 0) {
-    const toInsert = [
-      ...DEFAULT_INCOME_CATEGORIES.map((name) => ({
-        organization_id: organizationId,
-        normalized_name: name.toLowerCase(),
-        aliases: ['type:income'],
-        is_custom: false,
-      })),
-      ...DEFAULT_EXPENSE_CATEGORIES.map((name) => ({
-        organization_id: organizationId,
-        normalized_name: name.toLowerCase(),
-        aliases: ['type:expense'],
-        is_custom: false,
-      })),
-    ]
+    return { income: [], expense: [] }
+  }
 
-    const { data: seeded, error: seedError } = await admin
-      .from('transaction_categories')
-      .insert(toInsert)
-      .select('id, normalized_name, aliases, is_custom')
-
-    if (!seedError && seeded) {
-      data = seeded
+  const usageCounts = new Map<string, number>()
+  for (const tx of usageRows || []) {
+    if (tx.category_id) {
+      usageCounts.set(tx.category_id, (usageCounts.get(tx.category_id) ?? 0) + 1)
     }
   }
 
@@ -212,6 +209,12 @@ export async function getOrganizationCategoriesByType(organizationId: string): P
     }
   }
 
+  const byMostUsed = (a: CategoryItem, b: CategoryItem) =>
+    (usageCounts.get(b.id) ?? 0) - (usageCounts.get(a.id) ?? 0)
+
+  income.sort(byMostUsed)
+  expense.sort(byMostUsed)
+
   return { income, expense }
 }
 
@@ -224,7 +227,14 @@ export async function addOrganizationCategory(
   type: 'income' | 'expense'
 ): Promise<{ success?: boolean; error?: string; category?: CategoryItem }> {
   try {
-    await requireOrgMembership(organizationId)
+    const auth = await authorizeOrgAction(
+      organizationId,
+      ['owner', 'admin'],
+      'Only owners and admins can add categories.'
+    )
+    if ('error' in auth) {
+      return { error: auth.error }
+    }
     const admin = createAdminClient()
 
     if (!name?.trim()) {
@@ -265,8 +275,8 @@ export async function addOrganizationCategory(
         type,
       },
     }
-  } catch (err: any) {
-    return { error: err.message || 'Failed to add category' }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : 'Failed to add category' }
   }
 }
 
@@ -279,17 +289,26 @@ export async function updateOrganizationCategory(
   newName: string
 ): Promise<{ success?: boolean; error?: string }> {
   try {
-    await requireOrgMembership(organizationId)
+    const auth = await authorizeOrgAction(
+      organizationId,
+      ['owner', 'admin'],
+      'Only owners and admins can update categories.'
+    )
+    if ('error' in auth) {
+      return { error: auth.error }
+    }
     const admin = createAdminClient()
 
     if (!newName?.trim()) {
       return { error: 'Category name cannot be empty.' }
     }
 
+    const normalized = newName.trim().toLowerCase()
+
     const { error } = await admin
       .from('transaction_categories')
       .update({
-        normalized_name: newName.trim().toLowerCase(),
+        normalized_name: normalized,
       })
       .eq('id', categoryId)
       .eq('organization_id', organizationId)
@@ -301,10 +320,17 @@ export async function updateOrganizationCategory(
       return { error: error.message }
     }
 
+    await admin
+      .from('transactions')
+      .update({ category: formatCategoryName(normalized) })
+      .eq('organization_id', organizationId)
+      .eq('category_id', categoryId)
+
     revalidatePath(`/organizations/${organizationId}/settings`)
+    revalidatePath(`/organizations/${organizationId}/records`)
     return { success: true }
-  } catch (err: any) {
-    return { error: err.message || 'Failed to update category' }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : 'Failed to update category' }
   }
 }
 
@@ -316,7 +342,14 @@ export async function deleteOrganizationCategory(
   categoryId: string
 ): Promise<{ success?: boolean; error?: string }> {
   try {
-    await requireOrgMembership(organizationId)
+    const auth = await authorizeOrgAction(
+      organizationId,
+      ['owner', 'admin'],
+      'Only owners and admins can delete categories.'
+    )
+    if ('error' in auth) {
+      return { error: auth.error }
+    }
     const admin = createAdminClient()
 
     const { error } = await admin
@@ -330,9 +363,123 @@ export async function deleteOrganizationCategory(
     }
 
     revalidatePath(`/organizations/${organizationId}/settings`)
+    revalidatePath(`/organizations/${organizationId}/records`)
     return { success: true }
-  } catch (err: any) {
-    return { error: err.message || 'Failed to delete category' }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : 'Failed to delete category' }
+  }
+}
+
+/**
+ * List distinct raw transaction categories where category_id is null.
+ */
+export async function getUnlinkedTransactionCategories(
+  organizationId: string
+): Promise<UnlinkedCategoryItem[]> {
+  await requireOrgMembership(organizationId)
+  const admin = createAdminClient()
+
+  const { data, error } = await admin
+    .from('transactions')
+    .select('category')
+    .eq('organization_id', organizationId)
+    .is('category_id', null)
+    .not('category', 'is', null)
+    .limit(10000)
+
+  if (error || !data) {
+    if (error) console.error('[getUnlinkedTransactionCategories] Error:', error.message)
+    return []
+  }
+
+  const counts = new Map<string, number>()
+  for (const row of data) {
+    const raw = (row.category ?? '').trim()
+    if (!raw || raw.toLowerCase() === 'transfer') continue
+    counts.set(raw, (counts.get(raw) ?? 0) + 1)
+  }
+
+  return Array.from(counts.entries())
+    .map(([raw_name, count]) => ({ raw_name, count }))
+    .sort((a, b) => b.count - a.count || a.raw_name.localeCompare(b.raw_name))
+}
+
+/**
+ * Merge a catalogued category or unlinked raw category string into a target category.
+ */
+export async function mergeOrganizationCategories(
+  organizationId: string,
+  source: { categoryId?: string; rawName?: string },
+  targetCategoryId: string
+): Promise<{ success?: boolean; error?: string }> {
+  try {
+    const auth = await authorizeOrgAction(
+      organizationId,
+      ['owner', 'admin'],
+      'Only owners and admins can unify categories.'
+    )
+    if ('error' in auth) {
+      return { error: auth.error }
+    }
+    const admin = createAdminClient()
+
+    const { data: target, error: targetError } = await admin
+      .from('transaction_categories')
+      .select('id, normalized_name')
+      .eq('id', targetCategoryId)
+      .eq('organization_id', organizationId)
+      .maybeSingle()
+
+    if (targetError || !target) {
+      return { error: 'Target category not found.' }
+    }
+
+    const targetDisplay = formatCategoryName(target.normalized_name)
+
+    if (source.categoryId) {
+      if (source.categoryId === targetCategoryId) {
+        return { error: 'Source and target categories must be different.' }
+      }
+
+      const { error: txUpdateError } = await admin
+        .from('transactions')
+        .update({ category_id: targetCategoryId, category: targetDisplay })
+        .eq('organization_id', organizationId)
+        .eq('category_id', source.categoryId)
+
+      if (txUpdateError) {
+        return { error: txUpdateError.message }
+      }
+
+      const { error: deleteError } = await admin
+        .from('transaction_categories')
+        .delete()
+        .eq('id', source.categoryId)
+        .eq('organization_id', organizationId)
+
+      if (deleteError) {
+        return { error: deleteError.message }
+      }
+    } else if (source.rawName) {
+      const { error: txUpdateError } = await admin
+        .from('transactions')
+        .update({ category_id: targetCategoryId, category: targetDisplay })
+        .eq('organization_id', organizationId)
+        .is('category_id', null)
+        .eq('category', source.rawName)
+
+      if (txUpdateError) {
+        return { error: txUpdateError.message }
+      }
+    } else {
+      return { error: 'Source category is required.' }
+    }
+
+    revalidatePath(`/organizations/${organizationId}/settings`)
+    revalidatePath(`/organizations/${organizationId}/records`)
+    return { success: true }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : 'Failed to unify categories' }
   }
 }
 

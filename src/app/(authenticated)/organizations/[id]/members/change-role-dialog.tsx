@@ -109,8 +109,8 @@ export function ChangeRoleDialog({
           {member.role === 'owner' && (
             <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
               <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                <strong>Owner Protection:</strong> The owner role cannot be changed. Use the "Transfer
-                Ownership" feature in settings to change the organization owner.
+                <strong>Owner Protection:</strong> The owner role cannot be changed. Use the &quot;Transfer
+                Ownership&quot; feature in settings to change the organization owner.
               </p>
             </div>
           )}

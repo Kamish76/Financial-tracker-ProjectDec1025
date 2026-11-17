@@ -20,10 +20,11 @@ import {
 
 type CreateAccountSheetProps = {
   organizationId: string
+  currency?: string
   onSuccess?: () => void
 }
 
-export function CreateAccountSheet({ organizationId, onSuccess }: CreateAccountSheetProps) {
+export function CreateAccountSheet({ organizationId, currency, onSuccess }: CreateAccountSheetProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
@@ -112,7 +113,7 @@ export function CreateAccountSheet({ organizationId, onSuccess }: CreateAccountS
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="starting-value">Starting Value ($)</Label>
+                <Label htmlFor="starting-value">Starting Value ({currency || 'USD'})</Label>
                 <Input
                   id="starting-value"
                   type="number"

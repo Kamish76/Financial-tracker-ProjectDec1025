@@ -33,12 +33,33 @@ export const getAuthContext = cache(async (): Promise<AuthContext> => {
     }
 
     const admin = createAdminClient()
-    const { data, error } = await admin
-      .from('organization_members')
-      .select('organization_id, user_id, role, is_active')
-      .eq('organization_id', organizationId)
-      .eq('user_id', user.id)
-      .maybeSingle()
+
+    // Check owner and active membership in parallel (AGENTS.md Rule 1)
+    const [{ data: org }, { data, error }] = await Promise.all([
+      admin
+        .from('organizations')
+        .select('id, owner_id')
+        .eq('id', organizationId)
+        .eq('owner_id', user.id)
+        .maybeSingle(),
+      admin
+        .from('organization_members')
+        .select('organization_id, user_id, role, is_active')
+        .eq('organization_id', organizationId)
+        .eq('user_id', user.id)
+        .maybeSingle(),
+    ])
+
+    if (org) {
+      const ownerMembership: OrgMembership = {
+        organizationId,
+        userId: user.id,
+        role: 'owner',
+        isActive: true,
+      }
+      membershipCache.set(organizationId, ownerMembership)
+      return ownerMembership
+    }
 
     if (error || !data || !data.is_active) {
       if (error) {

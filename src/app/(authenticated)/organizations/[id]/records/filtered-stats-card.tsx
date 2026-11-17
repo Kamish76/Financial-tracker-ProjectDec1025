@@ -5,12 +5,7 @@ import { ChevronDown, ChevronUp } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import type { FilteredStats } from "@/lib/finance-client"
-
-const formatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-})
+import { formatCurrency } from "@/lib/utils"
 
 const TRANSACTION_TYPE_LABELS: Record<string, string> = {
   income: "Income",
@@ -18,21 +13,23 @@ const TRANSACTION_TYPE_LABELS: Record<string, string> = {
   expense_personal: "Personal Expenses",
   held_allocate: "Held Allocations",
   held_return: "Held Returns",
+  transfer: "Transfers",
 }
 
 type FilteredStatsCardProps = {
   stats: FilteredStats | null
   isLoading?: boolean
+  currency?: string
 }
 
-export function FilteredStatsCard({ stats, isLoading = false }: FilteredStatsCardProps) {
+export function FilteredStatsCard({ stats, isLoading = false, currency }: FilteredStatsCardProps) {
   const [showBreakdown, setShowBreakdown] = useState(false)
 
   if (isLoading) {
     return (
       <div className="sticky top-0 z-10 mb-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 py-2">
-        <div className="grid gap-4 sm:grid-cols-3 animate-pulse">
-          {[1, 2, 3].map((i) => (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 animate-pulse">
+          {[1, 2, 3, 4].map((i) => (
             <Card key={i}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">—</CardTitle>
@@ -61,26 +58,35 @@ export function FilteredStatsCard({ stats, isLoading = false }: FilteredStatsCar
     )
   }
 
+  const totalIncome = stats.byType.income || 0
+  const totalExpenses = (stats.byType.expense_business || 0) + (stats.byType.expense_personal || 0)
+
   const mainCards = [
     {
-      label: "Total Amount",
-      value: formatter.format(stats.totalAmount),
+      label: "Total Income",
+      value: formatCurrency(totalIncome, currency),
+      highlight: "text-emerald-600 dark:text-emerald-400",
+    },
+    {
+      label: "Total Expenses",
+      value: formatCurrency(totalExpenses, currency),
+      highlight: "text-rose-600 dark:text-rose-400",
+    },
+    {
+      label: "Gross Profit",
+      value: formatCurrency(stats.grossProfit, currency),
+      highlight: stats.grossProfit > 0 ? "text-green-600" : stats.grossProfit < 0 ? "text-red-600" : "",
     },
     {
       label: "Transaction Count",
       value: stats.count.toString(),
-    },
-    {
-      label: "Gross Profit",
-      value: formatter.format(stats.grossProfit),
-      highlight: stats.grossProfit > 0 ? "text-green-600" : stats.grossProfit < 0 ? "text-red-600" : "",
     },
   ]
 
   return (
     <div className="sticky top-0 z-10 mb-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 py-2 space-y-3">
       {/* Main stats cards */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {mainCards.map((card) => (
           <Card key={card.label}>
             <CardHeader className="pb-2">
@@ -118,13 +124,13 @@ export function FilteredStatsCard({ stats, isLoading = false }: FilteredStatsCar
 
         {showBreakdown && (
           <div className="mt-3 rounded-lg border p-4 bg-muted/50">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
               {Object.entries(stats.byType).map(([type, amount]) => (
                 <div key={type} className="space-y-1">
                   <p className="text-xs text-muted-foreground font-medium">
-                    {TRANSACTION_TYPE_LABELS[type]}
+                    {TRANSACTION_TYPE_LABELS[type] || type}
                   </p>
-                  <p className="text-sm font-semibold">{formatter.format(amount)}</p>
+                  <p className="text-sm font-semibold">{formatCurrency(amount, currency)}</p>
                 </div>
               ))}
             </div>

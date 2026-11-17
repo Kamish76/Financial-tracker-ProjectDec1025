@@ -9,6 +9,7 @@ import {
   toggleArchiveWalletAccount,
 } from '@/lib/wallet-accounts'
 import type { AccountWithBalance } from '@/lib/wallet-types'
+import { formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -24,9 +25,10 @@ import { EditAccountSheet } from './edit-account-sheet'
 type AccountsClientProps = {
   organizationId: string
   accounts: AccountWithBalance[]
+  currency?: string
 }
 
-export function AccountsClient({ organizationId, accounts }: AccountsClientProps) {
+export function AccountsClient({ organizationId, accounts, currency }: AccountsClientProps) {
   const router = useRouter()
   const [showArchived, setShowArchived] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -106,7 +108,7 @@ export function AccountsClient({ organizationId, accounts }: AccountsClientProps
               {showArchived ? 'Hide Archived' : `Show Archived (${archivedAccounts.length})`}
             </Button>
           )}
-          <CreateAccountSheet organizationId={organizationId} />
+          <CreateAccountSheet organizationId={organizationId} currency={currency} />
         </div>
       </div>
 
@@ -135,7 +137,7 @@ export function AccountsClient({ organizationId, accounts }: AccountsClientProps
           <CardHeader className="pb-2">
             <CardDescription>Combined Total Balance</CardDescription>
             <CardTitle className="text-3xl">
-              ${totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              {formatCurrency(totalBalance, currency)}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -154,7 +156,7 @@ export function AccountsClient({ organizationId, accounts }: AccountsClientProps
           <p className="text-sm text-muted-foreground mb-4">
             You don&apos;t have any active sub accounts yet. Create one to start tracking.
           </p>
-          <CreateAccountSheet organizationId={organizationId} />
+          <CreateAccountSheet organizationId={organizationId} currency={currency} />
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -181,7 +183,7 @@ export function AccountsClient({ organizationId, accounts }: AccountsClientProps
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-1">
-                    <EditAccountSheet account={acc} />
+                    <EditAccountSheet account={acc} currency={currency} />
                     <Button
                       variant="ghost"
                       size="icon"
@@ -217,17 +219,13 @@ export function AccountsClient({ organizationId, accounts }: AccountsClientProps
                     Current Balance
                   </span>
                   <span className="text-2xl font-bold">
-                    ${acc.current_balance.toLocaleString('en-US', {
-                      minimumFractionDigits: 2,
-                    })}
+                    {formatCurrency(acc.current_balance, currency)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs text-muted-foreground mt-1">
                   <span>Starting Value:</span>
                   <span>
-                    ${acc.starting_value.toLocaleString('en-US', {
-                      minimumFractionDigits: 2,
-                    })}
+                    {formatCurrency(acc.starting_value, currency)}
                   </span>
                 </div>
               </CardContent>

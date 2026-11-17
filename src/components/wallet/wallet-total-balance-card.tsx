@@ -6,19 +6,15 @@ import { Wallet, ArrowUpRight } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import type { AccountWithBalance } from '@/lib/wallet-types'
+import { formatCurrency } from '@/lib/utils'
 
 type Props = {
   organizationId: string
   accounts: AccountWithBalance[]
+  currency?: string
 }
 
-const formatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-})
-
-export function WalletTotalBalanceCard({ organizationId, accounts }: Props) {
+export function WalletTotalBalanceCard({ organizationId, accounts, currency }: Props) {
   const totalBalance = accounts.reduce((sum, acc) => sum + acc.current_balance, 0)
 
   return (
@@ -51,7 +47,7 @@ export function WalletTotalBalanceCard({ organizationId, accounts }: Props) {
         <div className="flex flex-col gap-4">
           <div className="flex items-baseline justify-between flex-wrap gap-2">
             <span className="text-4xl font-extrabold tracking-tight text-foreground">
-              {formatter.format(totalBalance)}
+              {formatCurrency(totalBalance, currency)}
             </span>
             <Link
               href={`/organizations/${organizationId}/accounts`}
@@ -72,7 +68,7 @@ export function WalletTotalBalanceCard({ organizationId, accounts }: Props) {
                   <span className="h-2 w-2 rounded-full bg-emerald-500" />
                   <span>{acc.name}:</span>
                   <span className="text-muted-foreground font-normal">
-                    {formatter.format(acc.current_balance)}
+                    {formatCurrency(acc.current_balance, currency)}
                   </span>
                 </div>
               ))}

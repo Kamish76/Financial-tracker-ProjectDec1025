@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import type { WalletAccount, AccountWithBalance } from '@/lib/wallet-types'
 import { addWalletTransaction } from '@/lib/wallet-transactions'
 import {
@@ -10,6 +10,7 @@ import {
   DEFAULT_INCOME_CATEGORIES,
   DEFAULT_EXPENSE_CATEGORIES,
 } from '@/lib/category-constants'
+import { formatCurrency, formatLocalDateInput } from '@/lib/utils'
 import { 
   X, 
   Check, 
@@ -28,19 +29,19 @@ type AddTransactionModalProps = {
   onClose: () => void
   organizationId: string
   accounts: (WalletAccount | AccountWithBalance)[]
+  currency?: string
   onTransactionAdded?: () => void
+  initialTab?: TabType
+  initialAccountId?: string
 }
 
-function getDisplayBalance(acc: WalletAccount | AccountWithBalance): string {
+function getDisplayBalance(acc: WalletAccount | AccountWithBalance, currency?: string): string {
   const val =
     'current_balance' in acc && typeof (acc as AccountWithBalance).current_balance === 'number'
       ? (acc as AccountWithBalance).current_balance
       : acc.starting_value
 
-  return `$${Number(val).toLocaleString('en-US', {
-    minimumFractionDigits: val % 1 === 0 ? 0 : 2,
-    maximumFractionDigits: 2,
-  })}`
+  return formatCurrency(Number(val), currency)
 }
 
 type TabType = 'income' | 'expense' | 'transfer'
@@ -119,16 +120,52 @@ export function AddTransactionModal({
   onClose,
   organizationId,
   accounts,
+  currency,
   onTransactionAdded,
+  initialTab,
+  initialAccountId,
 }: AddTransactionModalProps) {
-  const [activeTab, setActiveTab] = useState<TabType>('income')
+  const modalRef = useRef<HTMLDivElement>(null)
+  const previousFocusedElementRef = useRef<HTMLElement | null>(null)
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'expense')
+
+  // Lock body scroll and manage focus when modal is open
+  useEffect(() => {
+    if (!isOpen) return
+
+    previousFocusedElementRef.current = document.activeElement as HTMLElement | null
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const timer = setTimeout(() => {
+      if (modalRef.current) {
+        const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled])'
+        )
+        if (focusable.length > 0) {
+          focusable[0].focus()
+        } else {
+          modalRef.current.focus()
+        }
+      }
+    }, 0)
+
+    return () => {
+      clearTimeout(timer)
+      document.body.style.overflow = originalOverflow
+      if (previousFocusedElementRef.current && typeof previousFocusedElementRef.current.focus === 'function') {
+        previousFocusedElementRef.current.focus()
+      }
+    }
+  }, [isOpen])
+
   const [selectedAccountId, setSelectedAccountId] = useState<string>(
-    accounts[0]?.id ?? ''
+    initialAccountId || accounts[0]?.id || ''
   )
   const [transferToAccountId, setTransferToAccountId] = useState<string>(
     accounts.length > 1 ? accounts[1].id : ''
   )
-  const [category, setCategory] = useState<string>('Salary')
+  const [category, setCategory] = useState<string>('Food & Dining')
   const [customCategoryInput, setCustomCategoryInput] = useState<string>('')
   const [orgCategories, setOrgCategories] = useState<{
     income: string[]
@@ -161,17 +198,18 @@ export function AddTransactionModal({
     return activeTab === 'income' ? orgCategories.income : orgCategories.expense
   }, [activeTab, orgCategories])
 
-  useEffect(() => {
-    if (activeTab === 'income') {
-      if (!orgCategories.income.includes(category)) {
-        setCategory(orgCategories.income[0] || 'Salary')
-      }
-    } else if (activeTab === 'expense') {
-      if (!orgCategories.expense.includes(category)) {
-        setCategory(orgCategories.expense[0] || 'Food & Dining')
-      }
+  // Adjust category if current category is not in the active category list
+  const [prevTab, setPrevTab] = useState(activeTab)
+  const [prevOrgCategories, setPrevOrgCategories] = useState(orgCategories)
+  if (prevTab !== activeTab || prevOrgCategories !== orgCategories) {
+    setPrevTab(activeTab)
+    setPrevOrgCategories(orgCategories)
+    if (activeTab === 'income' && !orgCategories.income.includes(category)) {
+      setCategory(orgCategories.income[0] || 'Salary')
+    } else if (activeTab === 'expense' && !orgCategories.expense.includes(category)) {
+      setCategory(orgCategories.expense[0] || 'Food & Dining')
     }
-  }, [activeTab, orgCategories, category])
+  }
   const [showCategoryDropdown, setShowCategoryDropdown] = useState<boolean>(false)
   const [showAccountDropdown, setShowAccountDropdown] = useState<'from' | 'to' | null>(null)
   const [notes, setNotes] = useState<string>('')
@@ -189,19 +227,262 @@ export function AddTransactionModal({
 
   // Date/time state
   const [txDate, setTxDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
+    formatLocalDateInput(new Date().toISOString())
   )
   const [txTime, setTxTime] = useState<string>(
     new Date().toTimeString().split(' ')[0].substring(0, 5)
   )
+
+  // Reset form values cleanly when modal opens
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (isOpen) {
+      setDisplayExpr('0')
+      setNotes('')
+      setError(null)
+      setShowCategoryDropdown(false)
+      setShowAccountDropdown(null)
+      const tab = initialTab || 'expense'
+      setActiveTab(tab)
+      if (tab === 'expense') {
+        setCategory(orgCategories.expense[0] || 'Food & Dining')
+      } else if (tab === 'income') {
+        setCategory(orgCategories.income[0] || 'Salary')
+      }
+      if (initialAccountId && accounts.some((a) => a.id === initialAccountId)) {
+        setSelectedAccountId(initialAccountId)
+      } else if (accounts.length > 0 && !accounts.some((a) => a.id === selectedAccountId)) {
+        setSelectedAccountId(accounts[0].id)
+      }
+      setTxDate(formatLocalDateInput(new Date().toISOString()))
+      setTxTime(new Date().toTimeString().split(' ')[0].substring(0, 5))
+    }
+  }, [isOpen, initialTab, initialAccountId, orgCategories])
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   // Compute evaluated amount on the fly
   const evaluatedAmount = useMemo(() => {
     return evaluateMathExpression(displayExpr)
   }, [displayExpr])
 
-  // Non-negative safeguard rule: check if evaluated amount > 0
-  const isAmountValid = evaluatedAmount > 0
+  // Check if evaluated amount is not zero
+  const isAmountValid = evaluatedAmount !== 0
+
+  const handleKeypadPress = useCallback((key: string) => {
+    setError(null)
+    if (key === '=') {
+      const val = evaluateMathExpression(displayExpr)
+      if (val === 0) {
+        setError('Calculated amount cannot be 0.')
+        setDisplayExpr('0')
+      } else {
+        setDisplayExpr(String(val))
+      }
+      return
+    }
+
+    if (key === 'BACKSPACE') {
+      if (displayExpr.length <= 1) {
+        setDisplayExpr('0')
+      } else {
+        setDisplayExpr(displayExpr.slice(0, -1))
+      }
+      return
+    }
+
+    if (displayExpr === '0' && '0123456789'.includes(key)) {
+      setDisplayExpr(key)
+    } else {
+      // Prevent consecutive operators
+      const lastChar = displayExpr.slice(-1)
+      const isOp = '+-×÷.'.includes(key)
+      const lastIsOp = '+-×÷.'.includes(lastChar)
+      if (isOp && lastIsOp) {
+        setDisplayExpr(displayExpr.slice(0, -1) + key)
+      } else {
+        setDisplayExpr(displayExpr + key)
+      }
+    }
+  }, [displayExpr])
+
+  const handleSave = useCallback(async () => {
+    setError(null)
+    if (!isAmountValid) {
+      setError('Transaction amount cannot be 0.')
+      return
+    }
+
+    if (!selectedAccountId) {
+      setError('Please select an account.')
+      return
+    }
+
+    if (activeTab === 'transfer' && !transferToAccountId) {
+      setError('Please select a destination account.')
+      return
+    }
+
+    if (activeTab === 'transfer' && selectedAccountId === transferToAccountId) {
+      setError('Source and destination accounts must be different.')
+      return
+    }
+
+    setIsSubmitting(true)
+
+    // Build ISO timestamp from date and time, preserving current seconds/ms
+    const now = new Date()
+    const sec = String(now.getSeconds()).padStart(2, '0')
+    const ms = String(now.getMilliseconds()).padStart(3, '0')
+    const fullDate = new Date(`${txDate}T${txTime}:${sec}.${ms}`).toISOString()
+
+    const typeParam =
+      activeTab === 'income'
+        ? 'income'
+        : activeTab === 'expense'
+        ? 'expense_personal'
+        : 'transfer'
+
+    const res = await addWalletTransaction({
+      organizationId,
+      type: typeParam,
+      amount: Math.abs(evaluatedAmount),
+      accountId: selectedAccountId,
+      transferToAccountId: activeTab === 'transfer' ? transferToAccountId : null,
+      category: activeTab === 'transfer' ? 'Transfer' : category,
+      notes: notes.trim(),
+      createdAt: fullDate,
+    })
+
+    setIsSubmitting(false)
+
+    if (res.error) {
+      setError(res.error)
+    } else {
+      onTransactionAdded?.()
+      onClose()
+      // reset form
+      setDisplayExpr('0')
+      setNotes('')
+      setError(null)
+    }
+  }, [
+    isAmountValid,
+    selectedAccountId,
+    activeTab,
+    transferToAccountId,
+    txDate,
+    txTime,
+    organizationId,
+    evaluatedAmount,
+    category,
+    notes,
+    onTransactionAdded,
+    onClose,
+  ])
+
+  // Handle keyboard events for calculator
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+        return
+      }
+
+      if (e.key === 'Tab') {
+        if (!modalRef.current) return
+        const focusable = Array.from(
+          modalRef.current.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled])'
+          )
+        ).filter((el) => el.offsetParent !== null || el.offsetWidth > 0 || el.offsetHeight > 0)
+
+        if (focusable.length === 0) {
+          e.preventDefault()
+          return
+        }
+
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+
+        if (e.shiftKey) {
+          if (document.activeElement === first || !modalRef.current.contains(document.activeElement)) {
+            e.preventDefault()
+            last.focus()
+          }
+        } else {
+          if (document.activeElement === last || !modalRef.current.contains(document.activeElement)) {
+            e.preventDefault()
+            first.focus()
+          }
+        }
+        return
+      }
+
+      // Ignore calculator keys if user is typing in an input or textarea
+      if (
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement
+      ) {
+        return
+      }
+
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        // Check if expression is just a number or evaluated
+        const isEvaluated = !/[+\-×÷]/.test(displayExpr)
+        if (isEvaluated && isAmountValid && !isSubmitting) {
+          handleSave()
+        } else {
+          handleKeypadPress('=')
+        }
+        return
+      }
+
+      if (e.key === 'Backspace') {
+        e.preventDefault()
+        handleKeypadPress('BACKSPACE')
+        return
+      }
+
+      const keyMap: Record<string, string> = {
+        '*': '×',
+        'x': '×',
+        'X': '×',
+        '/': '÷',
+        '+': '+',
+        '-': '-',
+        '.': '.',
+      }
+
+      if (keyMap[e.key]) {
+        e.preventDefault()
+        handleKeypadPress(keyMap[e.key])
+        return
+      }
+
+      if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault()
+        handleKeypadPress(e.key)
+        return
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [
+    isOpen,
+    displayExpr,
+    isAmountValid,
+    isSubmitting,
+    handleSave,
+    handleKeypadPress,
+    onClose,
+  ])
 
   if (!isOpen) return null
 
@@ -237,101 +518,7 @@ export function AddTransactionModal({
       ? 'bg-rose-500/15 text-rose-500'
       : 'bg-amber-500/15 text-amber-500'
 
-  const handleKeypadPress = (key: string) => {
-    setError(null)
-    if (key === '=') {
-      const val = evaluateMathExpression(displayExpr)
-      if (val <= 0) {
-        setError('Calculated amount must be greater than 0.')
-        setDisplayExpr('0')
-      } else {
-        setDisplayExpr(String(val))
-      }
-      return
-    }
 
-    if (key === 'BACKSPACE') {
-      if (displayExpr.length <= 1) {
-        setDisplayExpr('0')
-      } else {
-        setDisplayExpr(displayExpr.slice(0, -1))
-      }
-      return
-    }
-
-    if (displayExpr === '0' && '0123456789'.includes(key)) {
-      setDisplayExpr(key)
-    } else {
-      // Prevent consecutive operators
-      const lastChar = displayExpr.slice(-1)
-      const isOp = '+-×÷.'.includes(key)
-      const lastIsOp = '+-×÷.'.includes(lastChar)
-      if (isOp && lastIsOp) {
-        setDisplayExpr(displayExpr.slice(0, -1) + key)
-      } else {
-        setDisplayExpr(displayExpr + key)
-      }
-    }
-  }
-
-  const handleSave = async () => {
-    setError(null)
-    if (!isAmountValid) {
-      setError('Transaction amount must be greater than 0.')
-      return
-    }
-
-    if (!selectedAccountId) {
-      setError('Please select an account.')
-      return
-    }
-
-    if (activeTab === 'transfer' && !transferToAccountId) {
-      setError('Please select a destination account.')
-      return
-    }
-
-    if (activeTab === 'transfer' && selectedAccountId === transferToAccountId) {
-      setError('Source and destination accounts must be different.')
-      return
-    }
-
-    setIsSubmitting(true)
-
-    // Build ISO timestamp from date and time
-    const fullDate = new Date(`${txDate}T${txTime}:00`).toISOString()
-
-    const typeParam =
-      activeTab === 'income'
-        ? 'income'
-        : activeTab === 'expense'
-        ? 'expense_personal'
-        : 'transfer'
-
-    const res = await addWalletTransaction({
-      organizationId,
-      type: typeParam,
-      amount: evaluatedAmount,
-      accountId: selectedAccountId,
-      transferToAccountId: activeTab === 'transfer' ? transferToAccountId : null,
-      category: activeTab === 'transfer' ? 'Transfer' : category,
-      notes: notes.trim(),
-      createdAt: fullDate,
-    })
-
-    setIsSubmitting(false)
-
-    if (res.error) {
-      setError(res.error)
-    } else {
-      onTransactionAdded?.()
-      onClose()
-      // reset form
-      setDisplayExpr('0')
-      setNotes('')
-      setError(null)
-    }
-  }
 
   const formatDisplayDate = (dStr: string) => {
     try {
@@ -360,7 +547,14 @@ export function AddTransactionModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background/80 backdrop-blur-md text-foreground animate-in fade-in-0 duration-200 overflow-y-auto">
+    <div
+      ref={modalRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Add Transaction"
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex flex-col bg-background/80 backdrop-blur-md text-foreground animate-in fade-in-0 duration-200 overflow-y-auto outline-none"
+    >
       {/* Top Header Bar */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card/50 backdrop-blur-sm">
         <button
@@ -475,7 +669,7 @@ export function AddTransactionModal({
                   showAccountDropdown === 'from' ? null : 'from'
                 )
               }
-              className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-accent text-foreground font-semibold text-sm transition-all shadow-sm"
+              className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-muted text-foreground font-semibold text-sm transition-all shadow-sm"
             >
               <Wallet className={`h-4 w-4 ${accentText}`} />
               <span className="truncate">
@@ -496,12 +690,12 @@ export function AddTransactionModal({
                     className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between transition-colors ${
                       acc.id === selectedAccountId
                         ? `${accentDropdownActive} font-semibold`
-                        : 'text-foreground hover:bg-accent'
+                        : 'text-foreground hover:bg-muted'
                     }`}
                   >
                     <span>{acc.name}</span>
                     <span className="text-xs text-muted-foreground">
-                      {getDisplayBalance(acc)}
+                      {getDisplayBalance(acc, currency)}
                     </span>
                   </button>
                 ))}
@@ -524,7 +718,7 @@ export function AddTransactionModal({
                       showAccountDropdown === 'to' ? null : 'to'
                     )
                   }
-                  className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-accent text-foreground font-semibold text-sm transition-all shadow-sm"
+                  className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-muted text-foreground font-semibold text-sm transition-all shadow-sm"
                 >
                   <ArrowRightLeft className={`h-4 w-4 ${accentText}`} />
                   <span className="truncate">
@@ -547,12 +741,12 @@ export function AddTransactionModal({
                             ? 'opacity-40 cursor-not-allowed text-muted-foreground'
                             : acc.id === transferToAccountId
                             ? `${accentDropdownActive} font-semibold`
-                            : 'text-foreground hover:bg-accent'
+                            : 'text-foreground hover:bg-muted'
                         }`}
                       >
                         <span>{acc.name}</span>
                         <span className="text-xs text-muted-foreground">
-                          {getDisplayBalance(acc)}
+                          {getDisplayBalance(acc, currency)}
                         </span>
                       </button>
                     ))}
@@ -564,7 +758,7 @@ export function AddTransactionModal({
               <>
                 <button
                   onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-                  className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-accent text-foreground font-semibold text-sm transition-all shadow-sm"
+                  className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-muted text-foreground font-semibold text-sm transition-all shadow-sm"
                 >
                   <Tag className={`h-4 w-4 ${accentText}`} />
                   <span className="truncate">{category || 'Category'}</span>
@@ -606,7 +800,7 @@ export function AddTransactionModal({
                         className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                           cat === category
                             ? `${accentDropdownActive} font-semibold`
-                            : 'text-foreground hover:bg-accent'
+                            : 'text-foreground hover:bg-muted'
                         }`}
                       >
                         {cat}
@@ -640,24 +834,30 @@ export function AddTransactionModal({
               {/* Show evaluated value preview if displayExpr is an expression */}
               {displayExpr.match(/[+\-×÷]/) && (
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  = ${evaluatedAmount.toFixed(2)}
+                  = {formatCurrency(evaluatedAmount, currency)}
                 </div>
               )}
             </div>
 
             <button
               onClick={() => handleKeypadPress('BACKSPACE')}
-              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               title="Backspace"
             >
               <Delete className="h-6 w-6" />
             </button>
           </div>
 
-          {!isAmountValid && displayExpr !== '0' && (
+          {evaluatedAmount === 0 && displayExpr !== '0' && (
             <div className="flex items-center gap-1.5 text-xs text-destructive px-2">
               <AlertCircle className="h-3.5 w-3.5" />
-              <span>Amount must be greater than 0</span>
+              <span>Amount cannot be 0</span>
+            </div>
+          )}
+          {evaluatedAmount < 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-amber-500 px-2 mt-1">
+              <AlertCircle className="h-3.5 w-3.5" />
+              <span>Negative result will be recorded as a positive value</span>
             </div>
           )}
         </div>
@@ -673,19 +873,19 @@ export function AddTransactionModal({
           </button>
           <button
             onClick={() => handleKeypadPress('7')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             7
           </button>
           <button
             onClick={() => handleKeypadPress('8')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             8
           </button>
           <button
             onClick={() => handleKeypadPress('9')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             9
           </button>
@@ -699,19 +899,19 @@ export function AddTransactionModal({
           </button>
           <button
             onClick={() => handleKeypadPress('4')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             4
           </button>
           <button
             onClick={() => handleKeypadPress('5')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             5
           </button>
           <button
             onClick={() => handleKeypadPress('6')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             6
           </button>
@@ -725,19 +925,19 @@ export function AddTransactionModal({
           </button>
           <button
             onClick={() => handleKeypadPress('1')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             1
           </button>
           <button
             onClick={() => handleKeypadPress('2')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             2
           </button>
           <button
             onClick={() => handleKeypadPress('3')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             3
           </button>
@@ -751,13 +951,13 @@ export function AddTransactionModal({
           </button>
           <button
             onClick={() => handleKeypadPress('0')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             0
           </button>
           <button
             onClick={() => handleKeypadPress('.')}
-            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-accent transition-colors border border-border/50 shadow-sm"
+            className="h-14 rounded-xl bg-card/80 text-foreground font-medium text-xl hover:bg-muted transition-colors border border-border/50 shadow-sm"
           >
             .
           </button>

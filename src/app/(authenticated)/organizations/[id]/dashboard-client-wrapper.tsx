@@ -1,12 +1,13 @@
 "use client"
 
 import { PeriodStatsCard } from './period-stats-card'
-import { calculatePeriodStats } from '@/lib/finance-client'
+import { calculatePeriodStats, type ClientTransaction } from '@/lib/finance-client'
 
 type DashboardClientWrapperProps = {
-  allTransactions: any[]
+  allTransactions: ClientTransaction[]
+  currency?: string
 }
 
-export function DashboardClientWrapper({ allTransactions }: DashboardClientWrapperProps) {
-  return <PeriodStatsCard allTransactions={allTransactions} calculatePeriodStats={calculatePeriodStats} />
+export function DashboardClientWrapper({ allTransactions, currency }: DashboardClientWrapperProps) {
+  return <PeriodStatsCard allTransactions={allTransactions} calculatePeriodStats={calculatePeriodStats} currency={currency} />
 }

@@ -7,7 +7,7 @@ ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_type_check;
 
 -- Add new constraint with held_allocate and held_return types
 ALTER TABLE transactions ADD CONSTRAINT transactions_type_check 
-  CHECK (type IN ('income', 'expense_business', 'expense_personal', 'held_allocate', 'held_return'));
+  CHECK (type IN ('income', 'expense_business', 'expense_personal', 'held_allocate', 'held_return', 'transfer'));
 
 -- Add comment explaining the new types
 COMMENT ON COLUMN transactions.type IS 

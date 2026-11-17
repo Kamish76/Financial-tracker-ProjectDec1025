@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { CircleDollarSign } from "lucide-react"
 
 import { addInitialTransaction } from "../actions"
+import { formatLocalDateInput } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -43,7 +44,6 @@ export function AddInitialValueSheet({
   organizationId, 
   members,
   currentUserEmail,
-  currentUserName,
   currentUserId,
 }: AddInitialValueSheetProps) {
   const router = useRouter()
@@ -64,7 +64,7 @@ export function AddInitialValueSheet({
     console.log('Filtered members:', members.filter(m => m.user_id !== currentUserId))
   }
 
-  const defaultDate = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const defaultDate = useMemo(() => formatLocalDateInput(new Date().toISOString()), [])
 
   const onOpenChange = (next: boolean) => {
     setOpen(next)

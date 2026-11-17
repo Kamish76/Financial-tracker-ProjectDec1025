@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { assertOrgRoleForAction } from '@/lib/auth/guards'
+import { revalidateOrganizationSections } from '@/lib/revalidation'
+import { revalidatePath } from 'next/cache'
 
 type RouteContext = {
 	params: Promise<{
@@ -32,7 +34,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 			.from('organizations')
 			.select('owner_id')
 			.eq('id', id)
-			.single()
+			.maybeSingle()
 
 		if (!org) {
 			return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
@@ -52,65 +54,38 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 			return NextResponse.json({ error: 'New owner ID is required' }, { status: 400 })
 		}
 
-		// Check if new owner is a member of the organization
+		// Check if new owner is an active member of the organization
 		const { data: newOwnerMembership } = await adminClient
 			.from('organization_members')
-			.select('user_id, role')
+			.select('user_id, role, is_active')
 			.eq('organization_id', id)
 			.eq('user_id', new_owner_id)
-			.single()
+			.eq('is_active', true)
+			.maybeSingle()
 
 		if (!newOwnerMembership) {
 			return NextResponse.json(
-				{ error: 'New owner must be a member of the organization' },
+				{ error: 'New owner must be an active member of the organization' },
 				{ status: 400 }
 			)
 		}
 
-		// Perform the transfer in a transaction-like manner
-		// 1. Update the organization's owner_id
-		const { error: orgUpdateError } = await adminClient
-			.from('organizations')
-			.update({ owner_id: new_owner_id })
-			.eq('id', id)
+		// Execute atomic ownership transfer via PostgreSQL stored procedure (with FOR UPDATE locks)
+		const { error: transferError } = await adminClient.rpc('transfer_organization_ownership', {
+			p_org_id: id,
+			p_new_owner_id: new_owner_id,
+		})
 
-		if (orgUpdateError) {
-			console.error('Error updating organization owner:', orgUpdateError)
-			return NextResponse.json({ error: 'Failed to transfer ownership' }, { status: 500 })
+		if (transferError) {
+			console.error('Error transferring organization ownership via RPC:', transferError)
+			return NextResponse.json(
+				{ error: transferError.message || 'Failed to transfer ownership' },
+				{ status: 500 }
+			)
 		}
 
-		// 2. Update the current owner's role to admin
-		const { error: currentOwnerUpdateError } = await adminClient
-			.from('organization_members')
-			.update({ role: 'admin' })
-			.eq('organization_id', id)
-			.eq('user_id', user.id)
-
-		if (currentOwnerUpdateError) {
-			console.error('Error updating current owner role:', currentOwnerUpdateError)
-			// Attempt to rollback
-			await adminClient.from('organizations').update({ owner_id: user.id }).eq('id', id)
-			return NextResponse.json({ error: 'Failed to update member roles' }, { status: 500 })
-		}
-
-		// 3. Update the new owner's role to owner
-		const { error: newOwnerUpdateError } = await adminClient
-			.from('organization_members')
-			.update({ role: 'owner' })
-			.eq('organization_id', id)
-			.eq('user_id', new_owner_id)
-
-		if (newOwnerUpdateError) {
-			console.error('Error updating new owner role:', newOwnerUpdateError)
-			// Attempt to rollback
-			await adminClient.from('organizations').update({ owner_id: user.id }).eq('id', id)
-			await adminClient
-				.from('organization_members')
-				.update({ role: 'owner' })
-				.eq('organization_id', id)
-				.eq('user_id', user.id)
-			return NextResponse.json({ error: 'Failed to update new owner role' }, { status: 500 })
-		}
+		revalidateOrganizationSections(id, ['settings', 'members'])
+		revalidatePath('/organizations')
 
 		return NextResponse.json({ success: true })
 	} catch (error) {

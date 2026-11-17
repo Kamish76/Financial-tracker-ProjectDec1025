@@ -5,6 +5,7 @@ import { Plus, Building2, Users, Crown, Shield, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { isWalletOrganization, stripWalletMarker } from '@/lib/wallet'
+import { OrganizationLinkButton } from './organization-link-button'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,62 +33,98 @@ export default async function OrganizationsPage() {
   // Using admin client to bypass RLS issues
   const adminClient = createAdminClient()
   
-  const { data: memberships, error } = await adminClient
-    .from('organization_members')
-    .select(`
-      role,
-      organization_id,
-      organizations (
-        id,
-        name,
-        description,
-        created_at
-      )
-    `)
-    .eq('user_id', user.id)
+  const [membershipsResult, ownedOrgsResult] = await Promise.all([
+    adminClient
+      .from('organization_members')
+      .select(`
+        role,
+        organization_id,
+        organizations (
+          id,
+          name,
+          description,
+          created_at
+        )
+      `)
+      .eq('user_id', user.id)
+      .eq('is_active', true),
+    adminClient
+      .from('organizations')
+      .select('id, name, description, created_at')
+      .eq('owner_id', user.id),
+  ])
 
-  if (error) {
-    console.error('[ORGS_PAGE] Failed to fetch organizations:', error.message)
+  if (membershipsResult.error) {
+    console.error('[ORGS_PAGE] Failed to fetch organizations:', membershipsResult.error.message)
   }
 
-  const organizations = await Promise.all(
-    (memberships || [])
-      .filter((m) => m.organizations)
-      .map(async (m) => {
-        const organizationData = Array.isArray(m.organizations)
-          ? m.organizations[0]
-          : m.organizations
+  const orgMap = new Map<
+    string,
+    {
+      id: string
+      name: string
+      description: string | null
+      created_at: string
+      role: string
+    }
+  >()
 
-        if (!organizationData) {
-          return null
-        }
+  for (const m of membershipsResult.data || []) {
+    const organizationData = Array.isArray(m.organizations)
+      ? m.organizations[0]
+      : m.organizations
+    if (!organizationData) continue
+    const org = organizationData as {
+      id: string
+      name: string
+      description: string | null
+      created_at: string
+    }
+    orgMap.set(org.id, {
+      id: org.id,
+      name: org.name,
+      description: org.description,
+      created_at: org.created_at,
+      role: m.role,
+    })
+  }
 
-        const org = organizationData as unknown as {
-          id: string
-          name: string
-          description: string | null
-          created_at: string
-        }
-
-        const { count } = await adminClient
-          .from('organization_members')
-          .select('*', { count: 'exact', head: true })
-          .eq('organization_id', org.id)
-
-        return {
-          id: org.id,
-          name: org.name,
-          description: org.description,
-          created_at: org.created_at,
-          role: m.role,
-          member_count: count || 0,
-        }
+  // Fallback for owners whose organization_members row is missing or inactive (Rule 1)
+  for (const ownedOrg of ownedOrgsResult.data || []) {
+    if (!orgMap.has(ownedOrg.id)) {
+      orgMap.set(ownedOrg.id, {
+        id: ownedOrg.id,
+        name: ownedOrg.name,
+        description: ownedOrg.description,
+        created_at: ownedOrg.created_at,
+        role: 'owner',
       })
-  )
+    } else {
+      const existing = orgMap.get(ownedOrg.id)!
+      existing.role = 'owner'
+    }
+  }
 
-  const validOrganizations = organizations.filter(
-    (org): org is NonNullable<typeof org> => org !== null
-  )
+  const orgIds = Array.from(orgMap.keys())
+
+  let memberCounts: Record<string, number> = {}
+  if (orgIds.length > 0) {
+    const { data: allMembers } = await adminClient
+      .from('organization_members')
+      .select('organization_id')
+      .in('organization_id', orgIds)
+      .eq('is_active', true)
+
+    memberCounts = (allMembers || []).reduce((acc, curr) => {
+      acc[curr.organization_id] = (acc[curr.organization_id] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+  }
+
+  const validOrganizations = Array.from(orgMap.values()).map((org) => ({
+    ...org,
+    member_count: Math.max(memberCounts[org.id] || 0, 1),
+  }))
 
   const walletOrganizations = validOrganizations.filter((org) => isWalletOrganization(org.description))
 
@@ -164,7 +201,7 @@ export default async function OrganizationsPage() {
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="rounded-lg bg-accent p-2">
+                      <div className="rounded-lg bg-accent-strong text-white p-2">
                         <Building2 className="h-5 w-5 text-white" />
                       </div>
                       <div>
@@ -192,11 +229,7 @@ export default async function OrganizationsPage() {
                     {stripWalletMarker(org.description) || 'No description'}
                   </p>
                   <div className="mt-4 flex items-center gap-2">
-                    <Button size="sm" asChild className="flex-1">
-                      <Link href={`/organizations/${org.id}`}>
-                        View Details
-                      </Link>
-                    </Button>
+                    <OrganizationLinkButton orgId={org.id} />
                   </div>
                 </CardContent>
               </Card>

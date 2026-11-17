@@ -1,6 +1,16 @@
 "use client"
 
-import { ArrowUpRight, ArrowDownLeft, MoreHorizontal } from "lucide-react"
+import { useState, useTransition } from "react"
+import { deleteTransaction } from "../actions"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { ArrowUpRight, ArrowDownLeft, ArrowLeftRight, MoreHorizontal } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,17 +21,22 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-type Transaction = any
+import type { TransactionRecord } from "./utils"
+
+type Transaction = TransactionRecord
 
 type TransactionsListProps = {
   transactions: Transaction[]
   organizationId: string
   isLoading: boolean
   isWallet?: boolean
+  currency?: string
+  userRole?: string
   onEdit: (transaction: Transaction) => void
+  onDelete: () => void
 }
 
-const getTransactionColor = (type: string) => {
+const getTransactionColor = () => {
   // Use CSS variables from shadcn for consistent theming
   return "hover:bg-muted/30 transition-colors"
 }
@@ -33,6 +48,8 @@ const getTransactionIcon = (type: string) => {
     case "expense_business":
     case "expense_personal":
       return <ArrowUpRight className="h-4 w-4 text-red-600" />
+    case "transfer":
+      return <ArrowLeftRight className="h-4 w-4 text-purple-600 dark:text-purple-400" />
     default:
       return null
   }
@@ -50,6 +67,8 @@ const getTransactionBadge = (type: string) => {
       return <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:bg-blue-950/30">Held</Badge>
     case "held_return":
       return <Badge variant="outline" className="border-purple-200 text-purple-700 bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:bg-purple-950/30">Return</Badge>
+    case "transfer":
+      return <Badge variant="outline" className="border-purple-200 text-purple-700 bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:bg-purple-950/30">Transfer</Badge>
     default:
       return <Badge variant="outline">{type}</Badge>
   }
@@ -60,8 +79,37 @@ export function TransactionsList({
   organizationId,
   isLoading,
   isWallet,
+  currency,
+  userRole,
   onEdit,
+  onDelete,
 }: TransactionsListProps) {
+  const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null)
+  const [isDeleting, startTransition] = useTransition()
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  const canManage = isWallet || !userRole || userRole === "owner" || userRole === "admin"
+  const isOwner = isWallet || !userRole || userRole === "owner"
+
+  const confirmDelete = () => {
+    if (!transactionToDelete) return
+    setDeleteError(null)
+
+    startTransition(async () => {
+      const result = await deleteTransaction({
+        organizationId,
+        transactionId: transactionToDelete.id,
+      })
+
+      if (result && 'error' in result) {
+        setDeleteError(result.error ?? "Unable to delete transaction")
+      } else {
+        setTransactionToDelete(null)
+        onDelete()
+      }
+    })
+  }
+
   if (isLoading && transactions.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -94,14 +142,18 @@ export function TransactionsList({
                 <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Funded By</th>
               )}
               <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Amount</th>
-              <th className="px-6 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
+              {canManage && (
+                <th className="px-6 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {transactions.map((tx) => (
+            {transactions.map((tx) => {
+              const canMutateRow = canManage && (!tx.is_initial || isOwner)
+              return (
               <tr
                 key={tx.id}
-                className={`${getTransactionColor(tx.type)} transition-colors`}
+                className={`${getTransactionColor()} transition-colors`}
               >
                 <td className="px-6 py-4 text-sm text-foreground">
                   {formatDate(tx.occurred_at)}
@@ -142,36 +194,88 @@ export function TransactionsList({
                 <td className="px-6 py-4 text-sm font-semibold text-right text-foreground">
                   <div className="flex items-center justify-end gap-2">
                     {getTransactionIcon(tx.type)}
-                    {formatCurrency(tx.amount)}
+                    {formatCurrency(tx.amount, currency)}
                   </div>
                 </td>
-                <td className="px-6 py-4 text-sm text-center">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => onEdit(tx)}>
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem>Delete</DropdownMenuItem>
-                      {(tx.type === "expense_business" || tx.type === "expense_personal") && (
-                        <DropdownMenuItem>Create Refund</DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </td>
+                {canManage && (
+                  <td className="px-6 py-4 text-sm text-center">
+                    {canMutateRow ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => onEdit(tx)}>
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => setTransactionToDelete(tx)}
+                            className="text-red-600 focus:text-red-600 focus:bg-red-100 dark:focus:bg-red-950"
+                          >
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Owner only</span>
+                    )}
+                  </td>
+                )}
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!transactionToDelete} onOpenChange={(open) => {
+        if (!open && !isDeleting) {
+          setTransactionToDelete(null)
+          setDeleteError(null)
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Transaction</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this transaction? This action cannot be undone and will affect your balances.
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+              {deleteError}
+            </div>
+          )}
+
+          <DialogFooter className="flex gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setTransactionToDelete(null)
+                setDeleteError(null)
+              }}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

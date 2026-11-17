@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { setMemberBaseline } from "../../actions"
 import { useRouter } from "next/navigation"
+import { formatCurrency } from "@/lib/utils"
 
 interface Member {
   user_id: string
@@ -21,9 +22,10 @@ interface HoldingsManagerProps {
   members: Member[]
   cashOnHand: number
   totalAllocated: number
+  currency?: string
 }
 
-export function HoldingsManager({ organizationId, members, cashOnHand, totalAllocated }: HoldingsManagerProps) {
+export function HoldingsManager({ organizationId, members, cashOnHand, totalAllocated, currency }: HoldingsManagerProps) {
   const router = useRouter()
   const [editValues, setEditValues] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState<string | null>(null)
@@ -74,7 +76,7 @@ export function HoldingsManager({ organizationId, members, cashOnHand, totalAllo
             <CardTitle className="text-sm font-medium">Cash on Hand</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${cashOnHand.toFixed(2)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(cashOnHand, currency)}</div>
             <p className="text-xs text-muted-foreground mt-1">
               Total available from income − business expenses
             </p>
@@ -86,7 +88,7 @@ export function HoldingsManager({ organizationId, members, cashOnHand, totalAllo
             <CardTitle className="text-sm font-medium">Total Allocated</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalAllocated.toFixed(2)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(totalAllocated, currency)}</div>
             <p className="text-xs text-muted-foreground mt-1">
               Sum of all baseline allocations
             </p>
@@ -98,7 +100,7 @@ export function HoldingsManager({ organizationId, members, cashOnHand, totalAllo
             <CardTitle className="text-sm font-medium">Unallocated</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${unallocated.toFixed(2)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(unallocated, currency)}</div>
             <p className="text-xs text-muted-foreground mt-1">
               Remaining available to allocate
             </p>
@@ -136,10 +138,10 @@ export function HoldingsManager({ organizationId, members, cashOnHand, totalAllo
                     Role: {member.role}
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">
-                    Current Business Held: <span className="font-medium">${member.businessHeld.toFixed(2)}</span>
+                    Current Business Held: <span className="font-medium">{formatCurrency(member.businessHeld, currency)}</span>
                     {member.baseline > 0 && (
                       <span className="text-xs ml-2">
-                        (Baseline: ${member.baseline.toFixed(2)})
+                        (Baseline: {formatCurrency(member.baseline, currency)})
                       </span>
                     )}
                   </div>

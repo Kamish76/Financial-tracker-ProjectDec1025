@@ -1,11 +1,19 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { updateTransaction, deleteTransaction } from "../actions"
+import { updateTransaction } from "../actions"
+import { formatLocalDateInput, mergeDateWithOriginalTime } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -15,10 +23,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
-type Transaction = any
+import type { TransactionRecord } from "./utils"
+
+type Transaction = TransactionRecord
 type Category = {
   id: string
   normalized_name: string
+  display_name?: string
   aliases?: string[]
 }
 
@@ -28,7 +39,7 @@ type TransactionEditDialogProps = {
   transaction: Transaction
   organizationId: string
   onSave: () => void
-  categories: Category[]
+  categories?: Category[]
 }
 
 export function TransactionEditDialog({
@@ -37,19 +48,21 @@ export function TransactionEditDialog({
   transaction,
   organizationId,
   onSave,
-  categories,
+  categories = [],
 }: TransactionEditDialogProps) {
   const [amount, setAmount] = useState(transaction.amount.toString())
   const [description, setDescription] = useState(transaction.description || "")
   const [category, setCategory] = useState(
     transaction.category_ref?.normalized_name || transaction.category || ""
   )
+  const matchedCategory = categories.find(
+    (c) => c.normalized_name.toLowerCase() === category.toLowerCase()
+  )
   const [occurredAt, setOccurredAt] = useState(
-    transaction.occurred_at?.split("T")[0] || ""
+    formatLocalDateInput(transaction.occurred_at)
   )
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [isDeleting, setIsDeleting] = useState(false)
 
   const handleSave = () => {
     setError(null)
@@ -67,7 +80,7 @@ export function TransactionEditDialog({
         amount: parsedAmount,
         description: description.trim() || undefined,
         category: category.trim() || undefined,
-        occurredAt,
+        occurredAt: mergeDateWithOriginalTime(occurredAt, transaction.occurred_at),
       })
 
       if ('error' in result) {
@@ -76,27 +89,6 @@ export function TransactionEditDialog({
         onSave()
         onOpenChange(false)
       }
-    })
-  }
-
-  const handleDelete = () => {
-    if (!confirm("Are you sure you want to delete this transaction?")) return
-
-    setIsDeleting(true)
-    startTransition(async () => {
-      const result = await deleteTransaction({
-        organizationId,
-        transactionId: transaction.id,
-      })
-
-      if ('error' in result) {
-        setError(result.error ?? "Unable to delete transaction")
-      } else {
-        onSave()
-        onOpenChange(false)
-      }
-
-      setIsDeleting(false)
     })
   }
 
@@ -124,7 +116,7 @@ export function TransactionEditDialog({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
-              disabled={isPending || isDeleting}
+              disabled={isPending}
             />
           </div>
 
@@ -139,7 +131,7 @@ export function TransactionEditDialog({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Transaction description..."
               rows={3}
-              disabled={isPending || isDeleting}
+              disabled={isPending}
             />
           </div>
 
@@ -148,13 +140,49 @@ export function TransactionEditDialog({
             <Label htmlFor="category" className="text-sm font-semibold">
               Category
             </Label>
-            <Input
-              id="category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder="Enter category..."
-              disabled={isPending || isDeleting}
-            />
+            {categories.length > 0 ? (
+              <div className="space-y-1.5">
+                <Select
+                  value={matchedCategory ? matchedCategory.normalized_name : "custom"}
+                  onValueChange={(val) => {
+                    if (val !== "custom") {
+                      setCategory(val)
+                    }
+                  }}
+                  disabled={isPending}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.normalized_name}>
+                        {cat.display_name || cat.normalized_name}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">Custom / Other</SelectItem>
+                  </SelectContent>
+                </Select>
+                {(!matchedCategory || category === "") && (
+                  <Input
+                    id="category"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    placeholder="Type custom category..."
+                    disabled={isPending}
+                    className="mt-1.5"
+                  />
+                )}
+              </div>
+            ) : (
+              <Input
+                id="category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="Enter category..."
+                disabled={isPending}
+              />
+            )}
           </div>
 
           {/* Date */}
@@ -167,7 +195,7 @@ export function TransactionEditDialog({
               type="date"
               value={occurredAt}
               onChange={(e) => setOccurredAt(e.target.value)}
-              disabled={isPending || isDeleting}
+              disabled={isPending}
             />
           </div>
 
@@ -180,26 +208,17 @@ export function TransactionEditDialog({
         </div>
 
         <DialogFooter className="flex gap-2 justify-between">
-          <Button
-            variant="destructive"
-            onClick={handleDelete}
-            disabled={isPending || isDeleting}
-            className="mr-auto"
-          >
-            {isDeleting ? "Deleting..." : "Delete"}
-          </Button>
-
           <div className="flex gap-2">
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={isPending || isDeleting}
+              disabled={isPending}
             >
               Cancel
             </Button>
             <Button
               onClick={handleSave}
-              disabled={isPending || isDeleting}
+              disabled={isPending}
             >
               {isPending ? "Saving..." : "Save"}
             </Button>

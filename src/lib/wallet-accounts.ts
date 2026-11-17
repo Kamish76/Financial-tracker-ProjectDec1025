@@ -1,12 +1,17 @@
 'use server'
 
-import { requireUser } from '@/lib/auth/guards'
+import { requireOrgMembership, authorizeOrgAction } from '@/lib/auth/guards'
 import { createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
 import type { WalletAccount, AccountWithBalance } from './wallet-types'
 
-async function verifyOrgAccess(organizationId: string, userId: string): Promise<boolean> {
+function sanitizePostgrestFilter(term: string): string {
+  if (!term) return ''
+  return term.replace(/[(),."\\]/g, '').trim()
+}
+
+export async function verifyOrgAccess(organizationId: string, userId: string): Promise<boolean> {
   const adminClient = createAdminClient()
 
   // First check if user is owner of the organization
@@ -22,7 +27,7 @@ async function verifyOrgAccess(organizationId: string, userId: string): Promise<
   // Otherwise check if user is an active member
   const { data: member } = await adminClient
     .from('organization_members')
-    .select('id')
+    .select('organization_id, user_id, is_active')
     .eq('organization_id', organizationId)
     .eq('user_id', userId)
     .eq('is_active', true)
@@ -35,6 +40,7 @@ export async function getWalletAccounts(
   organizationId: string,
   includeArchived = false
 ): Promise<WalletAccount[]> {
+  await requireOrgMembership(organizationId)
   const adminClient = createAdminClient()
 
   let query = adminClient
@@ -70,6 +76,7 @@ export async function getAccountsWithBalances(
   organizationId: string,
   includeArchived = false
 ): Promise<AccountWithBalance[]> {
+  await requireOrgMembership(organizationId)
   const accounts = await getWalletAccounts(organizationId, includeArchived)
   if (accounts.length === 0) return []
 
@@ -79,6 +86,7 @@ export async function getAccountsWithBalances(
     .select('id, account_id, transfer_to_account_id, type, amount')
     .eq('organization_id', organizationId)
     .or('account_id.not.is.null,transfer_to_account_id.not.is.null')
+    .limit(10000)
 
   if (error) {
     console.error('[getAccountsWithBalances] Error fetching transactions:', error.message)
@@ -122,10 +130,13 @@ export async function createWalletAccount(
   startingValue = 0
 ): Promise<{ success?: boolean; accountId?: string; error?: string }> {
   try {
-    const user = await requireUser()
-    const hasAccess = await verifyOrgAccess(organizationId, user.id)
-    if (!hasAccess) {
-      return { error: 'You do not have permission to create an account in this organization' }
+    const auth = await authorizeOrgAction(
+      organizationId,
+      ['owner', 'admin'],
+      'You do not have permission to create an account in this organization'
+    )
+    if ('error' in auth) {
+      return { error: auth.error }
     }
 
     const trimmedName = name.trim()
@@ -173,22 +184,25 @@ export async function updateWalletAccount(
   startingValue: number
 ): Promise<{ success?: boolean; error?: string }> {
   try {
-    const user = await requireUser()
     const adminClient = createAdminClient()
 
     const { data: account, error: fetchError } = await adminClient
       .from('wallet_accounts')
       .select('organization_id')
       .eq('id', accountId)
-      .single()
+      .maybeSingle()
 
     if (fetchError || !account) {
       return { error: 'Account not found' }
     }
 
-    const hasAccess = await verifyOrgAccess(account.organization_id, user.id)
-    if (!hasAccess) {
-      return { error: 'You do not have permission to modify this account' }
+    const auth = await authorizeOrgAction(
+      account.organization_id,
+      ['owner', 'admin'],
+      'You do not have permission to modify this account'
+    )
+    if ('error' in auth) {
+      return { error: auth.error }
     }
 
     const trimmedName = name.trim()
@@ -225,22 +239,25 @@ export async function toggleArchiveWalletAccount(
   isActive: boolean
 ): Promise<{ success?: boolean; error?: string }> {
   try {
-    const user = await requireUser()
     const adminClient = createAdminClient()
 
     const { data: account, error: fetchError } = await adminClient
       .from('wallet_accounts')
       .select('organization_id')
       .eq('id', accountId)
-      .single()
+      .maybeSingle()
 
     if (fetchError || !account) {
       return { error: 'Account not found' }
     }
 
-    const hasAccess = await verifyOrgAccess(account.organization_id, user.id)
-    if (!hasAccess) {
-      return { error: 'You do not have permission to modify this account' }
+    const auth = await authorizeOrgAction(
+      account.organization_id,
+      ['owner', 'admin'],
+      'You do not have permission to modify this account'
+    )
+    if ('error' in auth) {
+      return { error: auth.error }
     }
 
     const { error: updateError } = await adminClient
@@ -267,28 +284,36 @@ export async function deleteWalletAccount(
   accountId: string
 ): Promise<{ success?: boolean; error?: string }> {
   try {
-    const user = await requireUser()
     const adminClient = createAdminClient()
 
     const { data: account, error: fetchError } = await adminClient
       .from('wallet_accounts')
       .select('organization_id')
       .eq('id', accountId)
-      .single()
+      .maybeSingle()
 
     if (fetchError || !account) {
       return { error: 'Account not found' }
     }
 
-    const hasAccess = await verifyOrgAccess(account.organization_id, user.id)
-    if (!hasAccess) {
-      return { error: 'You do not have permission to delete this account' }
+    const auth = await authorizeOrgAction(
+      account.organization_id,
+      ['owner', 'admin'],
+      'You do not have permission to delete this account'
+    )
+    if ('error' in auth) {
+      return { error: auth.error }
+    }
+
+    const sanitizedAccountId = sanitizePostgrestFilter(accountId)
+    if (!sanitizedAccountId) {
+      return { error: 'Invalid account ID' }
     }
 
     const { count, error: txError } = await adminClient
       .from('transactions')
       .select('id', { count: 'exact', head: true })
-      .or(`account_id.eq.${accountId},transfer_to_account_id.eq.${accountId}`)
+      .or(`account_id.eq.${sanitizedAccountId},transfer_to_account_id.eq.${sanitizedAccountId}`)
 
     if (txError) {
       return { error: 'Failed to verify transaction references' }

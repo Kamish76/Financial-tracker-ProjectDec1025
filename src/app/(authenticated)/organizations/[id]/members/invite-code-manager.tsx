@@ -42,7 +42,6 @@ export function InviteCodeManager({ organizationId, organizationDescription }: I
   const isWallet = isWalletOrganization(organizationDescription)
 
   const fetchInviteCodes = useCallback(async () => {
-    setIsLoading(true)
     const result = await getInviteCodes(organizationId)
     if (result.inviteCodes) {
       setInviteCodes(result.inviteCodes)
@@ -54,8 +53,19 @@ export function InviteCodeManager({ organizationId, organizationDescription }: I
     if (isWallet) {
       return
     }
-    void fetchInviteCodes()
-  }, [isWallet, fetchInviteCodes])
+    let ignore = false
+    getInviteCodes(organizationId).then((result) => {
+      if (!ignore) {
+        if (result.inviteCodes) {
+          setInviteCodes(result.inviteCodes)
+        }
+        setIsLoading(false)
+      }
+    })
+    return () => {
+      ignore = true
+    }
+  }, [isWallet, organizationId])
 
   if (isWallet) {
     return null
