@@ -62,6 +62,7 @@ export interface TransactionRecord {
   } | null
   account_id?: string | null
   transfer_to_account_id?: string | null
+  mirrored_from_tx_id?: string | null
   account_ref?: {
     id: string
     name: string
@@ -99,6 +100,7 @@ export async function fetchTransactionsWithFilters(
       is_initial,
       account_id,
       transfer_to_account_id,
+      mirrored_from_tx_id,
       occurred_at,
       created_at,
       updated_at,

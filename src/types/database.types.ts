@@ -155,6 +155,7 @@ export type Database = {
           category_id: string | null
           account_id: string | null
           transfer_to_account_id: string | null
+          mirrored_from_tx_id: string | null
         }
         Insert: {
           id?: string
@@ -174,6 +175,7 @@ export type Database = {
           category_id?: string | null
           account_id?: string | null
           transfer_to_account_id?: string | null
+          mirrored_from_tx_id?: string | null
         }
         Update: {
           id?: string
@@ -193,6 +195,7 @@ export type Database = {
           category_id?: string | null
           account_id?: string | null
           transfer_to_account_id?: string | null
+          mirrored_from_tx_id?: string | null
         }
         Relationships: [
           {
@@ -242,6 +245,13 @@ export type Database = {
             columns: ['transfer_to_account_id']
             isOneToOne: false
             referencedRelation: 'wallet_accounts'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'transactions_mirrored_from_tx_id_fkey'
+            columns: ['mirrored_from_tx_id']
+            isOneToOne: false
+            referencedRelation: 'transactions'
             referencedColumns: ['id']
           },
         ]

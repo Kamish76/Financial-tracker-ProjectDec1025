@@ -141,7 +141,17 @@ export function WalletTransactionsList({
                   {formatDate(tx.occurred_at)}
                 </td>
                 <td className="px-6 py-4 text-sm">
-                  {getWalletBadge(tx.type)}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {getWalletBadge(tx.type)}
+                    {tx.mirrored_from_tx_id && (
+                      <Badge
+                        variant="outline"
+                        className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 text-[11px]"
+                      >
+                        Mirrored from Org
+                      </Badge>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4 text-sm text-foreground">
                   {tx.description || "—"}

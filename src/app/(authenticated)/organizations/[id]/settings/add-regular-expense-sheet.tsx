@@ -1,11 +1,13 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Receipt } from "lucide-react"
 
 import { addExpenseForMember } from "../actions"
 import { formatLocalDateInput } from "@/lib/utils"
+import { getUserMirrorableWalletAccounts } from "@/lib/wallet-accounts"
+import type { MirrorWalletContext } from "@/lib/wallet-types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -55,6 +57,21 @@ export function AddRegularExpenseSheet({
   const [isPending, startTransition] = useTransition()
   const [assignedToUserId, setAssignedToUserId] = useState<string>("")
   const [expenseType, setExpenseType] = useState<'business' | 'personal'>('business')
+  const [mirrorContext, setMirrorContext] = useState<MirrorWalletContext | null>(null)
+  const [mirrorWalletAccountId, setMirrorWalletAccountId] = useState<string>("none")
+
+  useEffect(() => {
+    if (!open || !organizationId) return
+    let isMounted = true
+    getUserMirrorableWalletAccounts(organizationId)
+      .then((ctx) => {
+        if (isMounted) setMirrorContext(ctx)
+      })
+      .catch(() => {})
+    return () => {
+      isMounted = false
+    }
+  }, [open, organizationId])
 
   const defaultDate = useMemo(() => formatLocalDateInput(new Date().toISOString()), [])
 
@@ -73,7 +90,15 @@ export function AddRegularExpenseSheet({
     setError(null)
     setAssignedToUserId("")
     setExpenseType('business')
+    setMirrorWalletAccountId("none")
   }
+
+  const canMirror = Boolean(
+    mirrorContext &&
+      mirrorContext.accounts.length > 0 &&
+      assignedToUserId === "current" &&
+      expenseType === "business"
+  )
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -106,6 +131,8 @@ export function AddRegularExpenseSheet({
             : assignedToUserId === 'current'
             ? currentUserId
             : assignedToUserId || null,
+        mirrorWalletAccountId:
+          canMirror && mirrorWalletAccountId !== "none" ? mirrorWalletAccountId : undefined,
       })
 
       if (result && 'error' in result) {
@@ -185,6 +212,27 @@ export function AddRegularExpenseSheet({
               Assign who paid/holds funds for this expense.
             </p>
           </div>
+
+          {canMirror && mirrorContext && (
+            <div className="space-y-2">
+              <Label htmlFor="mirrorWalletExpense">
+                Mirror to {mirrorContext.walletOrgName} (Optional)
+              </Label>
+              <Select value={mirrorWalletAccountId} onValueChange={setMirrorWalletAccountId}>
+                <SelectTrigger id="mirrorWalletExpense">
+                  <SelectValue placeholder="Don't mirror (Org only)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Don&apos;t mirror (Org only)</SelectItem>
+                  {mirrorContext.accounts.map((acc) => (
+                    <SelectItem key={acc.id} value={acc.id}>
+                      {acc.name} (− via {mirrorContext.linkedAccountName})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="amount">Amount</Label>

@@ -3,9 +3,15 @@
 import { requireOrgMembership, authorizeOrgAction } from '@/lib/auth/guards'
 import { createAdminClient } from '@/lib/supabase/server'
 import { isWalletOrganization } from '@/lib/wallet'
+import { getUserWalletId } from '@/lib/wallet-server'
 import { revalidatePath } from 'next/cache'
 
-import type { WalletAccount, AccountWithBalance, LinkableOrganization } from './wallet-types'
+import type {
+  WalletAccount,
+  AccountWithBalance,
+  LinkableOrganization,
+  MirrorWalletContext,
+} from './wallet-types'
 
 function sanitizePostgrestFilter(term: string): string {
   if (!term) return ''
@@ -204,6 +210,66 @@ export async function getAccountsWithBalances(
       transaction_count,
     }
   })
+}
+
+export async function getUserMirrorableWalletAccounts(
+  organizationId: string
+): Promise<MirrorWalletContext | null> {
+  const { user } = await requireOrgMembership(organizationId)
+  const walletOrgId = await getUserWalletId(user.id)
+
+  if (!walletOrgId || walletOrgId === organizationId) {
+    return null
+  }
+
+  const adminClient = createAdminClient()
+  const { data: activeWalletAccounts, error: accountsError } = await adminClient
+    .from('wallet_accounts')
+    .select('id, linked_org_id')
+    .eq('organization_id', walletOrgId)
+    .eq('is_active', true)
+
+  if (accountsError || !activeWalletAccounts) {
+    return null
+  }
+
+  const hasLinkedOrg = activeWalletAccounts.some((acc) => acc.linked_org_id === organizationId)
+  const hasUnlinkedAccounts = activeWalletAccounts.some((acc) => !acc.linked_org_id)
+  if (!hasLinkedOrg || !hasUnlinkedAccounts) {
+    return null
+  }
+
+  const [walletAccounts, { data: walletOrg }] = await Promise.all([
+    getAccountsWithBalances(walletOrgId, false),
+    adminClient.from('organizations').select('name').eq('id', walletOrgId).maybeSingle(),
+  ])
+
+  const linkedAccount = walletAccounts.find(
+    (acc) => acc.is_active && acc.linked_org_id === organizationId
+  )
+  if (!linkedAccount) {
+    return null
+  }
+
+  const unlinkedAccounts = walletAccounts
+    .filter((acc) => acc.is_active && !acc.linked_org_id)
+    .map((acc) => ({
+      id: acc.id,
+      name: acc.name,
+      current_balance: acc.current_balance,
+    }))
+
+  if (unlinkedAccounts.length === 0) {
+    return null
+  }
+
+  return {
+    walletOrgId,
+    walletOrgName: walletOrg?.name || 'Personal Wallet',
+    linkedAccountId: linkedAccount.id,
+    linkedAccountName: linkedAccount.name,
+    accounts: unlinkedAccounts,
+  }
 }
 
 export async function createWalletAccount(

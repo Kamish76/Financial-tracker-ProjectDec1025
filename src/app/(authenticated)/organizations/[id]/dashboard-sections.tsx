@@ -67,6 +67,7 @@ type RawTransactionRow = {
   is_initial?: boolean | null
   account_id?: string | null
   transfer_to_account_id?: string | null
+  mirrored_from_tx_id?: string | null
   account?: { name?: string | null } | null
   transfer_to_account?: { name?: string | null } | null
 }
@@ -185,7 +186,7 @@ export async function RecentActivitySection({
     adminClient
       .from('transactions')
       .select(
-        'id, type, amount, category, description, occurred_at, created_at, is_initial, account_id, transfer_to_account_id, account:wallet_accounts!account_id(id, name), transfer_to_account:wallet_accounts!transfer_to_account_id(id, name)'
+        'id, type, amount, category, description, occurred_at, created_at, is_initial, account_id, transfer_to_account_id, mirrored_from_tx_id, account:wallet_accounts!account_id(id, name), transfer_to_account:wallet_accounts!transfer_to_account_id(id, name)'
       )
       .eq('organization_id', organizationId)
       .order('occurred_at', { ascending: false, nullsFirst: false })
@@ -211,6 +212,7 @@ export async function RecentActivitySection({
     is_initial: row.is_initial ?? false,
     account_id: row.account_id ?? null,
     transfer_to_account_id: row.transfer_to_account_id ?? null,
+    mirrored_from_tx_id: row.mirrored_from_tx_id ?? null,
     account_name: row.account?.name ?? null,
     transfer_to_account_name: row.transfer_to_account?.name ?? null,
   }))
@@ -277,6 +279,11 @@ export async function RecentActivitySection({
                             {tx.account_name}
                           </span>
                         ) : null}
+                        {tx.mirrored_from_tx_id && (
+                          <span className="rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                            Mirrored from Org
+                          </span>
+                        )}
                       </div>
                       {tx.description && <p className="text-sm text-foreground">{tx.description}</p>}
                       <p className="text-xs text-muted-foreground">

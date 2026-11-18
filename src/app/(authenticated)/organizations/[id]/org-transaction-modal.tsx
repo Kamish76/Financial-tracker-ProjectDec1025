@@ -16,9 +16,13 @@ import {
   AlertCircle,
   Briefcase,
   Settings2,
+  Wallet,
+  ChevronDown,
 } from 'lucide-react'
 
 import { addIncome, addExpense, createRefund } from './actions'
+import { getUserMirrorableWalletAccounts } from '@/lib/wallet-accounts'
+import type { MirrorWalletContext } from '@/lib/wallet-types'
 import { ManageCategoriesDialog } from './settings/manage-categories-dialog'
 import { getOrganizationCategoriesByType } from '@/lib/categories'
 import {
@@ -83,6 +87,9 @@ export function OrgTransactionModal({
 
   const [showTypeDropdown, setShowTypeDropdown] = useState<boolean>(false)
   const [showCategoryDropdown, setShowCategoryDropdown] = useState<boolean>(false)
+  const [showMirrorDropdown, setShowMirrorDropdown] = useState<boolean>(false)
+  const [mirrorContext, setMirrorContext] = useState<MirrorWalletContext | null>(null)
+  const [mirrorWalletAccountId, setMirrorWalletAccountId] = useState<string>('')
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState<boolean>(false)
   const [notes, setNotes] = useState<string>('')
   const [displayExpr, setDisplayExpr] = useState<string>('0')
@@ -145,7 +152,7 @@ export function OrgTransactionModal({
     }
   }, [organizationId])
 
-  // Load current user and organization categories when modal opens
+  // Load current user, organization categories, and optional wallet mirror targets when modal opens
   useEffect(() => {
     if (!isOpen || !organizationId) return
     let isMounted = true
@@ -168,10 +175,29 @@ export function OrgTransactionModal({
       })
       .catch(() => {})
 
+    if (!isWallet) {
+      getUserMirrorableWalletAccounts(organizationId)
+        .then((ctx) => {
+          if (!isMounted) return
+          setMirrorContext(ctx)
+          if (ctx) {
+            try {
+              const stored = localStorage.getItem(`org_mirror_wallet_${organizationId}`)
+              if (stored && ctx.accounts.some((acc) => acc.id === stored)) {
+                setMirrorWalletAccountId(stored)
+              }
+            } catch {
+              // Ignore storage access errors
+            }
+          }
+        })
+        .catch(() => {})
+    }
+
     return () => {
       isMounted = false
     }
-  }, [isOpen, organizationId])
+  }, [isOpen, organizationId, isWallet])
 
   useEffect(() => {
     if (!error) return
@@ -179,15 +205,20 @@ export function OrgTransactionModal({
     return () => clearTimeout(timer)
   }, [error])
 
-  // Reset form when modal opens
+  // Reset form when modal opens or closes
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen) {
+      setMirrorWalletAccountId('')
+      setMirrorContext(null)
+      return
+    }
     setDisplayExpr('0')
     setNotes('')
     setError(null)
     setShowTypeDropdown(false)
     setShowCategoryDropdown(false)
+    setShowMirrorDropdown(false)
     setShowRefundConfirm(false)
     setCustomCategoryInput('')
     setFundedByType('business')
@@ -208,11 +239,39 @@ export function OrgTransactionModal({
     return activeTab === 'income' ? orgCategories.income : orgCategories.expense
   }, [activeTab, orgCategories])
 
+  const canMirror = Boolean(
+    !isWallet &&
+      mirrorContext &&
+      mirrorContext.accounts.length > 0 &&
+      ((activeTab === 'income' && fundedByType === 'business') ||
+        (activeTab === 'expense' && expenseType === 'business'))
+  )
+
+  const selectedMirrorAccount = useMemo(
+    () => mirrorContext?.accounts.find((acc) => acc.id === mirrorWalletAccountId) ?? null,
+    [mirrorContext, mirrorWalletAccountId]
+  )
+
+  const selectMirrorAccount = (nextAccountId: string) => {
+    setMirrorWalletAccountId(nextAccountId)
+    setShowMirrorDropdown(false)
+    try {
+      if (nextAccountId) {
+        localStorage.setItem(`org_mirror_wallet_${organizationId}`, nextAccountId)
+      } else {
+        localStorage.removeItem(`org_mirror_wallet_${organizationId}`)
+      }
+    } catch {
+      // Ignore storage access errors
+    }
+  }
+
   const switchTab = (nextTab: OrgTransactionTab) => {
     setActiveTab(nextTab)
     setError(null)
     setShowTypeDropdown(false)
     setShowCategoryDropdown(false)
+    setShowMirrorDropdown(false)
     if (nextTab === 'income' && !orgCategories.income.includes(category)) {
       setCategory(orgCategories.income[0] || 'Salary')
     } else if (nextTab === 'expense' && !orgCategories.expense.includes(category)) {
@@ -277,7 +336,14 @@ export function OrgTransactionModal({
     onTransactionAdded?.()
     router.refresh()
     onClose()
-  }, [organizationId, evaluatedAmount, notes, onTransactionAdded, router, onClose])
+  }, [
+    organizationId,
+    evaluatedAmount,
+    notes,
+    onTransactionAdded,
+    router,
+    onClose,
+  ])
 
   const handleSave = useCallback(async () => {
     setError(null)
@@ -299,6 +365,9 @@ export function OrgTransactionModal({
     const ms = String(now.getMilliseconds()).padStart(3, '0')
     const fullDate = new Date(`${txDate}T${txTime}:${sec}.${ms}`).toISOString()
 
+    const mirrorAccount =
+      canMirror && mirrorWalletAccountId ? mirrorWalletAccountId : undefined
+
     const result =
       activeTab === 'income'
         ? await addIncome({
@@ -309,6 +378,7 @@ export function OrgTransactionModal({
             occurredAt: fullDate,
             fundedByType,
             fundedByUserId: fundedByUserId || undefined,
+            mirrorWalletAccountId: mirrorAccount,
           })
         : await addExpense({
             organizationId,
@@ -317,6 +387,7 @@ export function OrgTransactionModal({
             description: notes.trim() || undefined,
             occurredAt: fullDate,
             expenseType: isWallet ? 'personal' : expenseType,
+            mirrorWalletAccountId: mirrorAccount,
           })
 
     setIsSubmitting(false)
@@ -342,6 +413,8 @@ export function OrgTransactionModal({
     fundedByUserId,
     isWallet,
     expenseType,
+    canMirror,
+    mirrorWalletAccountId,
     onTransactionAdded,
     router,
     onClose,
@@ -633,6 +706,7 @@ export function OrgTransactionModal({
                   disabled={activeTab === 'expense' && isWallet}
                   onClick={() => {
                     setShowCategoryDropdown(false)
+                    setShowMirrorDropdown(false)
                     setShowTypeDropdown((v) => !v)
                   }}
                   className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-muted text-foreground font-semibold text-sm transition-all shadow-sm disabled:opacity-70"
@@ -707,6 +781,7 @@ export function OrgTransactionModal({
                   type="button"
                   onClick={() => {
                     setShowTypeDropdown(false)
+                    setShowMirrorDropdown(false)
                     setShowCategoryDropdown((v) => !v)
                   }}
                   className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-muted text-foreground font-semibold text-sm transition-all shadow-sm"
@@ -774,6 +849,80 @@ export function OrgTransactionModal({
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Optional Auto-Mirror to Personal Wallet Sub-Account */}
+          {canMirror && mirrorContext && (
+            <div className="relative">
+              <div className="flex items-center justify-between mb-1 px-0.5">
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  Mirror to {mirrorContext.walletOrgName} (Optional)
+                </span>
+                {selectedMirrorAccount && (
+                  <button
+                    type="button"
+                    onClick={() => selectMirrorAccount('')}
+                    className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTypeDropdown(false)
+                  setShowCategoryDropdown(false)
+                  setShowMirrorDropdown((v) => !v)
+                }}
+                className="w-full flex items-center justify-between gap-2.5 px-4 py-2.5 rounded-xl border border-border bg-card/80 hover:bg-muted text-foreground text-sm transition-all shadow-sm"
+              >
+                <span className="flex items-center gap-2.5 min-w-0">
+                  <Wallet className={`h-4 w-4 shrink-0 ${selectedMirrorAccount ? accentText : 'text-muted-foreground'}`} />
+                  <span className={`truncate ${selectedMirrorAccount ? 'font-semibold' : 'text-muted-foreground'}`}>
+                    {selectedMirrorAccount
+                      ? `${selectedMirrorAccount.name} (${
+                          activeTab === 'income' ? '+' : '−'
+                        } via ${mirrorContext.linkedAccountName})`
+                      : "Don't mirror (Org only)"}
+                  </span>
+                </span>
+                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </button>
+
+              {showMirrorDropdown && (
+                <div className="absolute top-full left-0 right-0 mt-1 z-30 rounded-xl border border-border bg-card p-1.5 shadow-2xl max-h-56 overflow-y-auto space-y-0.5">
+                  <button
+                    type="button"
+                    onClick={() => selectMirrorAccount('')}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                      !mirrorWalletAccountId
+                        ? `${accentDropdownActive} font-semibold`
+                        : 'text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    Don&apos;t mirror (Org only)
+                  </button>
+                  {mirrorContext.accounts.map((acc) => (
+                    <button
+                      key={acc.id}
+                      type="button"
+                      onClick={() => selectMirrorAccount(acc.id)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
+                        mirrorWalletAccountId === acc.id
+                          ? `${accentDropdownActive} font-semibold`
+                          : 'text-foreground hover:bg-muted'
+                      }`}
+                    >
+                      <span className="truncate">{acc.name}</span>
+                      <span className="text-xs text-muted-foreground ml-2 shrink-0">
+                        {formatCurrency(acc.current_balance, currency)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

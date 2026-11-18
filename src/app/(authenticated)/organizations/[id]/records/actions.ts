@@ -11,6 +11,7 @@ import type { FilteredStats } from '@/lib/finance-client'
 import { getAccountsWithBalances } from '@/lib/wallet-accounts'
 import { createAdminClient } from '@/lib/supabase/server'
 import { isWalletOrganization } from '@/lib/wallet'
+import { getUserWalletId } from '@/lib/wallet-server'
 import { requireOrgMembership, authorizeOrgAction } from '@/lib/auth/guards'
 import { getOrCreateCategory } from '@/lib/categories'
 import { revalidateOrganizationSections } from '@/lib/revalidation'
@@ -196,7 +197,7 @@ export async function updateTransaction(
 	// Verify transaction exists and belongs to organization
 	const { data: existingTx, error: txError } = await admin
 		.from('transactions')
-		.select('id, organization_id, is_initial, type, account_id')
+		.select('id, organization_id, is_initial, type, account_id, transfer_to_account_id, amount, mirrored_from_tx_id')
 		.eq('id', transactionId)
 		.eq('organization_id', organizationId)
 		.maybeSingle()
@@ -207,6 +208,24 @@ export async function updateTransaction(
 
 	if (existingTx.is_initial && membership.role !== 'owner') {
 		return { error: 'Only organization owners can edit initial transactions' }
+	}
+
+	if (existingTx.mirrored_from_tx_id) {
+		const amountChanged =
+			updateData.amount !== undefined && Number(updateData.amount) !== Number(existingTx.amount)
+		const accountChanged =
+			(updateData.accountId !== undefined || updateData.account_id !== undefined) &&
+			(updateData.accountId ?? updateData.account_id) !== existingTx.account_id
+		const transferToChanged =
+			(updateData.transferToAccountId !== undefined || updateData.transfer_to_account_id !== undefined) &&
+			(updateData.transferToAccountId ?? updateData.transfer_to_account_id) !== existingTx.transfer_to_account_id
+
+		if (amountChanged || accountChanged || transferToChanged) {
+			return {
+				error:
+					'This transfer is auto-mirrored from an organization transaction. Edit the source organization transaction to change its amount or accounts.',
+			}
+		}
 	}
 
 	const updatePayload: Record<string, unknown> = {
@@ -277,6 +296,11 @@ export async function updateTransaction(
 
 	revalidateOrganizationSections(organizationId, ['records', 'settings', 'accounts', 'settings/holdings'])
 
+	const walletOrgId = await getUserWalletId(user.id)
+	if (walletOrgId && walletOrgId !== organizationId) {
+		revalidateOrganizationSections(walletOrgId, ['records', 'accounts'])
+	}
+
 	return { success: true, transaction: updated }
 }
 
@@ -309,7 +333,7 @@ export async function deleteTransaction(
 		return auth
 	}
 
-	const { membership } = auth
+	const { user, membership } = auth
 	const admin = createAdminClient()
 
 	// Verify transaction exists and belongs to organization
@@ -339,6 +363,11 @@ export async function deleteTransaction(
 	}
 
 	revalidateOrganizationSections(organizationId, ['records', 'settings', 'accounts', 'settings/holdings'])
+
+	const walletOrgId = await getUserWalletId(user.id)
+	if (walletOrgId && walletOrgId !== organizationId) {
+		revalidateOrganizationSections(walletOrgId, ['records', 'accounts'])
+	}
 
 	return { success: true }
 }
