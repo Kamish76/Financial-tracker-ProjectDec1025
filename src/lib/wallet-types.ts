@@ -4,6 +4,9 @@ export type WalletAccount = {
   name: string
   starting_value: number
   is_active: boolean
+  linked_org_id?: string | null
+  linked_org_balance?: number | null
+  linked_org_name?: string | null
   created_at: string
   updated_at: string
 }
@@ -11,4 +14,10 @@ export type WalletAccount = {
 export type AccountWithBalance = WalletAccount & {
   current_balance: number
   transaction_count: number
+}
+
+export type LinkableOrganization = {
+  id: string
+  name: string
+  currency?: string
 }
