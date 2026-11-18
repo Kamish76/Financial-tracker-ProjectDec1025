@@ -61,10 +61,11 @@ export async function fetchWalletSummary(organizationId: string) {
 	const isWallet = isWalletOrganization(org?.description)
 	if (!isWallet) return null
 
-	const accounts = await getAccountsWithBalances(organizationId, false)
+	const allAccounts = await getAccountsWithBalances(organizationId, true)
 	return {
 		isWallet: true,
-		accounts,
+		accounts: allAccounts.filter((acc) => acc.is_active),
+		allAccounts,
 	}
 }
 
