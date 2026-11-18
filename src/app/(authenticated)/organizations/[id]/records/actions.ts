@@ -219,7 +219,22 @@ export async function updateTransaction(
 		updatePayload.category_id = (updateData.category_id ?? updateData.categoryId) as string | null
 	}
 	if (updateData.accountId !== undefined || updateData.account_id !== undefined) {
-		updatePayload.account_id = (updateData.accountId ?? updateData.account_id) as string | null
+		const targetAccountId = (updateData.accountId ?? updateData.account_id) as string | null
+		if (targetAccountId && existingTx.type !== 'transfer') {
+			const { data: targetAccount } = await admin
+				.from('wallet_accounts')
+				.select('linked_org_id')
+				.eq('id', targetAccountId)
+				.eq('organization_id', organizationId)
+				.maybeSingle()
+			if (targetAccount?.linked_org_id) {
+				return {
+					error:
+						'This sub-account is linked to an organization balance and is read-only for direct income or expenses.',
+				}
+			}
+		}
+		updatePayload.account_id = targetAccountId
 	}
 	if (updateData.transferToAccountId !== undefined || updateData.transfer_to_account_id !== undefined) {
 		updatePayload.transfer_to_account_id = (updateData.transferToAccountId ?? updateData.transfer_to_account_id) as string | null
