@@ -118,6 +118,11 @@ export function WalletTransactionEditDialog({
     return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400'
   }
 
+  const selectableAccounts =
+    transaction.type === 'transfer'
+      ? accounts
+      : accounts.filter((acc) => !acc.linked_org_id || acc.id === transaction.account_id)
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -162,7 +167,7 @@ export function WalletTransactionEditDialog({
                   <SelectValue placeholder="Select account..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {accounts.map((acc) => (
+                  {selectableAccounts.map((acc) => (
                     <SelectItem key={acc.id} value={acc.id}>
                       {acc.name}
                     </SelectItem>

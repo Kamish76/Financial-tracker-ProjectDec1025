@@ -61,10 +61,11 @@ export async function fetchWalletSummary(organizationId: string) {
 	const isWallet = isWalletOrganization(org?.description)
 	if (!isWallet) return null
 
-	const accounts = await getAccountsWithBalances(organizationId, false)
+	const allAccounts = await getAccountsWithBalances(organizationId, true)
 	return {
 		isWallet: true,
-		accounts,
+		accounts: allAccounts.filter((acc) => acc.is_active),
+		allAccounts,
 	}
 }
 
@@ -126,6 +127,21 @@ export async function createTransaction(
 		updated_by_user_id: user.id,
 	}
 
+	if (insertPayload.account_id && txType !== 'transfer') {
+		const { data: targetAccount } = await admin
+			.from('wallet_accounts')
+			.select('linked_org_id')
+			.eq('id', insertPayload.account_id)
+			.eq('organization_id', organizationId)
+			.maybeSingle()
+		if (targetAccount?.linked_org_id) {
+			return {
+				error:
+					'This sub-account is linked to an organization balance and is read-only for direct income or expenses.',
+			}
+		}
+	}
+
 	const { data: created, error } = await admin
 		.from('transactions')
 		.insert(insertPayload)
@@ -180,7 +196,7 @@ export async function updateTransaction(
 	// Verify transaction exists and belongs to organization
 	const { data: existingTx, error: txError } = await admin
 		.from('transactions')
-		.select('id, organization_id, is_initial, type')
+		.select('id, organization_id, is_initial, type, account_id')
 		.eq('id', transactionId)
 		.eq('organization_id', organizationId)
 		.maybeSingle()
@@ -219,7 +235,26 @@ export async function updateTransaction(
 		updatePayload.category_id = (updateData.category_id ?? updateData.categoryId) as string | null
 	}
 	if (updateData.accountId !== undefined || updateData.account_id !== undefined) {
-		updatePayload.account_id = (updateData.accountId ?? updateData.account_id) as string | null
+		const targetAccountId = (updateData.accountId ?? updateData.account_id) as string | null
+		if (
+			targetAccountId &&
+			existingTx.type !== 'transfer' &&
+			targetAccountId !== existingTx.account_id
+		) {
+			const { data: targetAccount } = await admin
+				.from('wallet_accounts')
+				.select('linked_org_id')
+				.eq('id', targetAccountId)
+				.eq('organization_id', organizationId)
+				.maybeSingle()
+			if (targetAccount?.linked_org_id) {
+				return {
+					error:
+						'This sub-account is linked to an organization balance and is read-only for direct income or expenses.',
+				}
+			}
+		}
+		updatePayload.account_id = targetAccountId
 	}
 	if (updateData.transferToAccountId !== undefined || updateData.transfer_to_account_id !== undefined) {
 		updatePayload.transfer_to_account_id = (updateData.transferToAccountId ?? updateData.transfer_to_account_id) as string | null

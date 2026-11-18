@@ -1,51 +1,44 @@
-# Graph Report - Financial-tracker-ProjectDec1025  (2026-11-17)
+# Graph Report - Financial-tracker-ProjectDec1025  (2026-11-18)
 
 ## Corpus Check
 - cluster-only mode — file stats not available
 
 ## Summary
-- 810 nodes · 3016 edges · 38 communities (31 shown, 7 thin omitted)
+- 825 nodes · 3104 edges · 31 communities (25 shown, 6 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 9 edges (avg confidence: 0.92)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `058432cc`
+- Built from commit: `b9755805`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - Button
+- wallet-transaction-edit-dialog.tsx
+- wallet-records-view.tsx
 - organization-settings.tsx
-- member-list.tsx
-- createAdminClient
-- react
 - cn
 - server.ts
+- next
 - Database Schema & Policies Document
-- records/actions.ts
-- hero.tsx
+- createAdminClient
+- isWalletOrganization
+- org-transaction-modal.tsx
+- requireOrgMembership
 - database.types.ts
 - invite-code-manager.tsx
 - package.json
 - components.json
 - compilerOptions
 - dependencies
-- wallet-records-view.tsx
-- wallet_transaction_history.test.ts
-- requireOrgMembership
 - PageSkeleton
-- finance_calculations.test.ts
-- categories.ts
-- finance-client.ts
+- members/actions.ts
 - devDependencies
-- finance.ts
-- middleware.ts
-- create-test-user.mjs
+- add-transaction-modal.tsx
 - scripts
-- [id]/route.ts
-- records/utils.ts
+- category-dropdown.tsx
 - eslint.config.mjs
-- app/layout.tsx
 - Context & Architecture Routing
 - CI Validate Job
 - postcss.config.mjs
@@ -55,10 +48,10 @@
 
 ## God Nodes (most connected - your core abstractions)
 1. `Button` - 97 edges
-2. `createAdminClient()` - 86 edges
-3. `cn()` - 79 edges
+2. `createAdminClient()` - 84 edges
+3. `cn()` - 82 edges
 4. `react` - 70 edges
-5. `next` - 60 edges
+5. `next` - 61 edges
 6. `lucide-react` - 56 edges
 7. `Card` - 49 edges
 8. `Input` - 48 edges
@@ -70,12 +63,12 @@
   README.md → docs/implementation-summary.md
 - `Database Keep-Alive Architecture` --conceptually_related_to--> `Vercel Cron Job Keep-Alive Setup Guide`  [INFERRED]
   README.md → docs/keep-alive-setup-guide.md
-- `DropdownMenuCheckboxItem()` --calls--> `cn()`  [EXTRACTED]
-  src/components/ui/dropdown-menu.tsx → src/lib/utils.ts
-- `DropdownMenuRadioItem()` --calls--> `cn()`  [EXTRACTED]
-  src/components/ui/dropdown-menu.tsx → src/lib/utils.ts
-- `DropdownMenuShortcut()` --calls--> `cn()`  [EXTRACTED]
-  src/components/ui/dropdown-menu.tsx → src/lib/utils.ts
+- `Database Keep-Alive Architecture` --references--> `Health Check API Route`  [EXTRACTED]
+  README.md → docs/keep-alive-setup-guide.md
+- `Changelog Release 1.0.0` --references--> `keep_alive_logs Table`  [EXTRACTED]
+  CHANGELOG.md → docs/keep-alive-setup-guide.md
+- `Database Keep-Alive Architecture` --references--> `keep_alive_logs Table`  [EXTRACTED]
+  README.md → docs/keep-alive-setup-guide.md
 
 ## Import Cycles
 - None detected.
@@ -85,151 +78,127 @@
 - **Multi-Tenant Organization Membership and Authorization Pattern** — docs_database_profiles_table, docs_database_organizations_table, docs_database_organization_members_table, docs_database_fn_has_org_role [EXTRACTED 1.00]
 - **User Accountability and Reimbursement Subsystem** — docs_database_transactions_table, docs_database_user_contributions_table, docs_database_reimbursement_requests_table, docs_implementation_summary_balance_calculation_service [EXTRACTED 1.00]
 
-## Communities (38 total, 7 thin omitted)
+## Communities (31 total, 6 thin omitted)
 
 ### Community 0 - "Button"
-Cohesion: 0.07
-Nodes (78): nextConfig, lucide-react, next, AuthForm(), AuthPage(), signUpWithEmailPassword(), createOrganization(), createWallet() (+70 more)
-
-### Community 1 - "organization-settings.tsx"
-Cohesion: 0.10
-Nodes (70): CreateAccountSheet(), CreateAccountSheetProps, EditAccountSheet(), EditAccountSheetProps, updateTransaction(), ChangeRoleDialog(), ChangeRoleDialogProps, DeactivateMemberDialog() (+62 more)
-
-### Community 2 - "member-list.tsx"
 Cohesion: 0.06
-Nodes (57): @radix-ui/react-dropdown-menu, deleteTransaction(), MemberCard(), MemberCardProps, MemberList(), MemberListProps, mapMemberProfiles(), MemberRow (+49 more)
+Nodes (90): lucide-react, react, AuthForm(), AuthPage(), createOrganization(), createWallet(), CreateOrganizationPage(), AddExpenseSheet() (+82 more)
 
-### Community 3 - "createAdminClient"
-Cohesion: 0.12
-Nodes (41): POST(), RouteContext, addExpense(), addExpenseForMember(), AddExpenseForMemberInput, AddExpenseInput, addIncome(), addIncomeForMember() (+33 more)
+### Community 1 - "wallet-transaction-edit-dialog.tsx"
+Cohesion: 0.08
+Nodes (70): deleteTransaction(), updateTransaction(), ChangeRoleDialog(), ChangeRoleDialogProps, DeactivateMemberDialog(), DeactivateMemberDialogProps, MemberCard(), MemberCardProps (+62 more)
 
-### Community 4 - "react"
-Cohesion: 0.11
-Nodes (30): react, AddExpenseSheet(), AddExpenseSheetProps, AddIncomeSheet(), AddIncomeSheetProps, CustomizableDashboard(), DashboardSection, LayoutConfig (+22 more)
+### Community 2 - "wallet-records-view.tsx"
+Cohesion: 0.05
+Nodes (52): vitest, __dirname, supabase, testUser, GET(), runtime, fetchOrganizationCategories(), fetchOrganizationMembers() (+44 more)
 
-### Community 5 - "cn"
-Cohesion: 0.12
-Nodes (32): @supabase/ssr, AuthCallbackPage(), CallbackInner(), AuthenticatedLayout(), AppSidebar(), CardFooter, SelectLabel, SelectSeparator (+24 more)
+### Community 3 - "organization-settings.tsx"
+Cohesion: 0.13
+Nodes (48): CreateAccountSheet(), CreateAccountSheetProps, EditAccountSheet(), EditAccountSheetProps, addExpenseForMember(), addIncomeForMember(), MemberList(), MemberListProps (+40 more)
 
-### Community 6 - "server.ts"
-Cohesion: 0.10
-Nodes (19): @supabase/supabase-js, admin, AccountDeletionPage(), metadata, runtime, HoldingsPage(), DeleteAccountPage(), metadata (+11 more)
+### Community 4 - "cn"
+Cohesion: 0.09
+Nodes (38): @radix-ui/react-dropdown-menu, @supabase/ssr, AuthCallbackPage(), CallbackInner(), AuthenticatedLayout(), AppSidebar(), OrgFinanceLogoMark(), CardFooter (+30 more)
+
+### Community 5 - "server.ts"
+Cohesion: 0.07
+Nodes (36): @supabase/supabase-js, admin, AccountDeletionPage(), metadata, DELETE(), DeletionRequestBody, GET(), handleCancellation() (+28 more)
+
+### Community 6 - "next"
+Cohesion: 0.08
+Nodes (29): nextConfig, next, fetchHeroStatisticsCached, getHeroStatistics(), HeroStats, metadata, Home(), metadata (+21 more)
 
 ### Community 7 - "Database Schema & Policies Document"
 Cohesion: 0.10
 Nodes (27): Transaction Category Management, Changelog Release 1.0.0, Changelog Release 1.1.0, Wallet Sub-Accounts Management, fn_has_org_role RLS Helper Function, Invite Codes Table, Organization Members Table, Organizations Table (+19 more)
 
-### Community 8 - "records/actions.ts"
-Cohesion: 0.15
-Nodes (24): fetchOrganizationCategories(), fetchOrganizationMembers(), fetchTransactionAggregates(), fetchTransactions(), fetchTransactionsWithFilters(), fetchWalletSummary(), Category, Member (+16 more)
-
-### Community 9 - "hero.tsx"
+### Community 8 - "createAdminClient"
 Cohesion: 0.14
-Nodes (19): fetchHeroStatisticsCached, getHeroStatistics(), HeroStats, Home(), metadata, PrivacyPage(), Footer(), footerLinks (+11 more)
+Nodes (27): POST(), RouteContext, AddExpenseForMemberInput, AddExpenseInput, AddIncomeForMemberInput, AddIncomeInput, addInitialTransaction(), AddInitialTransactionInput (+19 more)
 
-### Community 10 - "database.types.ts"
+### Community 9 - "isWalletOrganization"
+Cohesion: 0.15
+Nodes (17): DELETE(), PATCH(), RouteContext, mapMemberProfiles(), MemberRow, MembersPage(), PageProps, PageProps (+9 more)
+
+### Community 10 - "org-transaction-modal.tsx"
+Cohesion: 0.21
+Nodes (20): addExpense(), addIncome(), createRefund(), OrgTransactionModal(), OrgTransactionModalProps, OrgTransactionTab, ManageCategoriesDialog(), ManageCategoriesDialogProps (+12 more)
+
+### Community 11 - "requireOrgMembership"
+Cohesion: 0.21
+Nodes (18): AccountsClient(), AccountsClientProps, AccountsPage(), Props, WalletFabProps, requireOrgMembership(), createWalletAccount(), deleteWalletAccount() (+10 more)
+
+### Community 12 - "database.types.ts"
 Cohesion: 0.09
 Nodes (21): Database, Enums, FundedByType, InvitationsTable, InviteCode, Json, KeepAliveLog, KeepAliveStatus (+13 more)
 
-### Community 11 - "invite-code-manager.tsx"
+### Community 13 - "invite-code-manager.tsx"
 Cohesion: 0.18
 Nodes (16): InviteCodeManager(), InviteCodeManagerProps, CreateInviteInput, formatCreatedDate(), formatInviteCode(), formatRemainingUses(), getInviteCodeBadge(), getRemainingUses() (+8 more)
 
-### Community 12 - "package.json"
+### Community 14 - "package.json"
 Cohesion: 0.10
 Nodes (19): name, private, version, class-variance-authority, clsx, @radix-ui/react-dialog, @radix-ui/react-select, @radix-ui/react-separator (+11 more)
 
-### Community 13 - "components.json"
+### Community 15 - "components.json"
 Cohesion: 0.11
 Nodes (18): aliases, components, hooks, lib, ui, utils, iconLibrary, registries (+10 more)
 
-### Community 14 - "compilerOptions"
+### Community 16 - "compilerOptions"
 Cohesion: 0.11
 Nodes (18): compilerOptions, allowJs, esModuleInterop, incremental, isolatedModules, jsx, lib, module (+10 more)
 
-### Community 15 - "dependencies"
+### Community 17 - "dependencies"
 Cohesion: 0.12
 Nodes (17): dependencies, class-variance-authority, clsx, lucide-react, next, @radix-ui/react-dialog, @radix-ui/react-dropdown-menu, @radix-ui/react-select (+9 more)
 
-### Community 16 - "wallet-records-view.tsx"
-Cohesion: 0.21
-Nodes (13): Category, Transaction, WALLET_TRANSACTION_TYPES, WalletRecordsViewProps, WalletSummary, AddTransactionModal(), AddTransactionModalProps, evaluateMathExpression() (+5 more)
-
-### Community 17 - "wallet_transaction_history.test.ts"
-Cohesion: 0.16
-Nodes (6): vitest, calculateFilteredStats(), MockClassList, ROOT, runScriptWithEnv(), ROOT
-
-### Community 18 - "requireOrgMembership"
-Cohesion: 0.20
-Nodes (13): AccountsPage(), Props, SettingsPage(), SettingsPageProps, requireOrgMembership(), createWalletAccount(), deleteWalletAccount(), getAccountsWithBalances() (+5 more)
-
-### Community 19 - "PageSkeleton"
+### Community 18 - "PageSkeleton"
 Cohesion: 0.27
 Nodes (7): Loading(), Loading(), Loading(), Loading(), Loading(), Loading(), PageSkeleton()
 
-### Community 20 - "finance_calculations.test.ts"
-Cohesion: 0.28
-Nodes (10): DELETE(), DeletionRequestBody, GET(), handleCancellation(), PATCH(), POST(), getSafeRedirect(), signInWithEmailPassword() (+2 more)
-
-### Community 21 - "categories.ts"
-Cohesion: 0.23
-Nodes (11): Category, CategoryDropdown(), CategoryDropdownProps, addOrganizationCategory(), deleteOrganizationCategory(), formatCategoryName(), getTopCategories(), getUnlinkedTransactionCategories() (+3 more)
-
-### Community 22 - "finance-client.ts"
+### Community 19 - "members/actions.ts"
 Cohesion: 0.31
-Nodes (10): calculatePeriodComparison(), calculatePeriodStats(), calculateTopExpenseCategories(), CategoryBreakdownItem, getPeriodBounds(), getTransactionDate(), pctDelta(), PeriodComparison (+2 more)
+Nodes (12): createInviteCode(), deactivateMember(), getInviteCodes(), reactivateMember(), revokeInviteCode(), updateMemberRole(), authorizeOrgAction(), OrganizationSection (+4 more)
 
-### Community 23 - "devDependencies"
+### Community 20 - "devDependencies"
 Cohesion: 0.20
 Nodes (10): devDependencies, eslint, eslint-config-next, tailwindcss, @tailwindcss/postcss, @types/node, @types/react, @types/react-dom (+2 more)
 
-### Community 24 - "finance.ts"
-Cohesion: 0.25
-Nodes (7): Props, MemberBalance, MemberRow, OrganizationStats, ReimbursementRow, Totals, TransactionRow
+### Community 21 - "add-transaction-modal.tsx"
+Cohesion: 0.33
+Nodes (7): AddTransactionModal(), AddTransactionModalProps, evaluateMathExpression(), getDisplayBalance(), TabType, addWalletTransaction(), AddWalletTransactionInput
 
-### Community 25 - "middleware.ts"
-Cohesion: 0.32
-Nodes (4): authRoutes, publicRoutes, updateSession(), proxy()
-
-### Community 26 - "create-test-user.mjs"
-Cohesion: 0.29
-Nodes (3): __dirname, supabase, testUser
-
-### Community 27 - "scripts"
+### Community 22 - "scripts"
 Cohesion: 0.33
 Nodes (6): scripts, build, dev, lint, start, test
 
-### Community 28 - "[id]/route.ts"
-Cohesion: 0.53
-Nodes (5): DELETE(), PATCH(), RouteContext, assertOrgRoleForAction(), encodeWalletDescription()
-
-### Community 29 - "records/utils.ts"
+### Community 23 - "category-dropdown.tsx"
 Cohesion: 0.40
-Nodes (3): FetchTransactionsResult, TransactionFilters, FilteredStats
+Nodes (5): Category, CategoryDropdown(), CategoryDropdownProps, getTopCategories(), searchCategories()
 
-### Community 30 - "eslint.config.mjs"
+### Community 24 - "eslint.config.mjs"
 Cohesion: 0.50
 Nodes (3): eslintConfig, eslint, eslint-config-next
 
 ## Knowledge Gaps
 - **18 isolated node(s):** `react-dom`, `tailwindcss`, `@tailwindcss/postcss`, `@types/node`, `@types/react` (+13 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 284 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 289 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **6 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `next` connect `Button` to `organization-settings.tsx`, `member-list.tsx`, `createAdminClient`, `react`, `cn`, `server.ts`, `records/actions.ts`, `hero.tsx`, `package.json`, `wallet-records-view.tsx`, `requireOrgMembership`, `finance_calculations.test.ts`, `categories.ts`, `middleware.ts`, `[id]/route.ts`, `app/layout.tsx`?**
-  _High betweenness centrality (0.121) - this node is a cross-community bridge._
+- **Why does `next` connect `next` to `Button`, `wallet-transaction-edit-dialog.tsx`, `wallet-records-view.tsx`, `organization-settings.tsx`, `cn`, `server.ts`, `createAdminClient`, `isWalletOrganization`, `org-transaction-modal.tsx`, `requireOrgMembership`, `package.json`, `members/actions.ts`, `add-transaction-modal.tsx`?**
+  _High betweenness centrality (0.120) - this node is a cross-community bridge._
 - **What connects `react-dom`, `tailwindcss`, `@tailwindcss/postcss` to the rest of the system?**
   _18 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Button` be split into smaller, more focused modules?**
-  _Cohesion score 0.07493261455525606 - nodes in this community are weakly interconnected._
-- **Why does `react` connect `react` to `Button`, `organization-settings.tsx`, `member-list.tsx`, `cn`, `server.ts`, `records/actions.ts`, `hero.tsx`, `invite-code-manager.tsx`, `package.json`, `wallet-records-view.tsx`, `categories.ts`?**
-  _High betweenness centrality (0.093) - this node is a cross-community bridge._
-- **Should `organization-settings.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.09802631578947368 - nodes in this community are weakly interconnected._
-- **Why does `Button` connect `Button` to `organization-settings.tsx`, `member-list.tsx`, `react`, `cn`, `records/actions.ts`, `hero.tsx`, `invite-code-manager.tsx`, `wallet-records-view.tsx`?**
-  _High betweenness centrality (0.062) - this node is a cross-community bridge._
-- **Should `member-list.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.05955734406438632 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06477409036385445 - nodes in this community are weakly interconnected._
+- **Why does `react` connect `Button` to `wallet-transaction-edit-dialog.tsx`, `wallet-records-view.tsx`, `organization-settings.tsx`, `cn`, `server.ts`, `next`, `isWalletOrganization`, `org-transaction-modal.tsx`, `requireOrgMembership`, `invite-code-manager.tsx`, `package.json`, `add-transaction-modal.tsx`, `category-dropdown.tsx`?**
+  _High betweenness centrality (0.090) - this node is a cross-community bridge._
+- **Should `wallet-transaction-edit-dialog.tsx` be split into smaller, more focused modules?**
+  _Cohesion score 0.07507002801120448 - nodes in this community are weakly interconnected._
+- **Why does `Button` connect `Button` to `wallet-transaction-edit-dialog.tsx`, `wallet-records-view.tsx`, `organization-settings.tsx`, `cn`, `next`, `org-transaction-modal.tsx`, `requireOrgMembership`, `invite-code-manager.tsx`?**
+  _High betweenness centrality (0.061) - this node is a cross-community bridge._
+- **Should `wallet-records-view.tsx` be split into smaller, more focused modules?**
+  _Cohesion score 0.05189189189189189 - nodes in this community are weakly interconnected._

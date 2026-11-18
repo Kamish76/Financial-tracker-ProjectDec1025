@@ -7,18 +7,65 @@ import {
   revalidateOrganizationSections,
 } from "@/lib/revalidation"
 
-interface AddIncomeInput {
+type OrgClient = ReturnType<typeof createAdminClient>
+type AllowedRoles = Parameters<typeof authorizeOrgAction>[1]
+
+async function verifyActiveOrgMember(
+  admin: OrgClient,
+  organizationId: string,
+  userId: string,
+  notFoundError = "Selected member is not part of this organization"
+): Promise<{ error: string } | null> {
+  const { data: memberCheck, error: memberCheckError } = await admin
+    .from("organization_members")
+    .select("organization_id, user_id, is_active")
+    .eq("organization_id", organizationId)
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .maybeSingle()
+
+  if (memberCheckError || !memberCheck) {
+    return { error: notFoundError }
+  }
+  return null
+}
+
+interface InsertOrgTransactionParams {
   organizationId: string
   amount: number
   description?: string
   category?: string
   occurredAt: string
+  allowedRoles: AllowedRoles
+  permissionError: string
+  txType: 'income' | 'expense_business' | 'expense_personal'
   fundedByType: 'business' | 'personal'
   fundedByUserId?: string | null
+  useCurrentUserAsFallback?: boolean
+  validateAssignedMember?: boolean
+  isInitial?: boolean
+  logTag: string
+  insertFailedError: string
 }
 
-export async function addIncome(input: AddIncomeInput) {
-  const { organizationId, amount, description, category, occurredAt, fundedByType, fundedByUserId } = input
+async function insertOrgTransaction(params: InsertOrgTransactionParams) {
+  const {
+    organizationId,
+    amount,
+    description,
+    category,
+    occurredAt,
+    allowedRoles,
+    permissionError,
+    txType,
+    fundedByType,
+    fundedByUserId,
+    useCurrentUserAsFallback = false,
+    validateAssignedMember = false,
+    isInitial,
+    logTag,
+    insertFailedError,
+  } = params
 
   if (!organizationId) {
     return { error: "Organization is required" }
@@ -37,53 +84,78 @@ export async function addIncome(input: AddIncomeInput) {
     return { error: "Invalid date" }
   }
 
-  const auth = await authorizeOrgAction(
-    organizationId,
-    ['owner', 'admin'],
-    "You don't have permission to add income"
-  )
-
+  const auth = await authorizeOrgAction(organizationId, allowedRoles, permissionError)
   if ('error' in auth) {
     return auth
   }
 
   const { user } = auth
-
-  // Validate source
-  // For income, we model revenue as business funds held by the recorder (user)
-  const sourceType = fundedByType
-  const sourceUserId = fundedByUserId || user.id
-
   const admin = createAdminClient()
 
-  // Normalize and get category ID
-  const categoryId = category ? await getOrCreateCategory(organizationId, category, 'income') : null
+  if (validateAssignedMember && fundedByUserId) {
+    const memberError = await verifyActiveOrgMember(admin, organizationId, fundedByUserId)
+    if (memberError) {
+      return memberError
+    }
+  }
+
+  const categoryKind = txType === 'income' ? 'income' : 'expense'
+  const categoryId = category ? await getOrCreateCategory(organizationId, category, categoryKind) : null
 
   const insertPayload = {
     organization_id: organizationId,
     user_id: user.id,
-    type: "income",
+    type: txType,
     amount,
     description: description?.trim() || null,
     category: category?.trim() || null,
     category_id: categoryId,
     occurred_at: occurredDate.toISOString(),
-    funded_by_type: sourceType,
-    funded_by_user_id: sourceUserId,
+    funded_by_type: fundedByType,
+    funded_by_user_id: useCurrentUserAsFallback ? (fundedByUserId || user.id) : (fundedByUserId || null),
     updated_by_user_id: user.id,
+    ...(isInitial !== undefined ? { is_initial: isInitial } : {}),
   }
 
   // Use admin client to bypass RLS after explicit role check
   const { error: insertError } = await admin.from("transactions").insert(insertPayload)
 
   if (insertError) {
-    console.error("[ADD_INCOME] Insert failed", insertError.message)
-    return { error: "Unable to add income right now" }
+    console.error(`${logTag} Insert failed`, insertError.message)
+    return { error: insertFailedError }
   }
 
   revalidateOrganizationSections(organizationId, ['records', 'settings', 'settings/holdings'])
 
   return { success: true }
+}
+
+interface AddIncomeInput {
+  organizationId: string
+  amount: number
+  description?: string
+  category?: string
+  occurredAt: string
+  fundedByType: 'business' | 'personal'
+  fundedByUserId?: string | null
+}
+
+export async function addIncome(input: AddIncomeInput) {
+  return insertOrgTransaction({
+    organizationId: input.organizationId,
+    amount: input.amount,
+    description: input.description,
+    category: input.category,
+    occurredAt: input.occurredAt,
+    allowedRoles: ['owner', 'admin'],
+    permissionError: "You don't have permission to add income",
+    txType: 'income',
+    fundedByType: input.fundedByType,
+    fundedByUserId: input.fundedByUserId,
+    useCurrentUserAsFallback: true,
+    logTag: '[ADD_INCOME]',
+    insertFailedError: 'Unable to add income right now',
+  })
 }
 
 import {
@@ -117,71 +189,23 @@ interface AddExpenseInput {
 }
 
 export async function addExpense(input: AddExpenseInput) {
-  const { organizationId, amount, description, category, occurredAt, expenseType } = input
+  const transactionType = input.expenseType === 'personal' ? 'expense_personal' : 'expense_business'
+  const fundedByType = input.expenseType === 'personal' ? 'personal' : 'business'
 
-  if (!organizationId) {
-    return { error: "Organization is required" }
-  }
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return { error: "Amount must be greater than 0" }
-  }
-
-  if (!occurredAt) {
-    return { error: "Date is required" }
-  }
-
-  const occurredDate = new Date(occurredAt)
-  if (Number.isNaN(occurredDate.getTime())) {
-    return { error: "Invalid date" }
-  }
-
-  const auth = await authorizeOrgAction(
-    organizationId,
-    ['owner', 'admin'],
-    "You don't have permission to add expenses"
-  )
-
-  if ('error' in auth) {
-    return auth
-  }
-
-  const { user } = auth
-  const admin = createAdminClient()
-
-  // Determine funding details based on expense type
-  const transactionType = expenseType === 'personal' ? 'expense_personal' : 'expense_business'
-  const fundedByType = expenseType === 'personal' ? 'personal' : 'business'
-  const fundedByUserId = user.id // Current user is always the payer/holder
-
-  // Normalize and get category ID
-  const categoryId = category ? await getOrCreateCategory(organizationId, category, 'expense') : null
-
-  const insertPayload = {
-    organization_id: organizationId,
-    user_id: user.id,
-    type: transactionType,
-    amount,
-    description: description?.trim() || null,
-    category: category?.trim() || null,
-    category_id: categoryId,
-    occurred_at: occurredDate.toISOString(),
-    funded_by_type: fundedByType,
-    funded_by_user_id: fundedByUserId,
-    updated_by_user_id: user.id,
-  }
-
-  // Use admin client to bypass RLS after explicit role check
-  const { error: insertError } = await admin.from("transactions").insert(insertPayload)
-
-  if (insertError) {
-    console.error("[ADD_EXPENSE] Insert failed", insertError.message)
-    return { error: "Unable to add expense right now" }
-  }
-
-  revalidateOrganizationSections(organizationId, ['records', 'settings', 'settings/holdings'])
-
-  return { success: true }
+  return insertOrgTransaction({
+    organizationId: input.organizationId,
+    amount: input.amount,
+    description: input.description,
+    category: input.category,
+    occurredAt: input.occurredAt,
+    allowedRoles: ['owner', 'admin'],
+    permissionError: "You don't have permission to add expenses",
+    txType: transactionType,
+    fundedByType,
+    useCurrentUserAsFallback: true,
+    logTag: '[ADD_EXPENSE]',
+    insertFailedError: 'Unable to add expense right now',
+  })
 }
 
 interface AddInitialTransactionInput {
@@ -225,16 +249,9 @@ export async function addInitialTransaction(input: AddInitialTransactionInput) {
 
   // Validate assigned member if provided
   if (assignedToUserId) {
-    const { data: memberCheck, error: memberCheckError } = await admin
-      .from("organization_members")
-      .select("organization_id, user_id, is_active")
-      .eq("organization_id", organizationId)
-      .eq("user_id", assignedToUserId)
-      .eq("is_active", true)
-      .maybeSingle()
-
-    if (memberCheckError || !memberCheck) {
-      return { error: "Selected member is not part of this organization" }
+    const memberError = await verifyActiveOrgMember(admin, organizationId, assignedToUserId)
+    if (memberError) {
+      return memberError
     }
   }
 
@@ -351,16 +368,9 @@ export async function updateInitialTransaction(input: UpdateInitialTransactionIn
 
   // Validate assigned member if provided
   if (assignedToUserId) {
-    const { data: memberCheck, error: memberCheckError } = await admin
-      .from("organization_members")
-      .select("organization_id, user_id, is_active")
-      .eq("organization_id", organizationId)
-      .eq("user_id", assignedToUserId)
-      .eq("is_active", true)
-      .maybeSingle()
-
-    if (memberCheckError || !memberCheck) {
-      return { error: "Selected member is not part of this organization" }
+    const memberError = await verifyActiveOrgMember(admin, organizationId, assignedToUserId)
+    if (memberError) {
+      return memberError
     }
   }
 
@@ -466,61 +476,22 @@ interface AddIncomeForMemberInput {
 }
 
 export async function addIncomeForMember(input: AddIncomeForMemberInput) {
-  const { organizationId, amount, description, category, occurredAt, assignedToUserId } = input
-
-  if (!organizationId) return { error: "Organization is required" }
-  if (!Number.isFinite(amount) || amount <= 0) return { error: "Amount must be greater than 0" }
-  if (!occurredAt) return { error: "Date is required" }
-
-  const occurredDate = new Date(occurredAt)
-  if (Number.isNaN(occurredDate.getTime())) return { error: "Invalid date" }
-
-  const auth = await authorizeOrgAction(organizationId, ['owner'], "Only organization owners can add income for members")
-
-  if ('error' in auth) {
-    return auth
-  }
-
-  const { user } = auth
-  const admin = createAdminClient()
-
-  if (assignedToUserId) {
-    const { data: memberCheck, error: memberCheckError } = await admin
-      .from("organization_members")
-      .select("organization_id, user_id, is_active")
-      .eq("organization_id", organizationId)
-      .eq("user_id", assignedToUserId)
-      .eq("is_active", true)
-      .maybeSingle()
-
-    if (memberCheckError || !memberCheck) {
-      return { error: "Selected member is not part of this organization" }
-    }
-  }
-
-  const insertPayload = {
-    organization_id: organizationId,
-    user_id: user.id, // owner recording the transaction
-    type: "income" as const,
-    amount,
-    description: description?.trim() || null,
-    category: category?.trim() || null,
-    category_id: category ? await getOrCreateCategory(organizationId, category, 'income') : null,
-    occurred_at: occurredDate.toISOString(),
-    funded_by_type: "business" as const,
-    funded_by_user_id: assignedToUserId || null,
-    updated_by_user_id: user.id,
-    is_initial: false,
-  }
-
-  const { error: insertError } = await admin.from("transactions").insert(insertPayload)
-  if (insertError) {
-    console.error("[ADD_INCOME_FOR_MEMBER] Insert failed", insertError.message)
-    return { error: "Unable to add income right now" }
-  }
-
-  revalidateOrganizationSections(organizationId, ['settings', 'records', 'settings/holdings'])
-  return { success: true }
+  return insertOrgTransaction({
+    organizationId: input.organizationId,
+    amount: input.amount,
+    description: input.description,
+    category: input.category,
+    occurredAt: input.occurredAt,
+    allowedRoles: ['owner'],
+    permissionError: "Only organization owners can add income for members",
+    txType: 'income',
+    fundedByType: 'business',
+    fundedByUserId: input.assignedToUserId,
+    validateAssignedMember: true,
+    isInitial: false,
+    logTag: '[ADD_INCOME_FOR_MEMBER]',
+    insertFailedError: 'Unable to add income right now',
+  })
 }
 
 interface AddExpenseForMemberInput {
@@ -534,64 +505,25 @@ interface AddExpenseForMemberInput {
 }
 
 export async function addExpenseForMember(input: AddExpenseForMemberInput) {
-  const { organizationId, amount, description, category, occurredAt, expenseType, assignedToUserId } = input
+  const transactionType = input.expenseType === 'personal' ? 'expense_personal' : 'expense_business'
+  const fundedByType = input.expenseType === 'personal' ? 'personal' : 'business'
 
-  if (!organizationId) return { error: "Organization is required" }
-  if (!Number.isFinite(amount) || amount <= 0) return { error: "Amount must be greater than 0" }
-  if (!occurredAt) return { error: "Date is required" }
-
-  const occurredDate = new Date(occurredAt)
-  if (Number.isNaN(occurredDate.getTime())) return { error: "Invalid date" }
-
-  const auth = await authorizeOrgAction(organizationId, ['owner'], "Only organization owners can add expenses for members")
-
-  if ('error' in auth) {
-    return auth
-  }
-
-  const { user } = auth
-  const admin = createAdminClient()
-
-  if (assignedToUserId) {
-    const { data: memberCheck, error: memberCheckError } = await admin
-      .from("organization_members")
-      .select("organization_id, user_id, is_active")
-      .eq("organization_id", organizationId)
-      .eq("user_id", assignedToUserId)
-      .eq("is_active", true)
-      .maybeSingle()
-
-    if (memberCheckError || !memberCheck) {
-      return { error: "Selected member is not part of this organization" }
-    }
-  }
-
-  const transactionType = expenseType === 'personal' ? 'expense_personal' : 'expense_business'
-  const fundedByType = expenseType === 'personal' ? 'personal' : 'business'
-
-  const insertPayload = {
-    organization_id: organizationId,
-    user_id: user.id, // owner recording the transaction
-    type: transactionType,
-    amount,
-    description: description?.trim() || null,
-    category: category?.trim() || null,
-    category_id: category ? await getOrCreateCategory(organizationId, category, 'expense') : null,
-    occurred_at: occurredDate.toISOString(),
-    funded_by_type: fundedByType,
-    funded_by_user_id: assignedToUserId || null,
-    updated_by_user_id: user.id,
-    is_initial: false,
-  }
-
-  const { error: insertError } = await admin.from("transactions").insert(insertPayload)
-  if (insertError) {
-    console.error("[ADD_EXPENSE_FOR_MEMBER] Insert failed", insertError.message)
-    return { error: "Unable to add expense right now" }
-  }
-
-  revalidateOrganizationSections(organizationId, ['settings', 'records', 'settings/holdings'])
-  return { success: true }
+  return insertOrgTransaction({
+    organizationId: input.organizationId,
+    amount: input.amount,
+    description: input.description,
+    category: input.category,
+    occurredAt: input.occurredAt,
+    allowedRoles: ['owner'],
+    permissionError: "Only organization owners can add expenses for members",
+    txType: transactionType,
+    fundedByType,
+    fundedByUserId: input.assignedToUserId,
+    validateAssignedMember: true,
+    isInitial: false,
+    logTag: '[ADD_EXPENSE_FOR_MEMBER]',
+    insertFailedError: 'Unable to add expense right now',
+  })
 }
 
 export async function setMemberBaseline(input: SetMemberBaselineInput) {
@@ -615,87 +547,27 @@ export async function setMemberBaseline(input: SetMemberBaselineInput) {
   const admin = createAdminClient()
 
   // Verify target member exists in organization
-  const { data: targetMember, error: targetMemberError } = await admin
-    .from("organization_members")
-    .select("organization_id, user_id, is_active")
-    .eq("organization_id", organizationId)
-    .eq("user_id", userId)
-    .eq("is_active", true)
-    .maybeSingle()
-
-  if (targetMemberError || !targetMember) {
-    return { error: "Target member is not part of this organization" }
+  const memberError = await verifyActiveOrgMember(
+    admin,
+    organizationId,
+    userId,
+    "Target member is not part of this organization"
+  )
+  if (memberError) {
+    return memberError
   }
 
-  // Get current baseline allocation for this member (sum of held_allocate - held_return, excluding Refund withdrawals)
-  const { data: allocationRows, error: allocationError } = await admin
-    .from("transactions")
-    .select("type, amount, category")
-    .eq("organization_id", organizationId)
-    .eq("funded_by_user_id", userId)
-    .in("type", ["held_allocate", "held_return"])
-
-  if (allocationError) {
-    console.error("[SET_MEMBER_BASELINE] Failed to fetch allocations", allocationError.message)
-    return { error: "Unable to calculate current baseline" }
-  }
-
-  let currentBaseline = 0
-  for (const row of allocationRows || []) {
-    const amount = Number(row.amount ?? 0)
-    const isRefund = (row.category || "").toLowerCase() === "refund"
-    if (row.type === "held_allocate") {
-      currentBaseline += amount
-    } else if (row.type === "held_return" && !isRefund) {
-      currentBaseline -= amount
-    }
-  }
-
-  const delta = targetBaseline - currentBaseline
-
-  // If no change needed, return early
-  if (Math.abs(delta) < 0.01) {
-    return { success: true }
-  }
-
-  // Determine transaction type based on delta
-  const transactionType = delta > 0 ? "held_allocate" : "held_return"
-  const transactionAmount = Math.abs(delta)
-
-  // Get cash on hand to validate allocation limit
-  const { data: txRows, error: txError } = await admin
-    .from("transactions")
-    .select("type, amount, category")
-    .eq("organization_id", organizationId)
-
-  if (txError) {
-    console.error("[SET_MEMBER_BASELINE] Failed to fetch transactions", txError.message)
-    return { error: "Unable to validate allocation limit" }
-  }
-
-  let totalIncome = 0
-  let totalExpensesBusiness = 0
-  let totalRefundWithdrawals = 0
-  for (const r of txRows || []) {
-    const amount = Number(r.amount ?? 0)
-    if (r.type === "income") totalIncome += amount
-    if (r.type === "expense_business") totalExpensesBusiness += amount
-    if (r.type === "held_return" && (r.category || "").toLowerCase() === "refund") {
-      totalRefundWithdrawals += amount
-    }
-  }
-  const cashOnHand = totalIncome - totalExpensesBusiness - totalRefundWithdrawals
-
-  // Calculate total allocated baseline across all members (excluding Refund withdrawals)
+  // Fetch all baseline allocations once to derive both the member's current baseline and org-wide limit
   const { data: allAllocations, error: allAllocationsError } = await admin
     .from("transactions")
     .select("type, amount, category, funded_by_user_id")
     .eq("organization_id", organizationId)
     .in("type", ["held_allocate", "held_return"])
+    .limit(10000)
 
   if (allAllocationsError) {
-    console.error("[SET_MEMBER_BASELINE] Failed to fetch all allocations", allAllocationsError.message)
-    return { error: "Unable to validate total allocation" }
+    console.error("[SET_MEMBER_BASELINE] Failed to fetch allocations", allAllocationsError.message)
+    return { error: "Unable to calculate current baseline" }
   }
 
   const baselineByUser: Record<string, number> = {}
@@ -710,6 +582,59 @@ export async function setMemberBaseline(input: SetMemberBaselineInput) {
       baselineByUser[uid] = (baselineByUser[uid] ?? 0) - amount
     }
   }
+
+  const currentBaseline = baselineByUser[userId] ?? 0
+  const delta = targetBaseline - currentBaseline
+
+  // If no change needed, return early
+  if (Math.abs(delta) < 0.01) {
+    return { success: true }
+  }
+
+  // Determine transaction type based on delta
+  const transactionType = delta > 0 ? "held_allocate" : "held_return"
+  const transactionAmount = Math.abs(delta)
+
+  // Compute cash on hand using the DB aggregate RPC (fallback to bounded scan if RPC unavailable)
+  let totalIncome = 0
+  let totalExpensesBusiness = 0
+  let totalRefundWithdrawals = 0
+
+  const { data: totalsRpcData, error: totalsRpcError } = await admin.rpc(
+    "get_organization_financial_totals",
+    { p_org_id: organizationId }
+  )
+  const rpcRow = (Array.isArray(totalsRpcData) ? totalsRpcData[0] : totalsRpcData) as
+    | Record<string, unknown>
+    | undefined
+
+  if (rpcRow && !totalsRpcError) {
+    totalIncome = Number(rpcRow.total_income ?? 0)
+    totalExpensesBusiness = Number(rpcRow.total_expenses_business ?? 0)
+    totalRefundWithdrawals = Number(rpcRow.total_refund_withdrawals ?? 0)
+  } else {
+    const { data: txRows, error: txError } = await admin
+      .from("transactions")
+      .select("type, amount, category")
+      .eq("organization_id", organizationId)
+      .in("type", ["income", "expense_business", "held_return"])
+      .limit(10000)
+
+    if (txError) {
+      console.error("[SET_MEMBER_BASELINE] Failed to fetch transactions", txError.message)
+      return { error: "Unable to validate allocation limit" }
+    }
+
+    for (const r of txRows || []) {
+      const amount = Number(r.amount ?? 0)
+      if (r.type === "income") totalIncome += amount
+      if (r.type === "expense_business") totalExpensesBusiness += amount
+      if (r.type === "held_return" && (r.category || "").toLowerCase() === "refund") {
+        totalRefundWithdrawals += amount
+      }
+    }
+  }
+  const cashOnHand = totalIncome - totalExpensesBusiness - totalRefundWithdrawals
 
   // Update the target user's baseline in our map
   baselineByUser[userId] = targetBaseline

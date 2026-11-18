@@ -291,6 +291,8 @@ export type Database = {
           name: string
           starting_value: number
           is_active: boolean
+          linked_org_id: string | null
+          linked_org_balance: number | null
           created_at: string
           updated_at: string
         }
@@ -300,6 +302,8 @@ export type Database = {
           name: string
           starting_value?: number
           is_active?: boolean
+          linked_org_id?: string | null
+          linked_org_balance?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -309,6 +313,8 @@ export type Database = {
           name?: string
           starting_value?: number
           is_active?: boolean
+          linked_org_id?: string | null
+          linked_org_balance?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -316,6 +322,13 @@ export type Database = {
           {
             foreignKeyName: 'wallet_accounts_organization_id_fkey'
             columns: ['organization_id']
+            isOneToOne: false
+            referencedRelation: 'organizations'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'wallet_accounts_linked_org_id_fkey'
+            columns: ['linked_org_id']
             isOneToOne: false
             referencedRelation: 'organizations'
             referencedColumns: ['id']
@@ -640,6 +653,13 @@ export type Database = {
           p_roles: string[]
         }
         Returns: boolean
+      }
+      get_member_business_held: {
+        Args: {
+          p_org_id: string
+          p_user_id: string
+        }
+        Returns: number
       }
     }
     Enums: {

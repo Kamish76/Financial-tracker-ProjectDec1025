@@ -71,7 +71,7 @@ export async function addWalletTransaction(input: AddWalletTransactionInput): Pr
     // Verify account belongs to organization and is active
     const { data: sourceAccount } = await adminClient
       .from('wallet_accounts')
-      .select('id, organization_id, is_active')
+      .select('id, organization_id, is_active, linked_org_id')
       .eq('id', input.accountId)
       .eq('organization_id', input.organizationId)
       .eq('is_active', true)
@@ -79,6 +79,13 @@ export async function addWalletTransaction(input: AddWalletTransactionInput): Pr
 
     if (!sourceAccount) {
       return { error: 'Invalid source account.' }
+    }
+
+    if (input.type !== 'transfer' && sourceAccount.linked_org_id) {
+      return {
+        error:
+          'This sub-account is linked to an organization balance and is read-only for direct income or expenses. Use Transfer or record transactions in the linked organization.',
+      }
     }
 
     if (input.type === 'transfer' && input.transferToAccountId) {

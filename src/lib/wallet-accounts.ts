@@ -2,9 +2,10 @@
 
 import { requireOrgMembership, authorizeOrgAction } from '@/lib/auth/guards'
 import { createAdminClient } from '@/lib/supabase/server'
+import { isWalletOrganization } from '@/lib/wallet'
 import { revalidatePath } from 'next/cache'
 
-import type { WalletAccount, AccountWithBalance } from './wallet-types'
+import type { WalletAccount, AccountWithBalance, LinkableOrganization } from './wallet-types'
 
 function sanitizePostgrestFilter(term: string): string {
   if (!term) return ''
@@ -36,6 +37,56 @@ export async function verifyOrgAccess(organizationId: string, userId: string): P
   return !!member
 }
 
+export async function getLinkableOrganizations(
+  organizationId: string
+): Promise<LinkableOrganization[]> {
+  const { user } = await requireOrgMembership(organizationId)
+  const adminClient = createAdminClient()
+
+  const [membershipsResult, ownedOrgsResult] = await Promise.all([
+    adminClient
+      .from('organization_members')
+      .select('organization_id, organizations(id, name, description, currency)')
+      .eq('user_id', user.id)
+      .eq('is_active', true),
+    adminClient
+      .from('organizations')
+      .select('id, name, description, currency')
+      .eq('owner_id', user.id),
+  ])
+
+  const orgMap = new Map<string, LinkableOrganization>()
+
+  const considerOrg = (org: {
+    id: string
+    name: string
+    description: string | null
+    currency?: string | null
+  }) => {
+    if (org.id === organizationId || isWalletOrganization(org.description)) return
+    orgMap.set(org.id, {
+      id: org.id,
+      name: org.name,
+      currency: org.currency ?? undefined,
+    })
+  }
+
+  for (const m of membershipsResult.data || []) {
+    const orgData = Array.isArray(m.organizations) ? m.organizations[0] : m.organizations
+    if (orgData) {
+      considerOrg(
+        orgData as { id: string; name: string; description: string | null; currency?: string | null }
+      )
+    }
+  }
+
+  for (const owned of ownedOrgsResult.data || []) {
+    considerOrg(owned)
+  }
+
+  return Array.from(orgMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+}
+
 export async function getWalletAccounts(
   organizationId: string,
   includeArchived = false
@@ -61,15 +112,41 @@ export async function getWalletAccounts(
     return []
   }
 
-  return (data || []).map((row: Record<string, unknown>) => ({
-    id: String(row.id ?? ''),
-    organization_id: String(row.organization_id ?? ''),
-    name: String(row.name ?? ''),
-    starting_value: Number(row.starting_value ?? 0),
-    is_active: Boolean(row.is_active ?? true),
-    created_at: String(row.created_at ?? ''),
-    updated_at: String(row.updated_at ?? ''),
-  }))
+  const rows = (data || []) as Record<string, unknown>[]
+  const linkedOrgIds = Array.from(
+    new Set(rows.map((r) => (r.linked_org_id ? String(r.linked_org_id) : '')).filter(Boolean))
+  )
+
+  const orgNameMap = new Map<string, string>()
+  if (linkedOrgIds.length > 0) {
+    const { data: linkedOrgs } = await adminClient
+      .from('organizations')
+      .select('id, name')
+      .in('id', linkedOrgIds)
+
+    for (const org of linkedOrgs || []) {
+      orgNameMap.set(org.id, org.name)
+    }
+  }
+
+  return rows.map((row) => {
+    const linkedOrgId = row.linked_org_id ? String(row.linked_org_id) : null
+    return {
+      id: String(row.id ?? ''),
+      organization_id: String(row.organization_id ?? ''),
+      name: String(row.name ?? ''),
+      starting_value: Number(row.starting_value ?? 0),
+      is_active: Boolean(row.is_active ?? true),
+      linked_org_id: linkedOrgId,
+      linked_org_balance:
+        row.linked_org_balance !== null && row.linked_org_balance !== undefined
+          ? Number(row.linked_org_balance)
+          : null,
+      linked_org_name: linkedOrgId ? (orgNameMap.get(linkedOrgId) ?? null) : null,
+      created_at: String(row.created_at ?? ''),
+      updated_at: String(row.updated_at ?? ''),
+    }
+  })
 }
 
 export async function getAccountsWithBalances(
@@ -116,6 +193,11 @@ export async function getAccountsWithBalances(
       }
     }
 
+    if (acc.linked_org_id) {
+      // Postgres triggers keep linked_org_balance synced with -get_member_business_held().
+      current_balance = Number(acc.linked_org_balance ?? 0)
+    }
+
     return {
       ...acc,
       current_balance,
@@ -127,7 +209,8 @@ export async function getAccountsWithBalances(
 export async function createWalletAccount(
   organizationId: string,
   name: string,
-  startingValue = 0
+  startingValue = 0,
+  linkedOrgId?: string | null
 ): Promise<{ success?: boolean; accountId?: string; error?: string }> {
   try {
     const auth = await authorizeOrgAction(
@@ -150,14 +233,26 @@ export async function createWalletAccount(
       return { error: 'Starting value must be a valid number' }
     }
 
+    const normalizedLinkedOrgId = linkedOrgId?.trim() || null
+    if (normalizedLinkedOrgId) {
+      if (normalizedLinkedOrgId === organizationId) {
+        return { error: 'Cannot link a wallet to itself' }
+      }
+      const hasAccess = await verifyOrgAccess(normalizedLinkedOrgId, auth.user.id)
+      if (!hasAccess) {
+        return { error: 'You do not have access to the selected organization' }
+      }
+    }
+
     const adminClient = createAdminClient()
     const { data, error } = await adminClient
       .from('wallet_accounts')
       .insert({
         organization_id: organizationId,
         name: trimmedName,
-        starting_value: startingValue,
+        starting_value: normalizedLinkedOrgId ? 0 : startingValue,
         is_active: true,
+        linked_org_id: normalizedLinkedOrgId,
       })
       .select('id')
       .single()
@@ -181,14 +276,15 @@ export async function createWalletAccount(
 export async function updateWalletAccount(
   accountId: string,
   name: string,
-  startingValue: number
+  startingValue: number,
+  linkedOrgId?: string | null
 ): Promise<{ success?: boolean; error?: string }> {
   try {
     const adminClient = createAdminClient()
 
     const { data: account, error: fetchError } = await adminClient
       .from('wallet_accounts')
-      .select('organization_id')
+      .select('organization_id, linked_org_id')
       .eq('id', accountId)
       .maybeSingle()
 
@@ -210,13 +306,41 @@ export async function updateWalletAccount(
       return { error: 'Account name must be at least 2 characters long' }
     }
 
+    const updateFields: {
+      name: string
+      starting_value?: number
+      linked_org_id?: string | null
+      linked_org_balance?: number | null
+      updated_at: string
+    } = {
+      name: trimmedName,
+      updated_at: new Date().toISOString(),
+    }
+
+    if (linkedOrgId !== undefined) {
+      const normalizedLinkedOrgId = linkedOrgId?.trim() || null
+      if (normalizedLinkedOrgId) {
+        if (normalizedLinkedOrgId === account.organization_id) {
+          return { error: 'Cannot link a wallet to itself' }
+        }
+        const hasAccess = await verifyOrgAccess(normalizedLinkedOrgId, auth.user.id)
+        if (!hasAccess) {
+          return { error: 'You do not have access to the selected organization' }
+        }
+        // Preserve existing starting_value; BEFORE UPDATE trigger populates linked_org_balance.
+        updateFields.linked_org_id = normalizedLinkedOrgId
+      } else {
+        updateFields.linked_org_id = null
+        updateFields.linked_org_balance = null
+        updateFields.starting_value = startingValue
+      }
+    } else if (!account.linked_org_id) {
+      updateFields.starting_value = startingValue
+    }
+
     const { error: updateError } = await adminClient
       .from('wallet_accounts')
-      .update({
-        name: trimmedName,
-        starting_value: startingValue,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateFields)
       .eq('id', accountId)
 
     if (updateError) {

@@ -18,6 +18,7 @@ import { DashboardClientWrapper } from './dashboard-client-wrapper'
 import { RecentActivityActions } from './recent-activity-actions'
 
 const getCachedWalletAccounts = cache((orgId: string) => getAccountsWithBalances(orgId, false))
+const getCachedAllWalletAccounts = cache((orgId: string) => getAccountsWithBalances(orgId, true))
 const getCachedOrgStats = cache((orgId: string) => getOrganizationStats(orgId))
 
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
@@ -190,7 +191,7 @@ export async function RecentActivitySection({
       .order('occurred_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .limit(10),
-    isWallet && canManage ? getCachedWalletAccounts(organizationId) : Promise.resolve([] as AccountWithBalance[]),
+    isWallet && canManage ? getCachedAllWalletAccounts(organizationId) : Promise.resolve([] as AccountWithBalance[]),
   ])
 
   const transactionsError = recentTxResult.error
