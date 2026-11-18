@@ -215,38 +215,31 @@ export async function fetchOrganizationMembers(organizationId: string) {
   const admin = createAdminClient()
 
   try {
-    // 1. Fetch organization owner
-    const { data: org, error: orgError } = await admin
-      .from('organizations')
-      .select('owner_id')
-      .eq('id', organizationId)
-      .maybeSingle()
+    // 1 & 2. Fetch organization owner and members in parallel
+    const [
+      { data: org, error: orgError },
+      { data: members, error: membersError },
+    ] = await Promise.all([
+      admin
+        .from('organizations')
+        .select('owner_id')
+        .eq('id', organizationId)
+        .maybeSingle(),
+      admin
+        .from('organization_members')
+        .select('user_id, role, is_active')
+        .eq('organization_id', organizationId),
+    ])
 
     if (orgError) {
       console.error('[fetchOrganizationMembers] Error fetching organization:', orgError.message)
     }
 
-    // 2. Fetch organization members
-    const { data: members, error: membersError } = await admin
-      .from('organization_members')
-      .select('user_id, role, is_active')
-      .eq('organization_id', organizationId)
-
     if (membersError) {
       console.error('[fetchOrganizationMembers] Error fetching organization_members:', membersError.message)
     }
 
-    // 3. Fetch distinct funded_by_user_id and user_id from transactions to ensure any past contributor is included
-    const { data: txUsers, error: txError } = await admin
-      .from('transactions')
-      .select('funded_by_user_id, user_id')
-      .eq('organization_id', organizationId)
-
-    if (txError) {
-      console.error('[fetchOrganizationMembers] Error fetching transaction users:', txError.message)
-    }
-
-    // 4. Map user IDs to their respective roles
+    // 3. Map user IDs to their respective roles (including deactivated members for historical filtering)
     const userRoleMap = new Map<string, string>()
 
     if (org?.owner_id) {
@@ -254,19 +247,9 @@ export async function fetchOrganizationMembers(organizationId: string) {
     }
 
     for (const m of members || []) {
-      if (m.is_active !== false) {
-        if (!userRoleMap.has(m.user_id) || m.role === 'owner') {
-          userRoleMap.set(m.user_id, m.role || 'member')
-        }
-      }
-    }
-
-    for (const tx of txUsers || []) {
-      if (tx.funded_by_user_id && !userRoleMap.has(tx.funded_by_user_id)) {
-        userRoleMap.set(tx.funded_by_user_id, 'member')
-      }
-      if (tx.user_id && !userRoleMap.has(tx.user_id)) {
-        userRoleMap.set(tx.user_id, 'member')
+      const existingRole = userRoleMap.get(m.user_id)
+      if (!existingRole || m.role === 'owner' || (m.is_active !== false && existingRole !== 'owner')) {
+        userRoleMap.set(m.user_id, m.role || 'member')
       }
     }
 
