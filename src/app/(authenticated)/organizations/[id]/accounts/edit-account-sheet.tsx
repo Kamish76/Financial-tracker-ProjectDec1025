@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Link2, Pencil } from 'lucide-react'
+import { Archive, ArchiveRestore, Link2, Pencil } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
-import { updateWalletAccount } from '@/lib/wallet-accounts'
+import { toggleArchiveWalletAccount, updateWalletAccount } from '@/lib/wallet-accounts'
 import type { LinkableOrganization, WalletAccount } from '@/lib/wallet-types'
 import { formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -89,6 +89,20 @@ export function EditAccountSheet({
         return
       }
 
+      setOpen(false)
+      router.refresh()
+      onSuccess?.()
+    })
+  }
+
+  const handleToggleArchive = () => {
+    setError(null)
+    startTransition(async () => {
+      const res = await toggleArchiveWalletAccount(account.id, !account.is_active)
+      if (res.error) {
+        setError(res.error)
+        return
+      }
       setOpen(false)
       router.refresh()
       onSuccess?.()
@@ -189,6 +203,35 @@ export function EditAccountSheet({
                     {formatCurrency(account.starting_value, currency)}
                   </p>
                 )}
+              </div>
+
+              <div className="rounded-lg border border-border bg-muted/30 p-3.5 space-y-2.5">
+                <div>
+                  <p className="text-sm font-medium">Archive / Hide Balance</p>
+                  <p className="text-xs text-muted-foreground">
+                    Hides this sub-account&apos;s current balance from your combined wallet total while keeping all past transactions intact.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2"
+                  onClick={handleToggleArchive}
+                  disabled={isPending}
+                >
+                  {account.is_active ? (
+                    <>
+                      <Archive className="h-4 w-4" />
+                      Hide Balance (Archive)
+                    </>
+                  ) : (
+                    <>
+                      <ArchiveRestore className="h-4 w-4" />
+                      Show Balance (Restore)
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
           </div>

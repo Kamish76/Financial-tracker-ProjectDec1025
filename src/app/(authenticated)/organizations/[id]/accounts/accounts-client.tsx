@@ -210,7 +210,7 @@ export function AccountsClient({
                       <span className="truncate">{acc.name}</span>
                       {!acc.is_active && (
                         <Badge variant="secondary" className="text-xs">
-                          Archived
+                          Archived • Balance Hidden
                         </Badge>
                       )}
                     </CardTitle>
@@ -252,8 +252,8 @@ export function AccountsClient({
                       size="icon"
                       onClick={() => handleToggleArchive(acc.id, acc.is_active)}
                       disabled={isPending}
-                      title={acc.is_active ? 'Archive account' : 'Restore account'}
-                      aria-label={acc.is_active ? 'Archive account' : 'Restore account'}
+                      title={acc.is_active ? 'Hide balance (Archive account)' : 'Show balance (Restore account)'}
+                      aria-label={acc.is_active ? 'Hide balance (Archive account)' : 'Show balance (Restore account)'}
                     >
                       {acc.is_active ? (
                         <Archive className="h-4 w-4" />
@@ -298,6 +298,11 @@ export function AccountsClient({
                     </>
                   )}
                 </div>
+                {!acc.is_active && (
+                  <p className="text-[11px] text-muted-foreground mt-2">
+                    Hidden from combined wallet total; past transactions remain preserved.
+                  </p>
+                )}
               </CardContent>
             </Card>
           ))}
