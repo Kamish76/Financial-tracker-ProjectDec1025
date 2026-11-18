@@ -46,11 +46,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error('Supabase URL or SUPABASE_SERVICE_ROLE_KEY not configured');
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Server configuration error: missing Supabase service role credentials',
+          timestamp: new Date().toISOString()
+        },
+        { status: 500 }
+      );
+    }
+
     // Initialize Supabase client with service role for admin access
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY!
-    );
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // Query database to keep it active and purge expired account deletion requests (Phase 2)
     const [orgsResult, transactionsResult, purgeResult] = await Promise.all([
@@ -59,8 +71,14 @@ export async function GET(request: NextRequest) {
       supabase.rpc('process_due_account_deletions'),
     ]);
 
+    if (orgsResult.error) {
+      throw new Error(`Organizations count query failed: ${orgsResult.error.message}`);
+    }
+    if (transactionsResult.error) {
+      throw new Error(`Transactions count query failed: ${transactionsResult.error.message}`);
+    }
     if (purgeResult.error) {
-      console.warn('Notice: process_due_account_deletions RPC notice:', purgeResult.error.message);
+      throw new Error(`process_due_account_deletions RPC failed: ${purgeResult.error.message}`);
     }
 
     const organizationCount = orgsResult.count || 0;
@@ -105,22 +123,23 @@ export async function GET(request: NextRequest) {
 
     // Attempt to log error to database
     try {
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY!
-      );
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (supabaseUrl && serviceRoleKey) {
+        const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-      await supabase
-        .from('keep_alive_logs')
-        .insert({
-          executed_at: new Date().toISOString(),
-          database_active: false,
-          organization_count: 0,
-          transaction_count: 0,
-          response_time_ms: responseTime,
-          status: 'error',
-          error_message: error instanceof Error ? error.message : 'Unknown error'
-        });
+        await supabase
+          .from('keep_alive_logs')
+          .insert({
+            executed_at: new Date().toISOString(),
+            database_active: false,
+            organization_count: 0,
+            transaction_count: 0,
+            response_time_ms: responseTime,
+            status: 'error',
+            error_message: error instanceof Error ? error.message : 'Unknown error'
+          });
+      }
     } catch (logError) {
       console.error('Failed to log error:', logError);
     }
