@@ -47,7 +47,6 @@ import { AddRegularIncomeSheet } from './add-regular-income-sheet'
 import { AddRegularExpenseSheet } from './add-regular-expense-sheet'
 import { ManageCategoriesDialog } from './manage-categories-dialog'
 import { stripWalletMarker } from '@/lib/wallet'
-import type { MirrorWalletContext } from '@/lib/wallet-types'
 import { formatCurrency } from '@/lib/utils'
 
 type OrganizationRole = 'owner' | 'admin' | 'member'
@@ -95,7 +94,6 @@ type OrganizationSettingsProps = {
 	currentUserEmail?: string | null
 	currentUserName?: string | null
 	currentUserId?: string | null
-	mirrorContext?: MirrorWalletContext | null
 }
 
 export function OrganizationSettings({
@@ -106,7 +104,6 @@ export function OrganizationSettings({
 	currentUserEmail,
 	currentUserName,
 	currentUserId,
-	mirrorContext,
 }: OrganizationSettingsProps) {
 	const router = useRouter()
 	const isOwner = organization.user_role === 'owner'
@@ -611,14 +608,12 @@ export function OrganizationSettings({
 										members={membersForSheet}
 										currentUserEmail={currentUserEmail}
 										currentUserId={currentUserId}
-										mirrorContext={mirrorContext}
 									/>
 									<AddRegularExpenseSheet
 										organizationId={organization.id}
 										members={membersForSheet}
 										currentUserEmail={currentUserEmail}
 										currentUserId={currentUserId}
-										mirrorContext={mirrorContext}
 									/>
 								</div>
 							</div>

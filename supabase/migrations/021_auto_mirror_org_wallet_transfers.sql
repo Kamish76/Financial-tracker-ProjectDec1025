@@ -28,6 +28,17 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  IF NEW.amount IS NOT DISTINCT FROM OLD.amount
+     AND NEW.occurred_at IS NOT DISTINCT FROM OLD.occurred_at
+     AND NEW.description IS NOT DISTINCT FROM OLD.description
+     AND NEW.type IS NOT DISTINCT FROM OLD.type THEN
+    RETURN NEW;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.transactions WHERE mirrored_from_tx_id = NEW.id) THEN
+    RETURN NEW;
+  END IF;
+
   SELECT name INTO v_org_name
   FROM public.organizations
   WHERE id = NEW.organization_id;

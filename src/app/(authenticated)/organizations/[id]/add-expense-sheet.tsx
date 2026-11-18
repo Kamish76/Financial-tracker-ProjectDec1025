@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { ReceiptText } from 'lucide-react'
 
 import { isWalletOrganization } from '@/lib/wallet'
-import type { MirrorWalletContext } from '@/lib/wallet-types'
 import { Button } from '@/components/ui/button'
 import { OrgTransactionModal } from './org-transaction-modal'
 
@@ -12,14 +11,12 @@ type AddExpenseSheetProps = {
   organizationId: string
   organizationDescription?: string | null
   currency?: string
-  mirrorContext?: MirrorWalletContext | null
 }
 
 export function AddExpenseSheet({
   organizationId,
   organizationDescription,
   currency,
-  mirrorContext,
 }: AddExpenseSheetProps) {
   const [open, setOpen] = useState(false)
   const isWallet = isWalletOrganization(organizationDescription)
@@ -45,7 +42,6 @@ export function AddExpenseSheet({
         organizationDescription={organizationDescription}
         currency={currency}
         initialTab="expense"
-        mirrorContext={mirrorContext}
       />
     </>
   )

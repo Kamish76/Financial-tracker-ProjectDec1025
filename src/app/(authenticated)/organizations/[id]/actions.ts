@@ -83,7 +83,7 @@ async function createMirroredWalletTransfer(params: {
   target: ResolvedMirrorTarget
   userId: string
   orgTxId: string
-  txType: 'income' | 'expense_business' | 'held_return'
+  txType: 'income' | 'expense_business'
   amount: number
   description?: string | null
   occurredAtIso: string
@@ -96,8 +96,7 @@ async function createMirroredWalletTransfer(params: {
     txType === "income" ? target.targetAccountId : target.linkedAccountId
 
   const prefix = `[${target.orgName}]`
-  const fallbackLabel =
-    txType === "income" ? "Income" : txType === "held_return" ? "Refund" : "Business expense"
+  const fallbackLabel = txType === "income" ? "Income" : "Business expense"
   const mirrorDesc = description?.trim() ? `${prefix} ${description.trim()}` : `${prefix} ${fallbackLabel}`
 
   const { data: mirrorTx, error: mirrorError } = await admin
@@ -854,11 +853,10 @@ interface CreateRefundInput {
   organizationId: string
   amount: number
   description?: string
-  mirrorWalletAccountId?: string | null
 }
 
 export async function createRefund(input: CreateRefundInput) {
-  const { organizationId, amount, description, mirrorWalletAccountId } = input
+  const { organizationId, amount, description } = input
 
   if (!organizationId) {
     return { error: "Organization is required" }
@@ -881,21 +879,6 @@ export async function createRefund(input: CreateRefundInput) {
   const { user } = auth
   const admin = createAdminClient()
 
-  const normalizedMirrorAccountId = mirrorWalletAccountId?.trim() || null
-  let mirrorTarget: ResolvedMirrorTarget | null = null
-  if (normalizedMirrorAccountId) {
-    const targetRes = await resolveMirrorTarget(
-      admin,
-      organizationId,
-      user.id,
-      normalizedMirrorAccountId
-    )
-    if ("error" in targetRes) {
-      return { error: targetRes.error }
-    }
-    mirrorTarget = targetRes
-  }
-
   // Atomic stored procedure execution with row-level locks (AGENTS.md Rule 5)
   const { data, error } = await admin.rpc('process_member_refund', {
     p_org_id: organizationId,
@@ -912,37 +895,12 @@ export async function createRefund(input: CreateRefundInput) {
   const result = data as {
     success?: boolean
     error?: string
-    reimbursement_id?: string
-    transaction_id?: string
   } | null
   if (!result || !result.success) {
     return { error: result?.error || "Unable to process refund" }
   }
 
-  let mirroredTransferId: string | undefined
-  if (mirrorTarget && result.transaction_id) {
-    const mirrorRes = await createMirroredWalletTransfer({
-      admin,
-      target: mirrorTarget,
-      userId: user.id,
-      orgTxId: result.transaction_id,
-      txType: "held_return",
-      amount,
-      description,
-      occurredAtIso: new Date().toISOString(),
-    })
-
-    if (mirrorRes.error) {
-      await admin.from("transactions").delete().eq("id", result.transaction_id)
-      if (result.reimbursement_id) {
-        await admin.from("reimbursement_requests").delete().eq("id", result.reimbursement_id)
-      }
-      return { error: mirrorRes.error }
-    }
-    mirroredTransferId = mirrorRes.mirroredTransferId
-  }
-
   revalidateOrganizationSections(organizationId, ['records', 'settings', 'settings/holdings'])
 
-  return mirroredTransferId ? { success: true, mirroredTransferId } : { success: true }
+  return { success: true }
 }

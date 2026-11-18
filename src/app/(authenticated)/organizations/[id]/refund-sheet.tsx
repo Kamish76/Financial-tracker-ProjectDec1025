@@ -4,16 +4,14 @@ import { useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import type { MirrorWalletContext } from '@/lib/wallet-types'
 import { OrgTransactionModal } from './org-transaction-modal'
 
 type RefundSheetProps = {
   organizationId: string
   currency?: string
-  mirrorContext?: MirrorWalletContext | null
 }
 
-export function RefundSheet({ organizationId, currency, mirrorContext }: RefundSheetProps) {
+export function RefundSheet({ organizationId, currency }: RefundSheetProps) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -36,7 +34,6 @@ export function RefundSheet({ organizationId, currency, mirrorContext }: RefundS
         organizationId={organizationId}
         currency={currency}
         initialTab="refund"
-        mirrorContext={mirrorContext}
       />
     </>
   )

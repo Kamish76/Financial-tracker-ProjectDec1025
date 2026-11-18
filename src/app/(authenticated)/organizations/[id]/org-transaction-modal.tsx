@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 
 import { addIncome, addExpense, createRefund } from './actions'
+import { getUserMirrorableWalletAccounts } from '@/lib/wallet-accounts'
 import type { MirrorWalletContext } from '@/lib/wallet-types'
 import { ManageCategoriesDialog } from './settings/manage-categories-dialog'
 import { getOrganizationCategoriesByType } from '@/lib/categories'
@@ -50,7 +51,6 @@ type OrgTransactionModalProps = {
   organizationDescription?: string | null
   currency?: string
   initialTab?: OrgTransactionTab
-  mirrorContext?: MirrorWalletContext | null
   onTransactionAdded?: () => void
 }
 
@@ -61,7 +61,6 @@ export function OrgTransactionModal({
   organizationDescription,
   currency,
   initialTab = 'expense',
-  mirrorContext,
   onTransactionAdded,
 }: OrgTransactionModalProps) {
   const router = useRouter()
@@ -89,6 +88,7 @@ export function OrgTransactionModal({
   const [showTypeDropdown, setShowTypeDropdown] = useState<boolean>(false)
   const [showCategoryDropdown, setShowCategoryDropdown] = useState<boolean>(false)
   const [showMirrorDropdown, setShowMirrorDropdown] = useState<boolean>(false)
+  const [mirrorContext, setMirrorContext] = useState<MirrorWalletContext | null>(null)
   const [mirrorWalletAccountId, setMirrorWalletAccountId] = useState<string>('')
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState<boolean>(false)
   const [notes, setNotes] = useState<string>('')
@@ -152,7 +152,7 @@ export function OrgTransactionModal({
     }
   }, [organizationId])
 
-  // Load current user and organization categories when modal opens
+  // Load current user, organization categories, and optional wallet mirror targets when modal opens
   useEffect(() => {
     if (!isOpen || !organizationId) return
     let isMounted = true
@@ -175,10 +175,29 @@ export function OrgTransactionModal({
       })
       .catch(() => {})
 
+    if (!isWallet) {
+      getUserMirrorableWalletAccounts(organizationId)
+        .then((ctx) => {
+          if (!isMounted) return
+          setMirrorContext(ctx)
+          if (ctx) {
+            try {
+              const stored = localStorage.getItem(`org_mirror_wallet_${organizationId}`)
+              if (stored && ctx.accounts.some((acc) => acc.id === stored)) {
+                setMirrorWalletAccountId(stored)
+              }
+            } catch {
+              // Ignore storage access errors
+            }
+          }
+        })
+        .catch(() => {})
+    }
+
     return () => {
       isMounted = false
     }
-  }, [isOpen, organizationId])
+  }, [isOpen, organizationId, isWallet])
 
   useEffect(() => {
     if (!error) return
@@ -186,10 +205,14 @@ export function OrgTransactionModal({
     return () => clearTimeout(timer)
   }, [error])
 
-  // Reset form when modal opens
+  // Reset form when modal opens or closes
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen) {
+      setMirrorWalletAccountId('')
+      setMirrorContext(null)
+      return
+    }
     setDisplayExpr('0')
     setNotes('')
     setError(null)
@@ -200,16 +223,6 @@ export function OrgTransactionModal({
     setCustomCategoryInput('')
     setFundedByType('business')
     setExpenseType(isWallet ? 'personal' : 'business')
-    let savedMirrorId = ''
-    try {
-      const stored = localStorage.getItem(`org_mirror_wallet_${organizationId}`)
-      if (stored && mirrorContext?.accounts.some((acc) => acc.id === stored)) {
-        savedMirrorId = stored
-      }
-    } catch {
-      // Ignore storage access errors
-    }
-    setMirrorWalletAccountId(savedMirrorId)
     const tab = isWallet && initialTab === 'refund' ? 'expense' : initialTab
     setActiveTab(tab)
     if (tab === 'income') {
@@ -219,7 +232,7 @@ export function OrgTransactionModal({
     }
     setTxDate(formatLocalDateInput(new Date().toISOString()))
     setTxTime(new Date().toTimeString().split(' ')[0].substring(0, 5))
-  }, [isOpen, initialTab, isWallet, orgCategories, organizationId, mirrorContext])
+  }, [isOpen, initialTab, isWallet, orgCategories])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const currentCategoriesList = useMemo(() => {
@@ -231,8 +244,7 @@ export function OrgTransactionModal({
       mirrorContext &&
       mirrorContext.accounts.length > 0 &&
       ((activeTab === 'income' && fundedByType === 'business') ||
-        (activeTab === 'expense' && expenseType === 'business') ||
-        activeTab === 'refund')
+        (activeTab === 'expense' && expenseType === 'business'))
   )
 
   const selectedMirrorAccount = useMemo(
@@ -312,8 +324,6 @@ export function OrgTransactionModal({
       organizationId,
       amount: Math.abs(evaluatedAmount),
       description: notes.trim() || undefined,
-      mirrorWalletAccountId:
-        canMirror && mirrorWalletAccountId ? mirrorWalletAccountId : undefined,
     })
 
     setIsSubmitting(false)
@@ -330,8 +340,6 @@ export function OrgTransactionModal({
     organizationId,
     evaluatedAmount,
     notes,
-    canMirror,
-    mirrorWalletAccountId,
     onTransactionAdded,
     router,
     onClose,

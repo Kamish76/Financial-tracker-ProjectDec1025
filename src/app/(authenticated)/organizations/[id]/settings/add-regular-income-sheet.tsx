@@ -6,6 +6,7 @@ import { CircleDollarSign } from "lucide-react"
 
 import { addIncomeForMember } from "../actions"
 import { formatLocalDateInput } from "@/lib/utils"
+import { getUserMirrorableWalletAccounts } from "@/lib/wallet-accounts"
 import type { MirrorWalletContext } from "@/lib/wallet-types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,7 +39,6 @@ type AddRegularIncomeSheetProps = {
   members: Member[]
   currentUserEmail?: string | null
   currentUserId?: string | null
-  mirrorContext?: MirrorWalletContext | null
 }
 
 export function AddRegularIncomeSheet({
@@ -46,7 +46,6 @@ export function AddRegularIncomeSheet({
   members,
   currentUserEmail,
   currentUserId,
-  mirrorContext,
 }: AddRegularIncomeSheetProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -57,7 +56,21 @@ export function AddRegularIncomeSheet({
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [assignedToUserId, setAssignedToUserId] = useState<string>("")
+  const [mirrorContext, setMirrorContext] = useState<MirrorWalletContext | null>(null)
   const [mirrorWalletAccountId, setMirrorWalletAccountId] = useState<string>("none")
+
+  useEffect(() => {
+    if (!open || !organizationId) return
+    let isMounted = true
+    getUserMirrorableWalletAccounts(organizationId)
+      .then((ctx) => {
+        if (isMounted) setMirrorContext(ctx)
+      })
+      .catch(() => {})
+    return () => {
+      isMounted = false
+    }
+  }, [open, organizationId])
 
   useEffect(() => {
     if (!error) return

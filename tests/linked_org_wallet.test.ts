@@ -5,9 +5,18 @@ import * as guards from '@/lib/auth/guards'
 import * as supabaseServer from '@/lib/supabase/server'
 import * as categories from '@/lib/categories'
 import * as walletServer from '@/lib/wallet-server'
-import { getAccountsWithBalances, updateWalletAccount } from '@/lib/wallet-accounts'
+import { revalidatePath } from 'next/cache'
+import {
+  getAccountsWithBalances,
+  getUserMirrorableWalletAccounts,
+  updateWalletAccount,
+} from '@/lib/wallet-accounts'
 import { addWalletTransaction } from '@/lib/wallet-transactions'
-import { createTransaction, updateTransaction } from '@/app/(authenticated)/organizations/[id]/records/actions'
+import {
+  createTransaction,
+  updateTransaction,
+  deleteTransaction,
+} from '@/app/(authenticated)/organizations/[id]/records/actions'
 import { fetchOrganizationMembers } from '@/app/(authenticated)/organizations/[id]/records/utils'
 import {
   setMemberBaseline,
@@ -15,7 +24,6 @@ import {
   addExpenseForMember,
   addIncome,
   addExpense,
-  createRefund,
 } from '@/app/(authenticated)/organizations/[id]/actions'
 import { GET as healthCheckGet } from '@/app/api/health-check/route'
 
@@ -457,25 +465,46 @@ describe('Organization ↔ Personal Wallet Sub-Account Auto-Mirror', () => {
     vi.spyOn(walletServer, 'getUserWalletId').mockResolvedValue(walletOrgId)
   })
 
-  function mockAutoMirrorSupabase(capturedInserts: Record<string, unknown>[]) {
+  function mockAutoMirrorSupabase(
+    capturedInserts: Record<string, unknown>[],
+    options?: { failSecondInsert?: boolean; deletedIds?: string[] }
+  ) {
     let insertCounter = 0
     vi.spyOn(supabaseServer, 'createAdminClient').mockImplementation(() => {
       const makeBuilder = (table: string) => {
+        let isDelete = false
         const builder: Record<string, unknown> = {
           select: () => builder,
-          eq: () => builder,
+          eq: (col: string, val: unknown) => {
+            if (isDelete && col === 'id') {
+              options?.deletedIds?.push(String(val))
+            }
+            return builder
+          },
           insert: (payload: Record<string, unknown>) => {
             capturedInserts.push(payload)
             insertCounter++
             const txId = `tx-${insertCounter}`
+            const shouldFail = Boolean(options?.failSecondInsert && insertCounter === 2)
             return {
               select: () => ({
-                single: async () => ({ data: { id: txId }, error: null }),
+                single: async () =>
+                  shouldFail
+                    ? { data: null, error: { message: 'Mirror insert failed' } }
+                    : { data: { id: txId }, error: null },
               }),
-              then: (resolve: (v: unknown) => unknown) => resolve({ data: { id: txId }, error: null }),
+              then: (resolve: (v: unknown) => unknown) =>
+                resolve(
+                  shouldFail
+                    ? { data: null, error: { message: 'Mirror insert failed' } }
+                    : { data: { id: txId }, error: null }
+                ),
             }
           },
-          delete: () => builder,
+          delete: () => {
+            isDelete = true
+            return builder
+          },
           maybeSingle: async () => {
             if (table === 'organizations') {
               return { data: { id: orgId, name: 'KYUBI' }, error: null }
@@ -502,10 +531,6 @@ describe('Organization ↔ Personal Wallet Sub-Account Auto-Mirror', () => {
       }
       return {
         from: makeBuilder,
-        rpc: async () => ({
-          data: { success: true, reimbursement_id: 'reimb-1', transaction_id: 'refund-org-tx-1' },
-          error: null,
-        }),
       } as unknown as ReturnType<typeof supabaseServer.createAdminClient>
     })
   }
@@ -544,7 +569,7 @@ describe('Organization ↔ Personal Wallet Sub-Account Auto-Mirror', () => {
     })
   })
 
-  it('addExpense (business) and createRefund with mirrorWalletAccountId create paired Wallet transfer from targetAccount to linkedAccount', async () => {
+  it('addExpense (business) with mirrorWalletAccountId creates paired Wallet transfer from targetAccount to linkedAccount', async () => {
     const capturedInserts: Record<string, unknown>[] = []
     mockAutoMirrorSupabase(capturedInserts)
 
@@ -568,24 +593,52 @@ describe('Organization ↔ Personal Wallet Sub-Account Auto-Mirror', () => {
       description: '[KYUBI] Packaging',
       mirrored_from_tx_id: 'tx-1',
     })
+  })
 
-    const refundRes = await createRefund({
+  it('rolls back the newly inserted org transaction if creating the mirrored wallet transfer fails', async () => {
+    const capturedInserts: Record<string, unknown>[] = []
+    const deletedIds: string[] = []
+    mockAutoMirrorSupabase(capturedInserts, { failSecondInsert: true, deletedIds })
+
+    const res = await addIncome({
       organizationId: orgId,
-      amount: 200,
-      description: 'Customer return',
+      amount: 900,
+      category: 'Sales',
+      occurredAt: '2026-11-18T12:00:00.000Z',
+      fundedByType: 'business',
       mirrorWalletAccountId: mayaAccountId,
     })
 
-    expect(refundRes).toEqual({ success: true, mirroredTransferId: 'tx-3' })
-    expect(capturedInserts[2]).toMatchObject({
-      organization_id: walletOrgId,
-      type: 'transfer',
-      amount: 200,
-      account_id: mayaAccountId,
-      transfer_to_account_id: linkedAccountId,
-      description: '[KYUBI] Customer return',
-      mirrored_from_tx_id: 'refund-org-tx-1',
+    expect(res).toEqual({ error: 'Unable to create mirrored wallet transfer' })
+    expect(deletedIds).toEqual(['tx-1'])
+  })
+
+  it('getUserMirrorableWalletAccounts exits before scanning wallet transactions when org is unlinked', async () => {
+    vi.spyOn(guards, 'requireOrgMembership').mockResolvedValue({
+      user: { id: userId } as User,
+      membership: { organizationId: orgId, userId, role: 'owner', isActive: true },
     })
+    const queriedTables: string[] = []
+    vi.spyOn(supabaseServer, 'createAdminClient').mockImplementation(() => {
+      const makeBuilder = (table: string) => {
+        queriedTables.push(table)
+        const builder: Record<string, unknown> = {
+          select: () => builder,
+          eq: () => builder,
+          then: (resolve: (v: unknown) => unknown) =>
+            resolve({
+              data: [{ id: mayaAccountId, linked_org_id: null }],
+              error: null,
+            }),
+        }
+        return builder
+      }
+      return { from: makeBuilder } as unknown as ReturnType<typeof supabaseServer.createAdminClient>
+    })
+
+    const ctx = await getUserMirrorableWalletAccounts(orgId)
+    expect(ctx).toBeNull()
+    expect(queriedTables).toEqual(['wallet_accounts'])
   })
 
   it('rejects mirrorWalletAccountId for personal expense, personal-funded income, and other-member income', async () => {
@@ -633,6 +686,7 @@ describe('Organization ↔ Personal Wallet Sub-Account Auto-Mirror', () => {
         const builder: Record<string, unknown> = {
           select: () => builder,
           update: () => builder,
+          delete: () => builder,
           eq: () => builder,
           maybeSingle: async () => ({
             data: {
@@ -647,6 +701,7 @@ describe('Organization ↔ Personal Wallet Sub-Account Auto-Mirror', () => {
             },
             error: null,
           }),
+          then: (resolve: (v: unknown) => unknown) => resolve({ error: null }),
         }
         return builder
       }
@@ -680,5 +735,12 @@ describe('Organization ↔ Personal Wallet Sub-Account Auto-Mirror', () => {
       description: '[KYUBI] Updated note',
     })
     expect(allowedNoteEdit).toMatchObject({ success: true })
+
+    await deleteTransaction({
+      organizationId: orgId,
+      transactionId: 'org-tx-1',
+    })
+    expect(revalidatePath).toHaveBeenCalledWith(`/organizations/${walletOrgId}/records`)
+    expect(revalidatePath).toHaveBeenCalledWith(`/organizations/${walletOrgId}/accounts`)
   })
 })

@@ -4,21 +4,18 @@ import { useState } from 'react'
 import { PlusCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import type { MirrorWalletContext } from '@/lib/wallet-types'
 import { OrgTransactionModal } from './org-transaction-modal'
 
 type AddIncomeSheetProps = {
   organizationId: string
   organizationDescription?: string | null
   currency?: string
-  mirrorContext?: MirrorWalletContext | null
 }
 
 export function AddIncomeSheet({
   organizationId,
   organizationDescription,
   currency,
-  mirrorContext,
 }: AddIncomeSheetProps) {
   const [open, setOpen] = useState(false)
 
@@ -42,7 +39,6 @@ export function AddIncomeSheet({
         organizationDescription={organizationDescription}
         currency={currency}
         initialTab="income"
-        mirrorContext={mirrorContext}
       />
     </>
   )

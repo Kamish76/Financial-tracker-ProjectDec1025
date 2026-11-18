@@ -223,6 +223,22 @@ export async function getUserMirrorableWalletAccounts(
   }
 
   const adminClient = createAdminClient()
+  const { data: activeWalletAccounts, error: accountsError } = await adminClient
+    .from('wallet_accounts')
+    .select('id, linked_org_id')
+    .eq('organization_id', walletOrgId)
+    .eq('is_active', true)
+
+  if (accountsError || !activeWalletAccounts) {
+    return null
+  }
+
+  const hasLinkedOrg = activeWalletAccounts.some((acc) => acc.linked_org_id === organizationId)
+  const hasUnlinkedAccounts = activeWalletAccounts.some((acc) => !acc.linked_org_id)
+  if (!hasLinkedOrg || !hasUnlinkedAccounts) {
+    return null
+  }
+
   const [walletAccounts, { data: walletOrg }] = await Promise.all([
     getAccountsWithBalances(walletOrgId, false),
     adminClient.from('organizations').select('name').eq('id', walletOrgId).maybeSingle(),

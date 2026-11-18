@@ -11,6 +11,7 @@ import type { FilteredStats } from '@/lib/finance-client'
 import { getAccountsWithBalances } from '@/lib/wallet-accounts'
 import { createAdminClient } from '@/lib/supabase/server'
 import { isWalletOrganization } from '@/lib/wallet'
+import { getUserWalletId } from '@/lib/wallet-server'
 import { requireOrgMembership, authorizeOrgAction } from '@/lib/auth/guards'
 import { getOrCreateCategory } from '@/lib/categories'
 import { revalidateOrganizationSections } from '@/lib/revalidation'
@@ -295,6 +296,11 @@ export async function updateTransaction(
 
 	revalidateOrganizationSections(organizationId, ['records', 'settings', 'accounts', 'settings/holdings'])
 
+	const walletOrgId = await getUserWalletId(user.id)
+	if (walletOrgId && walletOrgId !== organizationId) {
+		revalidateOrganizationSections(walletOrgId, ['records', 'accounts'])
+	}
+
 	return { success: true, transaction: updated }
 }
 
@@ -327,7 +333,7 @@ export async function deleteTransaction(
 		return auth
 	}
 
-	const { membership } = auth
+	const { user, membership } = auth
 	const admin = createAdminClient()
 
 	// Verify transaction exists and belongs to organization
@@ -357,6 +363,11 @@ export async function deleteTransaction(
 	}
 
 	revalidateOrganizationSections(organizationId, ['records', 'settings', 'accounts', 'settings/holdings'])
+
+	const walletOrgId = await getUserWalletId(user.id)
+	if (walletOrgId && walletOrgId !== organizationId) {
+		revalidateOrganizationSections(walletOrgId, ['records', 'accounts'])
+	}
 
 	return { success: true }
 }

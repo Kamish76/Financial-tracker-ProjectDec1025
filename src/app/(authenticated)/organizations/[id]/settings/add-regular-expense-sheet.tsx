@@ -1,11 +1,12 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Receipt } from "lucide-react"
 
 import { addExpenseForMember } from "../actions"
 import { formatLocalDateInput } from "@/lib/utils"
+import { getUserMirrorableWalletAccounts } from "@/lib/wallet-accounts"
 import type { MirrorWalletContext } from "@/lib/wallet-types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,7 +39,6 @@ type AddRegularExpenseSheetProps = {
   members: Member[]
   currentUserEmail?: string | null
   currentUserId?: string | null
-  mirrorContext?: MirrorWalletContext | null
 }
 
 export function AddRegularExpenseSheet({
@@ -46,7 +46,6 @@ export function AddRegularExpenseSheet({
   members,
   currentUserEmail,
   currentUserId,
-  mirrorContext,
 }: AddRegularExpenseSheetProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -58,7 +57,21 @@ export function AddRegularExpenseSheet({
   const [isPending, startTransition] = useTransition()
   const [assignedToUserId, setAssignedToUserId] = useState<string>("")
   const [expenseType, setExpenseType] = useState<'business' | 'personal'>('business')
+  const [mirrorContext, setMirrorContext] = useState<MirrorWalletContext | null>(null)
   const [mirrorWalletAccountId, setMirrorWalletAccountId] = useState<string>("none")
+
+  useEffect(() => {
+    if (!open || !organizationId) return
+    let isMounted = true
+    getUserMirrorableWalletAccounts(organizationId)
+      .then((ctx) => {
+        if (isMounted) setMirrorContext(ctx)
+      })
+      .catch(() => {})
+    return () => {
+      isMounted = false
+    }
+  }, [open, organizationId])
 
   const defaultDate = useMemo(() => formatLocalDateInput(new Date().toISOString()), [])
 
