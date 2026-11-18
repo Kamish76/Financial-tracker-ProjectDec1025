@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { User } from '@supabase/supabase-js'
+import { NextRequest } from 'next/server'
 import * as guards from '@/lib/auth/guards'
 import * as supabaseServer from '@/lib/supabase/server'
+import * as categories from '@/lib/categories'
 import { getAccountsWithBalances, updateWalletAccount } from '@/lib/wallet-accounts'
 import { addWalletTransaction } from '@/lib/wallet-transactions'
 import { createTransaction, updateTransaction } from '@/app/(authenticated)/organizations/[id]/records/actions'
+import { fetchOrganizationMembers } from '@/app/(authenticated)/organizations/[id]/records/utils'
+import { setMemberBaseline, addIncomeForMember, addExpenseForMember } from '@/app/(authenticated)/organizations/[id]/actions'
+import { GET as healthCheckGet } from '@/app/api/health-check/route'
 
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
@@ -217,5 +222,211 @@ describe('Linked Organization Withholding Sub-Account', () => {
       linked_org_id: null,
       linked_org_balance: null,
     })
+  })
+})
+
+describe('Audit hardening & reliability fixes', () => {
+  const orgId = 'org-audit-1'
+  const userId = 'user-owner-1'
+
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.spyOn(guards, 'authorizeOrgAction').mockResolvedValue({
+      ok: true,
+      user: { id: userId } as User,
+      membership: { organizationId: orgId, userId, role: 'owner', isActive: true },
+    })
+    vi.spyOn(categories, 'getOrCreateCategory').mockResolvedValue('cat-1')
+  })
+
+  it('health-check returns 500 when SUPABASE_SERVICE_ROLE_KEY is missing instead of falling back to anon key', async () => {
+    const prevCron = process.env.CRON_SECRET
+    const prevUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const prevService = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const prevAnon = process.env.SUPABASE_ANON_KEY
+
+    try {
+      process.env.CRON_SECRET = 'secret-123'
+      process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co'
+      delete process.env.SUPABASE_SERVICE_ROLE_KEY
+      process.env.SUPABASE_ANON_KEY = 'anon-key-should-not-be-used'
+
+      const req = new NextRequest('http://localhost/api/health-check', {
+        headers: { authorization: 'Bearer secret-123' },
+      })
+      const res = await healthCheckGet(req)
+      const body = await res.json()
+
+      expect(res.status).toBe(500)
+      expect(body.success).toBe(false)
+      expect(body.error).toContain('service role')
+    } finally {
+      if (prevCron === undefined) delete process.env.CRON_SECRET
+      else process.env.CRON_SECRET = prevCron
+      if (prevUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL
+      else process.env.NEXT_PUBLIC_SUPABASE_URL = prevUrl
+      if (prevService === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY
+      else process.env.SUPABASE_SERVICE_ROLE_KEY = prevService
+      if (prevAnon === undefined) delete process.env.SUPABASE_ANON_KEY
+      else process.env.SUPABASE_ANON_KEY = prevAnon
+    }
+  })
+
+  it('fetchOrganizationMembers does not scan transactions and still includes deactivated members', async () => {
+    const queriedTables: string[] = []
+    vi.spyOn(supabaseServer, 'createAdminClient').mockImplementation(() => {
+      return {
+        from: (table: string) => {
+          queriedTables.push(table)
+          const builder: Record<string, unknown> = {
+            select: () => builder,
+            eq: () => builder,
+            in: () => builder,
+            maybeSingle: async () =>
+              table === 'organizations' ? { data: { owner_id: 'owner-1' }, error: null } : { data: null, error: null },
+            then: (resolve: (v: unknown) => unknown) => {
+              if (table === 'organization_members') {
+                return resolve({
+                  data: [
+                    { user_id: 'owner-1', role: 'owner', is_active: true },
+                    { user_id: 'former-1', role: 'member', is_active: false },
+                  ],
+                  error: null,
+                })
+              }
+              if (table === 'profiles') {
+                return resolve({
+                  data: [
+                    { id: 'owner-1', full_name: 'Owner User', avatar_url: null },
+                    { id: 'former-1', full_name: 'Former Member', avatar_url: null },
+                  ],
+                  error: null,
+                })
+              }
+              return resolve({ data: [], error: null })
+            },
+          }
+          return builder
+        },
+        rpc: async () => ({ data: [], error: null }),
+      } as unknown as ReturnType<typeof supabaseServer.createAdminClient>
+    })
+
+    const members = await fetchOrganizationMembers(orgId)
+    expect(queriedTables).not.toContain('transactions')
+    expect(members.map((m) => m.id)).toEqual(['owner-1', 'former-1'])
+  })
+
+  it('setMemberBaseline scans allocations once and uses get_organization_financial_totals RPC for cashOnHand', async () => {
+    let allocationSelectCount = 0
+    const insertedPayloads: Record<string, unknown>[] = []
+    const rpcCalls: string[] = []
+
+    vi.spyOn(supabaseServer, 'createAdminClient').mockImplementation(() => {
+      const makeBuilder = (table: string) => {
+        const builder: Record<string, unknown> = {
+          select: () => {
+            if (table === 'transactions') allocationSelectCount++
+            return builder
+          },
+          insert: async (payload: Record<string, unknown>) => {
+            insertedPayloads.push(payload)
+            return { error: null }
+          },
+          eq: () => builder,
+          in: () => builder,
+          limit: () => builder,
+          maybeSingle: async () =>
+            table === 'organization_members'
+              ? { data: { organization_id: orgId, user_id: 'member-1', is_active: true }, error: null }
+              : { data: null, error: null },
+          then: (resolve: (v: unknown) => unknown) => {
+            if (table === 'transactions') {
+              return resolve({
+                data: [
+                  { type: 'held_allocate', amount: 200, category: 'Allocation', funded_by_user_id: 'member-1' },
+                ],
+                error: null,
+              })
+            }
+            return resolve({ data: [], error: null })
+          },
+        }
+        return builder
+      }
+      return {
+        from: makeBuilder,
+        rpc: async (fn: string) => {
+          rpcCalls.push(fn)
+          return {
+            data: [{ total_income: 2000, total_expenses_business: 500, total_refund_withdrawals: 0 }],
+            error: null,
+          }
+        },
+      } as unknown as ReturnType<typeof supabaseServer.createAdminClient>
+    })
+
+    const res = await setMemberBaseline({ organizationId: orgId, userId: 'member-1', targetBaseline: 600 })
+    expect(res).toEqual({ success: true })
+    expect(allocationSelectCount).toBe(1)
+    expect(rpcCalls).toContain('get_organization_financial_totals')
+    expect(insertedPayloads[0]).toMatchObject({
+      type: 'held_allocate',
+      amount: 400,
+      funded_by_user_id: 'member-1',
+    })
+  })
+
+  it('addIncomeForMember and addExpenseForMember validate active assignee and insert expected payloads', async () => {
+    const insertedPayloads: Record<string, unknown>[] = []
+    let memberExists = false
+
+    vi.spyOn(supabaseServer, 'createAdminClient').mockImplementation(() => {
+      const makeBuilder = () => {
+        const builder: Record<string, unknown> = {
+          select: () => builder,
+          insert: async (payload: Record<string, unknown>) => {
+            insertedPayloads.push(payload)
+            return { error: null }
+          },
+          eq: () => builder,
+          maybeSingle: async () => ({
+            data: memberExists ? { organization_id: orgId, user_id: 'member-1', is_active: true } : null,
+            error: null,
+          }),
+        }
+        return builder
+      }
+      return { from: makeBuilder } as unknown as ReturnType<typeof supabaseServer.createAdminClient>
+    })
+
+    const invalidRes = await addIncomeForMember({
+      organizationId: orgId,
+      amount: 100,
+      occurredAt: '2026-11-18',
+      assignedToUserId: 'non-member',
+    })
+    expect(invalidRes).toEqual({ error: 'Selected member is not part of this organization' })
+
+    memberExists = true
+    const incRes = await addIncomeForMember({
+      organizationId: orgId,
+      amount: 250,
+      category: 'Sales',
+      occurredAt: '2026-11-18',
+      assignedToUserId: 'member-1',
+    })
+    const expRes = await addExpenseForMember({
+      organizationId: orgId,
+      amount: 75,
+      expenseType: 'personal',
+      occurredAt: '2026-11-18',
+      assignedToUserId: 'member-1',
+    })
+
+    expect(incRes).toEqual({ success: true })
+    expect(expRes).toEqual({ success: true })
+    expect(insertedPayloads[0]).toMatchObject({ type: 'income', funded_by_type: 'business', funded_by_user_id: 'member-1', is_initial: false })
+    expect(insertedPayloads[1]).toMatchObject({ type: 'expense_personal', funded_by_type: 'personal', funded_by_user_id: 'member-1', is_initial: false })
   })
 })
