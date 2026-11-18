@@ -4,6 +4,7 @@ import * as guards from '@/lib/auth/guards'
 import * as supabaseServer from '@/lib/supabase/server'
 import { getAccountsWithBalances, updateWalletAccount } from '@/lib/wallet-accounts'
 import { addWalletTransaction } from '@/lib/wallet-transactions'
+import { createTransaction, updateTransaction } from '@/app/(authenticated)/organizations/[id]/records/actions'
 
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
@@ -28,7 +29,7 @@ describe('Linked Organization Withholding Sub-Account', () => {
     })
   })
 
-  it('computes negated businessHeld for linked accounts while leaving unlinked transfers intact', async () => {
+  it('uses trigger-maintained linked_org_balance while preserving unlinked transfer deltas', async () => {
     const accountsRows = [
       {
         id: 'acc-maya',
@@ -55,7 +56,6 @@ describe('Linked Organization Withholding Sub-Account', () => {
     ]
 
     const walletTxRows = [
-      // Transfer from Maya to Biz Withholding: deducts Maya by 2486.01, but does NOT double-count Biz Withholding
       {
         id: 'tx-w-1',
         account_id: 'acc-maya',
@@ -65,40 +65,20 @@ describe('Linked Organization Withholding Sub-Account', () => {
       },
     ]
 
-    const bizTxRows = [
-      { type: 'income', amount: 30000, funded_by_type: 'business' },
-      { type: 'expense_business', amount: 5986.01, funded_by_type: 'business' },
-    ]
-
     vi.spyOn(supabaseServer, 'createAdminClient').mockImplementation(() => {
       return {
         from: (table: string) => {
-          const filters: Record<string, unknown> = {}
           const builder: Record<string, unknown> = {
             select: () => builder,
-            eq: (col: string, val: unknown) => {
-              filters[col] = val
-              return builder
-            },
+            eq: () => builder,
             in: () => builder,
             or: () => builder,
             order: () => builder,
             limit: () => builder,
-            maybeSingle: async () => {
-              if (table === 'organizations') {
-                return { data: { id: walletOrgId, owner_id: userId, name: 'KYUBI' }, error: null }
-              }
-              return { data: null, error: null }
-            },
             then: (resolve: (v: unknown) => unknown) => {
               if (table === 'wallet_accounts') return resolve({ data: accountsRows, error: null })
               if (table === 'organizations') return resolve({ data: [{ id: bizOrgId, name: 'KYUBI' }], error: null })
-              if (table === 'transactions') {
-                if (filters.organization_id === bizOrgId) {
-                  return resolve({ data: bizTxRows, error: null })
-                }
-                return resolve({ data: walletTxRows, error: null })
-              }
+              if (table === 'transactions') return resolve({ data: walletTxRows, error: null })
               return resolve({ data: [], error: null })
             },
           }
@@ -117,19 +97,32 @@ describe('Linked Organization Withholding Sub-Account', () => {
     expect(linked?.linked_org_name).toBe('KYUBI')
   })
 
-  it('blocks direct income/expense on linked accounts while allowing transfers', async () => {
+  it('blocks direct income/expense on linked accounts in addWalletTransaction and createTransaction, but allows editing notes on existing linked txs', async () => {
     vi.spyOn(supabaseServer, 'createAdminClient').mockImplementation(() => {
       const filters: Record<string, unknown> = {}
       const makeBuilder = (table: string) => {
         const builder: Record<string, unknown> = {
           select: () => builder,
           insert: () => builder,
+          update: () => builder,
           eq: (col: string, val: unknown) => {
             filters[col] = val
             return builder
           },
           maybeSingle: async () => {
             if (table === 'organizations') return { data: { id: walletOrgId }, error: null }
+            if (table === 'transactions') {
+              return {
+                data: {
+                  id: 'tx-existing',
+                  organization_id: walletOrgId,
+                  is_initial: false,
+                  type: 'expense_personal',
+                  account_id: 'acc-linked',
+                },
+                error: null,
+              }
+            }
             if (table === 'wallet_accounts') {
               if (filters.id === 'acc-linked') {
                 return { data: { id: 'acc-linked', organization_id: walletOrgId, is_active: true, linked_org_id: bizOrgId }, error: null }
@@ -145,13 +138,30 @@ describe('Linked Organization Withholding Sub-Account', () => {
       return { from: makeBuilder } as unknown as ReturnType<typeof supabaseServer.createAdminClient>
     })
 
-    const blocked = await addWalletTransaction({
+    const blockedAdd = await addWalletTransaction({
       organizationId: walletOrgId,
       type: 'expense_personal',
       amount: 100,
       accountId: 'acc-linked',
     })
-    expect(blocked.error).toContain('read-only')
+    expect(blockedAdd.error).toContain('read-only')
+
+    const blockedCreate = await createTransaction({
+      organizationId: walletOrgId,
+      type: 'income',
+      amount: 100,
+      accountId: 'acc-linked',
+    })
+    expect(blockedCreate.error).toContain('read-only')
+
+    // Editing notes on an existing transaction belonging to a linked account succeeds when accountId is unchanged
+    const allowedEditSameAccount = await updateTransaction({
+      organizationId: walletOrgId,
+      transactionId: 'tx-existing',
+      accountId: 'acc-linked',
+      description: 'Updated note',
+    })
+    expect(allowedEditSameAccount).toMatchObject({ success: true })
 
     const allowedTransfer = await addWalletTransaction({
       organizationId: walletOrgId,
@@ -175,7 +185,6 @@ describe('Linked Organization Withholding Sub-Account', () => {
             return builder
           },
           eq: () => builder,
-          limit: () => builder,
           maybeSingle: async () => {
             if (table === 'wallet_accounts') {
               return { data: { organization_id: walletOrgId, linked_org_id: null }, error: null }
@@ -185,12 +194,7 @@ describe('Linked Organization Withholding Sub-Account', () => {
             }
             return { data: null, error: null }
           },
-          then: (resolve: (v: unknown) => unknown) => {
-            if (table === 'transactions') {
-              return resolve({ data: [{ type: 'income', amount: 500, funded_by_type: 'business' }], error: null })
-            }
-            return resolve({ data: null, error: null })
-          },
+          then: (resolve: (v: unknown) => unknown) => resolve({ data: null, error: null }),
         }
         return builder
       }
@@ -202,7 +206,6 @@ describe('Linked Organization Withholding Sub-Account', () => {
     expect(capturedUpdates[0]).toMatchObject({
       name: 'My Account',
       linked_org_id: bizOrgId,
-      linked_org_balance: -500,
     })
     expect(capturedUpdates[0]).not.toHaveProperty('starting_value')
 

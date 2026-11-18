@@ -37,45 +37,6 @@ export async function verifyOrgAccess(organizationId: string, userId: string): P
   return !!member
 }
 
-/**
- * Computes a member's businessHeld balance inside a linked organization,
- * matching getOrganizationStats() in src/lib/finance.ts.
- */
-async function computeMemberBusinessHeld(
-  adminClient: ReturnType<typeof createAdminClient>,
-  linkedOrgId: string,
-  userId: string
-): Promise<number> {
-  const { data, error } = await adminClient
-    .from('transactions')
-    .select('type, amount, funded_by_type')
-    .eq('organization_id', linkedOrgId)
-    .eq('funded_by_user_id', userId)
-    .limit(10000)
-
-  if (error) {
-    console.error('[computeMemberBusinessHeld] Error fetching transactions:', error.message)
-    return 0
-  }
-
-  let held = 0
-  for (const tx of data || []) {
-    const amount = Number(tx.amount ?? 0)
-    if (tx.type === 'held_allocate') {
-      held += amount
-    } else if (tx.type === 'held_return') {
-      held -= amount
-    } else if (tx.funded_by_type === 'business') {
-      if (tx.type === 'income') {
-        held += amount
-      } else if (tx.type === 'expense_business') {
-        held -= amount
-      }
-    }
-  }
-  return Number(held.toFixed(2))
-}
-
 export async function getLinkableOrganizations(
   organizationId: string
 ): Promise<LinkableOrganization[]> {
@@ -197,35 +158,15 @@ export async function getAccountsWithBalances(
   if (accounts.length === 0) return []
 
   const adminClient = createAdminClient()
-  const linkedOrgIds = Array.from(
-    new Set(accounts.map((a) => a.linked_org_id).filter((id): id is string => Boolean(id)))
-  )
-
-  const [{ data: transactions, error }, walletOrgResult] = await Promise.all([
-    adminClient
-      .from('transactions')
-      .select('id, account_id, transfer_to_account_id, type, amount')
-      .eq('organization_id', organizationId)
-      .or('account_id.not.is.null,transfer_to_account_id.not.is.null')
-      .limit(10000),
-    linkedOrgIds.length > 0
-      ? adminClient.from('organizations').select('owner_id').eq('id', organizationId).maybeSingle()
-      : Promise.resolve({ data: null }),
-  ])
+  const { data: transactions, error } = await adminClient
+    .from('transactions')
+    .select('id, account_id, transfer_to_account_id, type, amount')
+    .eq('organization_id', organizationId)
+    .or('account_id.not.is.null,transfer_to_account_id.not.is.null')
+    .limit(10000)
 
   if (error) {
     console.error('[getAccountsWithBalances] Error fetching transactions:', error.message)
-  }
-
-  const linkedBalanceMap = new Map<string, number>()
-  const walletOwnerId = walletOrgResult.data?.owner_id
-  if (linkedOrgIds.length > 0 && walletOwnerId) {
-    await Promise.all(
-      linkedOrgIds.map(async (linkedOrgId) => {
-        const held = await computeMemberBusinessHeld(adminClient, linkedOrgId, walletOwnerId)
-        linkedBalanceMap.set(linkedOrgId, held === 0 ? 0 : Number((-held).toFixed(2)))
-      })
-    )
   }
 
   const txList = transactions || []
@@ -253,8 +194,8 @@ export async function getAccountsWithBalances(
     }
 
     if (acc.linked_org_id) {
-      current_balance =
-        linkedBalanceMap.get(acc.linked_org_id) ?? Number(acc.linked_org_balance ?? 0)
+      // Postgres triggers keep linked_org_balance synced with -get_member_business_held().
+      current_balance = Number(acc.linked_org_balance ?? 0)
     }
 
     return {
@@ -292,10 +233,7 @@ export async function createWalletAccount(
       return { error: 'Starting value must be a valid number' }
     }
 
-    const adminClient = createAdminClient()
     const normalizedLinkedOrgId = linkedOrgId?.trim() || null
-    let linkedBalance: number | null = null
-
     if (normalizedLinkedOrgId) {
       if (normalizedLinkedOrgId === organizationId) {
         return { error: 'Cannot link a wallet to itself' }
@@ -304,16 +242,9 @@ export async function createWalletAccount(
       if (!hasAccess) {
         return { error: 'You do not have access to the selected organization' }
       }
-      const { data: walletOrg } = await adminClient
-        .from('organizations')
-        .select('owner_id')
-        .eq('id', organizationId)
-        .maybeSingle()
-      const targetUserId = walletOrg?.owner_id ?? auth.user.id
-      const held = await computeMemberBusinessHeld(adminClient, normalizedLinkedOrgId, targetUserId)
-      linkedBalance = held === 0 ? 0 : Number((-held).toFixed(2))
     }
 
+    const adminClient = createAdminClient()
     const { data, error } = await adminClient
       .from('wallet_accounts')
       .insert({
@@ -322,7 +253,6 @@ export async function createWalletAccount(
         starting_value: normalizedLinkedOrgId ? 0 : startingValue,
         is_active: true,
         linked_org_id: normalizedLinkedOrgId,
-        linked_org_balance: linkedBalance,
       })
       .select('id')
       .single()
@@ -397,16 +327,8 @@ export async function updateWalletAccount(
         if (!hasAccess) {
           return { error: 'You do not have access to the selected organization' }
         }
-        const { data: walletOrg } = await adminClient
-          .from('organizations')
-          .select('owner_id')
-          .eq('id', account.organization_id)
-          .maybeSingle()
-        const targetUserId = walletOrg?.owner_id ?? auth.user.id
-        const held = await computeMemberBusinessHeld(adminClient, normalizedLinkedOrgId, targetUserId)
+        // Preserve existing starting_value; BEFORE UPDATE trigger populates linked_org_balance.
         updateFields.linked_org_id = normalizedLinkedOrgId
-        updateFields.linked_org_balance = held === 0 ? 0 : Number((-held).toFixed(2))
-        // Preserve existing starting_value when linking so unlinking later restores it cleanly.
       } else {
         updateFields.linked_org_id = null
         updateFields.linked_org_balance = null
