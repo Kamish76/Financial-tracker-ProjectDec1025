@@ -1,14 +1,22 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Pencil } from 'lucide-react'
+import { Link2, Pencil } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 import { updateWalletAccount } from '@/lib/wallet-accounts'
-import type { WalletAccount } from '@/lib/wallet-types'
+import type { LinkableOrganization, WalletAccount } from '@/lib/wallet-types'
+import { formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Sheet,
   SheetContent,
@@ -21,23 +29,33 @@ import {
 
 type EditAccountSheetProps = {
   account: WalletAccount
+  linkableOrgs?: LinkableOrganization[]
   currency?: string
   onSuccess?: () => void
 }
 
-export function EditAccountSheet({ account, currency, onSuccess }: EditAccountSheetProps) {
+export function EditAccountSheet({
+  account,
+  linkableOrgs = [],
+  currency,
+  onSuccess,
+}: EditAccountSheetProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(account.name)
   const [startingValue, setStartingValue] = useState(String(account.starting_value))
+  const [linkedOrgId, setLinkedOrgId] = useState<string>(account.linked_org_id || 'none')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  const isLinked = linkedOrgId !== 'none'
 
   const onOpenChange = (next: boolean) => {
     setOpen(next)
     if (next) {
       setName(account.name)
       setStartingValue(String(account.starting_value))
+      setLinkedOrgId(account.linked_org_id || 'none')
     } else {
       setError(null)
     }
@@ -54,13 +72,18 @@ export function EditAccountSheet({ account, currency, onSuccess }: EditAccountSh
     }
 
     const val = parseFloat(startingValue || '0')
-    if (isNaN(val)) {
+    if (!isLinked && isNaN(val)) {
       setError('Please enter a valid starting balance number')
       return
     }
 
     startTransition(async () => {
-      const res = await updateWalletAccount(account.id, trimmedName, val)
+      const res = await updateWalletAccount(
+        account.id,
+        trimmedName,
+        isNaN(val) ? account.starting_value : val,
+        isLinked ? linkedOrgId : null
+      )
       if (res.error) {
         setError(res.error)
         return
@@ -85,7 +108,7 @@ export function EditAccountSheet({ account, currency, onSuccess }: EditAccountSh
             <SheetHeader>
               <SheetTitle>Edit Sub Account</SheetTitle>
               <SheetDescription>
-                Update the account name or starting baseline value for {account.name}.
+                Update the account name, organization link, or manual starting balance for {account.name}.
               </SheetDescription>
             </SheetHeader>
 
@@ -107,17 +130,65 @@ export function EditAccountSheet({ account, currency, onSuccess }: EditAccountSh
                 />
               </div>
 
+              {(linkableOrgs.length > 0 || account.linked_org_id) && (
+                <div className="space-y-2">
+                  <Label
+                    htmlFor={`edit-link-org-${account.id}`}
+                    className="flex items-center gap-1.5"
+                  >
+                    <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                    Link to Organization Balance
+                  </Label>
+                  <Select
+                    value={linkedOrgId}
+                    onValueChange={setLinkedOrgId}
+                    disabled={isPending}
+                  >
+                    <SelectTrigger id={`edit-link-org-${account.id}`}>
+                      <SelectValue placeholder="None (Manual Balance)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None (Manual Balance)</SelectItem>
+                      {linkableOrgs.map((org) => (
+                        <SelectItem key={org.id} value={org.id}>
+                          {org.name} (Negated Business Held)
+                        </SelectItem>
+                      ))}
+                      {account.linked_org_id &&
+                        !linkableOrgs.some((o) => o.id === account.linked_org_id) && (
+                          <SelectItem value={account.linked_org_id}>
+                            {account.linked_org_name || 'Linked Organization'}
+                          </SelectItem>
+                        )}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {isLinked
+                      ? 'Balance automatically mirrors your negated Business Held from this organization. Your original manual starting value is preserved if you unlink later.'
+                      : 'Unlinked — balance uses your manual Starting Value + wallet transactions.'}
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-2">
-                <Label htmlFor={`edit-starting-value-${account.id}`}>Starting Value ({currency || 'USD'})</Label>
+                <Label htmlFor={`edit-starting-value-${account.id}`}>
+                  Starting Value ({currency || 'USD'})
+                </Label>
                 <Input
                   id={`edit-starting-value-${account.id}`}
                   type="number"
                   step="0.01"
                   value={startingValue}
                   onChange={(e) => setStartingValue(e.target.value)}
-                  disabled={isPending}
-                  required
+                  disabled={isPending || isLinked}
+                  required={!isLinked}
                 />
+                {isLinked && (
+                  <p className="text-xs text-muted-foreground">
+                    Locked while linked. Preserved manual starting value:{' '}
+                    {formatCurrency(account.starting_value, currency)}
+                  </p>
+                )}
               </div>
             </div>
           </div>
