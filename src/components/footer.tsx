@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { Github, Linkedin, Mail, ShieldCheck } from 'lucide-react'
+import { Github, Linkedin, Mail } from 'lucide-react'
+import { BrandLogo } from '@/components/brand-logo'
 
 const footerLinks = {
   Product: [
@@ -44,12 +45,7 @@ export function Footer() {
           {/* Brand Section */}
           <div className="col-span-1 space-y-3">
             <Link href="/" className="inline-flex items-center gap-2.5 rounded-xl border border-border/80 bg-background/60 px-3 py-1.5 hover:border-accent/50 transition-colors">
-              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-accent/15 text-accent-strong">
-                <ShieldCheck className="h-4 w-4" aria-hidden />
-              </div>
-              <span className="font-semibold tracking-tight text-foreground text-sm">
-                OrgFinance
-              </span>
+              <BrandLogo markClassName="h-5 w-5" textClassName="text-sm" />
             </Link>
             <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
               Multi-tenant organization treasuries and personal wallet tracking built for clarity and accountability.

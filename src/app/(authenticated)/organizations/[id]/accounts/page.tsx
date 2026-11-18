@@ -1,6 +1,6 @@
 import { requireOrgMembership } from '@/lib/auth/guards'
 import { createAdminClient } from '@/lib/supabase/server'
-import { getAccountsWithBalances } from '@/lib/wallet-accounts'
+import { getAccountsWithBalances, getLinkableOrganizations } from '@/lib/wallet-accounts'
 import { AccountsClient } from './accounts-client'
 
 type Props = {
@@ -12,8 +12,9 @@ export default async function AccountsPage({ params }: Props) {
   await requireOrgMembership(id)
 
   const adminClient = createAdminClient()
-  const [accounts, { data: organization }] = await Promise.all([
+  const [accounts, linkableOrgs, { data: organization }] = await Promise.all([
     getAccountsWithBalances(id, true),
+    getLinkableOrganizations(id),
     adminClient
       .from('organizations')
       .select('currency')
@@ -26,10 +27,9 @@ export default async function AccountsPage({ params }: Props) {
       <AccountsClient
         organizationId={id}
         accounts={accounts}
+        linkableOrgs={linkableOrgs}
         currency={organization?.currency}
       />
     </div>
   )
 }
-
-

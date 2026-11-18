@@ -1,13 +1,21 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { PlusCircle } from 'lucide-react'
+import { Link2, PlusCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 import { createWalletAccount } from '@/lib/wallet-accounts'
+import type { LinkableOrganization } from '@/lib/wallet-types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Sheet,
   SheetContent,
@@ -20,17 +28,26 @@ import {
 
 type CreateAccountSheetProps = {
   organizationId: string
+  linkableOrgs?: LinkableOrganization[]
   currency?: string
   onSuccess?: () => void
 }
 
-export function CreateAccountSheet({ organizationId, currency, onSuccess }: CreateAccountSheetProps) {
+export function CreateAccountSheet({
+  organizationId,
+  linkableOrgs = [],
+  currency,
+  onSuccess,
+}: CreateAccountSheetProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [startingValue, setStartingValue] = useState('0')
+  const [linkedOrgId, setLinkedOrgId] = useState<string>('none')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  const isLinked = linkedOrgId !== 'none'
 
   const onOpenChange = (next: boolean) => {
     setOpen(next)
@@ -42,6 +59,7 @@ export function CreateAccountSheet({ organizationId, currency, onSuccess }: Crea
   const resetForm = () => {
     setName('')
     setStartingValue('0')
+    setLinkedOrgId('none')
     setError(null)
   }
 
@@ -55,14 +73,19 @@ export function CreateAccountSheet({ organizationId, currency, onSuccess }: Crea
       return
     }
 
-    const val = parseFloat(startingValue || '0')
+    const val = isLinked ? 0 : parseFloat(startingValue || '0')
     if (isNaN(val)) {
       setError('Please enter a valid starting balance number')
       return
     }
 
     startTransition(async () => {
-      const res = await createWalletAccount(organizationId, trimmedName, val)
+      const res = await createWalletAccount(
+        organizationId,
+        trimmedName,
+        val,
+        isLinked ? linkedOrgId : null
+      )
       if (res.error) {
         setError(res.error)
         return
@@ -89,7 +112,7 @@ export function CreateAccountSheet({ organizationId, currency, onSuccess }: Crea
             <SheetHeader>
               <SheetTitle>Create Sub Account</SheetTitle>
               <SheetDescription>
-                Add a new account to your personal wallet to organize cash, checking, savings, or cards.
+                Add a new account to your personal wallet to organize cash, checking, savings, or linked organization withholding.
               </SheetDescription>
             </SheetHeader>
 
@@ -104,13 +127,44 @@ export function CreateAccountSheet({ organizationId, currency, onSuccess }: Crea
                 <Label htmlFor="account-name">Account Name</Label>
                 <Input
                   id="account-name"
-                  placeholder="e.g. Main Checking, Cash, Savings"
+                  placeholder="e.g. Main Checking, Cash, Business Withholding"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   disabled={isPending}
                   required
                 />
               </div>
+
+              {linkableOrgs.length > 0 && (
+                <div className="space-y-2">
+                  <Label htmlFor="link-org-select" className="flex items-center gap-1.5">
+                    <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                    Link to Organization Balance (Optional)
+                  </Label>
+                  <Select
+                    value={linkedOrgId}
+                    onValueChange={setLinkedOrgId}
+                    disabled={isPending}
+                  >
+                    <SelectTrigger id="link-org-select">
+                      <SelectValue placeholder="None (Manual Balance)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None (Manual Balance)</SelectItem>
+                      {linkableOrgs.map((org) => (
+                        <SelectItem key={org.id} value={org.id}>
+                          {org.name} (Negated Business Held)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {isLinked && (
+                    <p className="text-xs text-muted-foreground">
+                      This sub-account mirrors your negated Business Held balance from the selected organization and is read-only for direct wallet income/expenses.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="starting-value">Starting Value ({currency || 'USD'})</Label>
@@ -119,13 +173,15 @@ export function CreateAccountSheet({ organizationId, currency, onSuccess }: Crea
                   type="number"
                   step="0.01"
                   placeholder="0.00"
-                  value={startingValue}
+                  value={isLinked ? '0' : startingValue}
                   onChange={(e) => setStartingValue(e.target.value)}
-                  disabled={isPending}
-                  required
+                  disabled={isPending || isLinked}
+                  required={!isLinked}
                 />
                 <p className="text-xs text-muted-foreground">
-                  The initial opening balance of this account before any recorded transactions.
+                  {isLinked
+                    ? 'Locked while linked — balance automatically syncs from the organization.'
+                    : 'The initial opening balance of this account before any recorded transactions.'}
                 </p>
               </div>
             </div>

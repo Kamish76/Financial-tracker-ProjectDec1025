@@ -1,14 +1,24 @@
 'use client'
 
 import { useState, useTransition, useEffect } from 'react'
-import { Archive, ArchiveRestore, Trash2, Wallet, AlertCircle, ArrowLeft } from 'lucide-react'
+import {
+  Archive,
+  ArchiveRestore,
+  Trash2,
+  Wallet,
+  AlertCircle,
+  ArrowLeft,
+  Link2,
+  Unlink,
+} from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 import {
   deleteWalletAccount,
   toggleArchiveWalletAccount,
+  updateWalletAccount,
 } from '@/lib/wallet-accounts'
-import type { AccountWithBalance } from '@/lib/wallet-types'
+import type { AccountWithBalance, LinkableOrganization } from '@/lib/wallet-types'
 import { formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -25,10 +35,16 @@ import { EditAccountSheet } from './edit-account-sheet'
 type AccountsClientProps = {
   organizationId: string
   accounts: AccountWithBalance[]
+  linkableOrgs?: LinkableOrganization[]
   currency?: string
 }
 
-export function AccountsClient({ organizationId, accounts, currency }: AccountsClientProps) {
+export function AccountsClient({
+  organizationId,
+  accounts,
+  linkableOrgs = [],
+  currency,
+}: AccountsClientProps) {
   const router = useRouter()
   const [showArchived, setShowArchived] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -53,6 +69,18 @@ export function AccountsClient({ organizationId, accounts, currency }: AccountsC
     setErrorMsg(null)
     startTransition(async () => {
       const res = await toggleArchiveWalletAccount(accountId, !currentStatus)
+      if (res.error) {
+        setErrorMsg(res.error)
+      } else {
+        router.refresh()
+      }
+    })
+  }
+
+  const handleUnlink = (acc: AccountWithBalance) => {
+    setErrorMsg(null)
+    startTransition(async () => {
+      const res = await updateWalletAccount(acc.id, acc.name, acc.starting_value, null)
       if (res.error) {
         setErrorMsg(res.error)
       } else {
@@ -95,7 +123,7 @@ export function AccountsClient({ organizationId, accounts, currency }: AccountsC
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Sub Accounts</h1>
           <p className="text-sm text-muted-foreground">
-            Manage your personal wallet accounts, cash balances, and bank accounts.
+            Manage your personal wallet accounts, cash balances, and linked organization withholding accounts.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -108,7 +136,11 @@ export function AccountsClient({ organizationId, accounts, currency }: AccountsC
               {showArchived ? 'Hide Archived' : `Show Archived (${archivedAccounts.length})`}
             </Button>
           )}
-          <CreateAccountSheet organizationId={organizationId} currency={currency} />
+          <CreateAccountSheet
+            organizationId={organizationId}
+            linkableOrgs={linkableOrgs}
+            currency={currency}
+          />
         </div>
       </div>
 
@@ -156,7 +188,11 @@ export function AccountsClient({ organizationId, accounts, currency }: AccountsC
           <p className="text-sm text-muted-foreground mb-4">
             You don&apos;t have any active sub accounts yet. Create one to start tracking.
           </p>
-          <CreateAccountSheet organizationId={organizationId} currency={currency} />
+          <CreateAccountSheet
+            organizationId={organizationId}
+            linkableOrgs={linkableOrgs}
+            currency={currency}
+          />
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -169,28 +205,55 @@ export function AccountsClient({ organizationId, accounts, currency }: AccountsC
             >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      {acc.name}
+                  <div className="min-w-0">
+                    <CardTitle className="text-lg flex items-center gap-2 flex-wrap">
+                      <span className="truncate">{acc.name}</span>
                       {!acc.is_active && (
                         <Badge variant="secondary" className="text-xs">
-                          Archived
+                          Archived • Balance Hidden
                         </Badge>
                       )}
                     </CardTitle>
+                    {acc.linked_org_id && (
+                      <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                        <Badge
+                          variant="outline"
+                          className="text-xs gap-1 border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                        >
+                          <Link2 className="h-3 w-3" />
+                          Linked: {acc.linked_org_name || 'Organization'} (Read-Only)
+                        </Badge>
+                      </div>
+                    )}
                     <CardDescription className="text-xs mt-1">
                       {acc.transaction_count} transaction{acc.transaction_count === 1 ? '' : 's'}
                     </CardDescription>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <EditAccountSheet account={acc} currency={currency} />
+                  <div className="flex items-center gap-1 shrink-0">
+                    {acc.linked_org_id && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleUnlink(acc)}
+                        disabled={isPending}
+                        title="Unlink organization balance"
+                        aria-label="Unlink organization balance"
+                      >
+                        <Unlink className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <EditAccountSheet
+                      account={acc}
+                      linkableOrgs={linkableOrgs}
+                      currency={currency}
+                    />
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => handleToggleArchive(acc.id, acc.is_active)}
                       disabled={isPending}
-                      title={acc.is_active ? 'Archive account' : 'Restore account'}
-                      aria-label={acc.is_active ? 'Archive account' : 'Restore account'}
+                      title={acc.is_active ? 'Hide balance (Archive account)' : 'Show balance (Restore account)'}
+                      aria-label={acc.is_active ? 'Hide balance (Archive account)' : 'Show balance (Restore account)'}
                     >
                       {acc.is_active ? (
                         <Archive className="h-4 w-4" />
@@ -223,11 +286,23 @@ export function AccountsClient({ organizationId, accounts, currency }: AccountsC
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs text-muted-foreground mt-1">
-                  <span>Starting Value:</span>
-                  <span>
-                    {formatCurrency(acc.starting_value, currency)}
-                  </span>
+                  {acc.linked_org_id ? (
+                    <>
+                      <span>Source:</span>
+                      <span>Linked Org Withholding</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Starting Value:</span>
+                      <span>{formatCurrency(acc.starting_value, currency)}</span>
+                    </>
+                  )}
                 </div>
+                {!acc.is_active && (
+                  <p className="text-[11px] text-muted-foreground mt-2">
+                    Hidden from combined wallet total; past transactions remain preserved.
+                  </p>
+                )}
               </CardContent>
             </Card>
           ))}

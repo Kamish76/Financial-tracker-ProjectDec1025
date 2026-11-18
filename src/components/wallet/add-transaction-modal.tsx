@@ -159,8 +159,13 @@ export function AddTransactionModal({
     }
   }, [isOpen])
 
+  const selectableAccounts = useMemo(() => {
+    if (activeTab === 'transfer') return accounts
+    return accounts.filter((acc) => !acc.linked_org_id)
+  }, [accounts, activeTab])
+
   const [selectedAccountId, setSelectedAccountId] = useState<string>(
-    initialAccountId || accounts[0]?.id || ''
+    initialAccountId || selectableAccounts[0]?.id || accounts[0]?.id || ''
   )
   const [transferToAccountId, setTransferToAccountId] = useState<string>(
     accounts.length > 1 ? accounts[1].id : ''
@@ -244,21 +249,29 @@ export function AddTransactionModal({
       setShowAccountDropdown(null)
       const tab = initialTab || 'expense'
       setActiveTab(tab)
+      const tabAccounts = tab === 'transfer' ? accounts : accounts.filter((a) => !a.linked_org_id)
       if (tab === 'expense') {
         setCategory(orgCategories.expense[0] || 'Food & Dining')
       } else if (tab === 'income') {
         setCategory(orgCategories.income[0] || 'Salary')
       }
-      if (initialAccountId && accounts.some((a) => a.id === initialAccountId)) {
+      if (initialAccountId && tabAccounts.some((a) => a.id === initialAccountId)) {
         setSelectedAccountId(initialAccountId)
-      } else if (accounts.length > 0 && !accounts.some((a) => a.id === selectedAccountId)) {
-        setSelectedAccountId(accounts[0].id)
+      } else if (tabAccounts.length > 0 && !tabAccounts.some((a) => a.id === selectedAccountId)) {
+        setSelectedAccountId(tabAccounts[0].id)
+      } else if (tabAccounts.length === 0) {
+        setSelectedAccountId('')
       }
       setTxDate(formatLocalDateInput(new Date().toISOString()))
       setTxTime(new Date().toTimeString().split(' ')[0].substring(0, 5))
     }
   }, [isOpen, initialTab, initialAccountId, orgCategories])
   /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+
+  // Derive valid selected account for the current tab without an extra render effect
+  const effectiveSelectedAccountId = selectableAccounts.some((a) => a.id === selectedAccountId)
+    ? selectedAccountId
+    : selectableAccounts[0]?.id || ''
 
   // Compute evaluated amount on the fly
   const evaluatedAmount = useMemo(() => {
@@ -312,7 +325,7 @@ export function AddTransactionModal({
       return
     }
 
-    if (!selectedAccountId) {
+    if (!effectiveSelectedAccountId) {
       setError('Please select an account.')
       return
     }
@@ -322,7 +335,7 @@ export function AddTransactionModal({
       return
     }
 
-    if (activeTab === 'transfer' && selectedAccountId === transferToAccountId) {
+    if (activeTab === 'transfer' && effectiveSelectedAccountId === transferToAccountId) {
       setError('Source and destination accounts must be different.')
       return
     }
@@ -346,7 +359,7 @@ export function AddTransactionModal({
       organizationId,
       type: typeParam,
       amount: Math.abs(evaluatedAmount),
-      accountId: selectedAccountId,
+      accountId: effectiveSelectedAccountId,
       transferToAccountId: activeTab === 'transfer' ? transferToAccountId : null,
       category: activeTab === 'transfer' ? 'Transfer' : category,
       notes: notes.trim(),
@@ -367,7 +380,7 @@ export function AddTransactionModal({
     }
   }, [
     isAmountValid,
-    selectedAccountId,
+    effectiveSelectedAccountId,
     activeTab,
     transferToAccountId,
     txDate,
@@ -486,7 +499,7 @@ export function AddTransactionModal({
 
   if (!isOpen) return null
 
-  const selectedAccount = accounts.find((a) => a.id === selectedAccountId)
+  const selectedAccount = accounts.find((a) => a.id === effectiveSelectedAccountId)
   const selectedToAccount = accounts.find((a) => a.id === transferToAccountId)
 
   // Color coding by transaction type: Income = Green, Expense = Red, Transfer = Yellow
@@ -680,7 +693,7 @@ export function AddTransactionModal({
             {/* Account dropdown */}
             {showAccountDropdown === 'from' && (
               <div className="absolute top-full left-0 right-0 mt-1 z-30 rounded-xl border border-border bg-card p-1.5 shadow-2xl max-h-48 overflow-y-auto">
-                {accounts.map((acc) => (
+                {selectableAccounts.map((acc) => (
                   <button
                     key={acc.id}
                     onClick={() => {
@@ -688,13 +701,16 @@ export function AddTransactionModal({
                       setShowAccountDropdown(null)
                     }}
                     className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between transition-colors ${
-                      acc.id === selectedAccountId
+                      acc.id === effectiveSelectedAccountId
                         ? `${accentDropdownActive} font-semibold`
                         : 'text-foreground hover:bg-muted'
                     }`}
                   >
-                    <span>{acc.name}</span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="truncate">
+                      {acc.name}
+                      {acc.linked_org_id ? ' (Linked)' : ''}
+                    </span>
+                    <span className="text-xs text-muted-foreground shrink-0 ml-2">
                       {getDisplayBalance(acc, currency)}
                     </span>
                   </button>
@@ -731,13 +747,13 @@ export function AddTransactionModal({
                     {accounts.map((acc) => (
                       <button
                         key={acc.id}
-                        disabled={acc.id === selectedAccountId}
+                        disabled={acc.id === effectiveSelectedAccountId}
                         onClick={() => {
                           setTransferToAccountId(acc.id)
                           setShowAccountDropdown(null)
                         }}
                         className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between transition-colors ${
-                          acc.id === selectedAccountId
+                          acc.id === effectiveSelectedAccountId
                             ? 'opacity-40 cursor-not-allowed text-muted-foreground'
                             : acc.id === transferToAccountId
                             ? `${accentDropdownActive} font-semibold`

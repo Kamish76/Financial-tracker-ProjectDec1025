@@ -33,6 +33,7 @@ type Transaction = TransactionRecord
 type WalletSummary = {
   isWallet: boolean
   accounts: AccountWithBalance[]
+  allAccounts?: AccountWithBalance[]
 }
 type Category = {
   id: string
@@ -227,7 +228,7 @@ export function WalletRecordsView({ currency }: WalletRecordsViewProps) {
     selectedCategory && selectedCategory !== "all" && { label: `Category: ${selectedCategory}`, key: "category" },
     selectedType && selectedType !== "all" && { label: `Type: ${selectedType}`, key: "type" },
     selectedAccount && selectedAccount !== "all" && {
-      label: `Account: ${walletSummary?.accounts.find((a) => a.id === selectedAccount)?.name || selectedAccount}`,
+      label: `Account: ${(walletSummary?.allAccounts || walletSummary?.accounts || []).find((a) => a.id === selectedAccount)?.name || selectedAccount}`,
       key: "account",
     },
     startDate && { label: `From: ${startDate}`, key: "startDate" },
@@ -378,9 +379,9 @@ export function WalletRecordsView({ currency }: WalletRecordsViewProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All accounts</SelectItem>
-                {(walletSummary?.accounts || []).map((acc) => (
+                {(walletSummary?.allAccounts || walletSummary?.accounts || []).map((acc) => (
                   <SelectItem key={acc.id} value={acc.id}>
-                    {acc.name}
+                    {acc.name}{!acc.is_active ? " (Archived)" : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -461,7 +462,7 @@ export function WalletRecordsView({ currency }: WalletRecordsViewProps) {
           organizationId={organizationId}
           onSave={handleEditSave}
           categories={categories}
-          accounts={walletSummary?.accounts || []}
+          accounts={walletSummary?.allAccounts || walletSummary?.accounts || []}
           currency={currency}
         />
       )}

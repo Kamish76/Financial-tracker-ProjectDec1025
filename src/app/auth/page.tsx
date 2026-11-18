@@ -3,6 +3,7 @@
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, CheckCircle2, LockKeyhole, Mail } from "lucide-react";
+import { OrgFinanceLogoMark } from "@/components/brand-logo";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -96,7 +97,7 @@ function AuthForm() {
         <div className="relative z-10 flex h-full flex-col justify-between p-6 sm:p-8 lg:p-10">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-white/80 backdrop-blur">
-              <LockKeyhole className="h-3.5 w-3.5 text-accent-strong" />
+              <OrgFinanceLogoMark className="h-4 w-4" dark />
               OrgFinance Access
             </div>
             <h1 className="mt-6 max-w-sm text-3xl font-semibold leading-tight text-white sm:text-4xl">

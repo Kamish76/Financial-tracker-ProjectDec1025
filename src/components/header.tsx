@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { ShieldCheck, Menu, X, ArrowRight } from 'lucide-react'
+import { Menu, X, ArrowRight } from 'lucide-react'
 import { useState } from 'react'
+import { BrandLogo } from '@/components/brand-logo'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
 
@@ -22,12 +23,7 @@ export function Header() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
             <div className="inline-flex items-center gap-2.5 rounded-xl border border-border/80 bg-card/80 px-3 py-1.5 shadow-2xs group-hover:border-accent/50 transition-colors">
-              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-accent/15 text-accent-strong">
-                <ShieldCheck className="h-4 w-4" aria-hidden />
-              </div>
-              <span className="font-semibold tracking-tight text-foreground text-sm">
-                OrgFinance
-              </span>
+              <BrandLogo markClassName="h-5 w-5" textClassName="text-sm" />
             </div>
           </Link>
 
