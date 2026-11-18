@@ -96,7 +96,7 @@ END;
 $$;
 
 CREATE OR REPLACE TRIGGER trg_sync_linked_wallet_accounts_on_tx
-  AFTER INSERT OR UPDATE OR DELETE
+  AFTER INSERT OR DELETE OR UPDATE OF organization_id, type, amount, funded_by_type, funded_by_user_id
   ON public.transactions
   FOR EACH ROW
   EXECUTE FUNCTION public.sync_linked_wallet_accounts_on_tx();
