@@ -121,7 +121,7 @@ export function WalletTransactionEditDialog({
   const selectableAccounts =
     transaction.type === 'transfer'
       ? accounts
-      : accounts.filter((acc) => !acc.linked_org_id)
+      : accounts.filter((acc) => !acc.linked_org_id || acc.id === transaction.account_id)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

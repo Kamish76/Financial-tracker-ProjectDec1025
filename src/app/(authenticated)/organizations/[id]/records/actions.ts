@@ -127,6 +127,21 @@ export async function createTransaction(
 		updated_by_user_id: user.id,
 	}
 
+	if (insertPayload.account_id && txType !== 'transfer') {
+		const { data: targetAccount } = await admin
+			.from('wallet_accounts')
+			.select('linked_org_id')
+			.eq('id', insertPayload.account_id)
+			.eq('organization_id', organizationId)
+			.maybeSingle()
+		if (targetAccount?.linked_org_id) {
+			return {
+				error:
+					'This sub-account is linked to an organization balance and is read-only for direct income or expenses.',
+			}
+		}
+	}
+
 	const { data: created, error } = await admin
 		.from('transactions')
 		.insert(insertPayload)
@@ -181,7 +196,7 @@ export async function updateTransaction(
 	// Verify transaction exists and belongs to organization
 	const { data: existingTx, error: txError } = await admin
 		.from('transactions')
-		.select('id, organization_id, is_initial, type')
+		.select('id, organization_id, is_initial, type, account_id')
 		.eq('id', transactionId)
 		.eq('organization_id', organizationId)
 		.maybeSingle()
@@ -221,7 +236,11 @@ export async function updateTransaction(
 	}
 	if (updateData.accountId !== undefined || updateData.account_id !== undefined) {
 		const targetAccountId = (updateData.accountId ?? updateData.account_id) as string | null
-		if (targetAccountId && existingTx.type !== 'transfer') {
+		if (
+			targetAccountId &&
+			existingTx.type !== 'transfer' &&
+			targetAccountId !== existingTx.account_id
+		) {
 			const { data: targetAccount } = await admin
 				.from('wallet_accounts')
 				.select('linked_org_id')
