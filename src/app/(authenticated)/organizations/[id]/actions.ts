@@ -627,75 +627,17 @@ export async function setMemberBaseline(input: SetMemberBaselineInput) {
     return { error: "Target member is not part of this organization" }
   }
 
-  // Get current baseline allocation for this member (sum of held_allocate - held_return, excluding Refund withdrawals)
-  const { data: allocationRows, error: allocationError } = await admin
-    .from("transactions")
-    .select("type, amount, category")
-    .eq("organization_id", organizationId)
-    .eq("funded_by_user_id", userId)
-    .in("type", ["held_allocate", "held_return"])
-
-  if (allocationError) {
-    console.error("[SET_MEMBER_BASELINE] Failed to fetch allocations", allocationError.message)
-    return { error: "Unable to calculate current baseline" }
-  }
-
-  let currentBaseline = 0
-  for (const row of allocationRows || []) {
-    const amount = Number(row.amount ?? 0)
-    const isRefund = (row.category || "").toLowerCase() === "refund"
-    if (row.type === "held_allocate") {
-      currentBaseline += amount
-    } else if (row.type === "held_return" && !isRefund) {
-      currentBaseline -= amount
-    }
-  }
-
-  const delta = targetBaseline - currentBaseline
-
-  // If no change needed, return early
-  if (Math.abs(delta) < 0.01) {
-    return { success: true }
-  }
-
-  // Determine transaction type based on delta
-  const transactionType = delta > 0 ? "held_allocate" : "held_return"
-  const transactionAmount = Math.abs(delta)
-
-  // Get cash on hand to validate allocation limit
-  const { data: txRows, error: txError } = await admin
-    .from("transactions")
-    .select("type, amount, category")
-    .eq("organization_id", organizationId)
-
-  if (txError) {
-    console.error("[SET_MEMBER_BASELINE] Failed to fetch transactions", txError.message)
-    return { error: "Unable to validate allocation limit" }
-  }
-
-  let totalIncome = 0
-  let totalExpensesBusiness = 0
-  let totalRefundWithdrawals = 0
-  for (const r of txRows || []) {
-    const amount = Number(r.amount ?? 0)
-    if (r.type === "income") totalIncome += amount
-    if (r.type === "expense_business") totalExpensesBusiness += amount
-    if (r.type === "held_return" && (r.category || "").toLowerCase() === "refund") {
-      totalRefundWithdrawals += amount
-    }
-  }
-  const cashOnHand = totalIncome - totalExpensesBusiness - totalRefundWithdrawals
-
-  // Calculate total allocated baseline across all members (excluding Refund withdrawals)
+  // Fetch all baseline allocations once to derive both the member's current baseline and org-wide limit
   const { data: allAllocations, error: allAllocationsError } = await admin
     .from("transactions")
     .select("type, amount, category, funded_by_user_id")
     .eq("organization_id", organizationId)
     .in("type", ["held_allocate", "held_return"])
+    .limit(10000)
 
   if (allAllocationsError) {
-    console.error("[SET_MEMBER_BASELINE] Failed to fetch all allocations", allAllocationsError.message)
-    return { error: "Unable to validate total allocation" }
+    console.error("[SET_MEMBER_BASELINE] Failed to fetch allocations", allAllocationsError.message)
+    return { error: "Unable to calculate current baseline" }
   }
 
   const baselineByUser: Record<string, number> = {}
@@ -710,6 +652,59 @@ export async function setMemberBaseline(input: SetMemberBaselineInput) {
       baselineByUser[uid] = (baselineByUser[uid] ?? 0) - amount
     }
   }
+
+  const currentBaseline = baselineByUser[userId] ?? 0
+  const delta = targetBaseline - currentBaseline
+
+  // If no change needed, return early
+  if (Math.abs(delta) < 0.01) {
+    return { success: true }
+  }
+
+  // Determine transaction type based on delta
+  const transactionType = delta > 0 ? "held_allocate" : "held_return"
+  const transactionAmount = Math.abs(delta)
+
+  // Compute cash on hand using the DB aggregate RPC (fallback to bounded scan if RPC unavailable)
+  let totalIncome = 0
+  let totalExpensesBusiness = 0
+  let totalRefundWithdrawals = 0
+
+  const { data: totalsRpcData, error: totalsRpcError } = await admin.rpc(
+    "get_organization_financial_totals",
+    { p_org_id: organizationId }
+  )
+  const rpcRow = (Array.isArray(totalsRpcData) ? totalsRpcData[0] : totalsRpcData) as
+    | Record<string, unknown>
+    | undefined
+
+  if (rpcRow && !totalsRpcError) {
+    totalIncome = Number(rpcRow.total_income ?? 0)
+    totalExpensesBusiness = Number(rpcRow.total_expenses_business ?? 0)
+    totalRefundWithdrawals = Number(rpcRow.total_refund_withdrawals ?? 0)
+  } else {
+    const { data: txRows, error: txError } = await admin
+      .from("transactions")
+      .select("type, amount, category")
+      .eq("organization_id", organizationId)
+      .in("type", ["income", "expense_business", "held_return"])
+      .limit(10000)
+
+    if (txError) {
+      console.error("[SET_MEMBER_BASELINE] Failed to fetch transactions", txError.message)
+      return { error: "Unable to validate allocation limit" }
+    }
+
+    for (const r of txRows || []) {
+      const amount = Number(r.amount ?? 0)
+      if (r.type === "income") totalIncome += amount
+      if (r.type === "expense_business") totalExpensesBusiness += amount
+      if (r.type === "held_return" && (r.category || "").toLowerCase() === "refund") {
+        totalRefundWithdrawals += amount
+      }
+    }
+  }
+  const cashOnHand = totalIncome - totalExpensesBusiness - totalRefundWithdrawals
 
   // Update the target user's baseline in our map
   baselineByUser[userId] = targetBaseline
