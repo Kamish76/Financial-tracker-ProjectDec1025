@@ -6,6 +6,7 @@ import { CircleDollarSign } from "lucide-react"
 
 import { addIncomeForMember } from "../actions"
 import { formatLocalDateInput } from "@/lib/utils"
+import type { MirrorWalletContext } from "@/lib/wallet-types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -37,6 +38,7 @@ type AddRegularIncomeSheetProps = {
   members: Member[]
   currentUserEmail?: string | null
   currentUserId?: string | null
+  mirrorContext?: MirrorWalletContext | null
 }
 
 export function AddRegularIncomeSheet({
@@ -44,6 +46,7 @@ export function AddRegularIncomeSheet({
   members,
   currentUserEmail,
   currentUserId,
+  mirrorContext,
 }: AddRegularIncomeSheetProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -54,6 +57,7 @@ export function AddRegularIncomeSheet({
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [assignedToUserId, setAssignedToUserId] = useState<string>("")
+  const [mirrorWalletAccountId, setMirrorWalletAccountId] = useState<string>("none")
 
   useEffect(() => {
     if (!error) return
@@ -79,7 +83,14 @@ export function AddRegularIncomeSheet({
     setOccurredAt("")
     setError(null)
     setAssignedToUserId("")
+    setMirrorWalletAccountId("none")
   }
+
+  const canMirror = Boolean(
+    mirrorContext &&
+      mirrorContext.accounts.length > 0 &&
+      assignedToUserId === "current"
+  )
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -111,6 +122,8 @@ export function AddRegularIncomeSheet({
             : assignedToUserId === 'current'
             ? currentUserId
             : assignedToUserId || null,
+        mirrorWalletAccountId:
+          canMirror && mirrorWalletAccountId !== "none" ? mirrorWalletAccountId : undefined,
       })
 
       if (result && 'error' in result) {
@@ -165,6 +178,27 @@ export function AddRegularIncomeSheet({
               Choose the holder of business funds for this income.
             </p>
           </div>
+
+          {canMirror && mirrorContext && (
+            <div className="space-y-2">
+              <Label htmlFor="mirrorWalletIncome">
+                Mirror to {mirrorContext.walletOrgName} (Optional)
+              </Label>
+              <Select value={mirrorWalletAccountId} onValueChange={setMirrorWalletAccountId}>
+                <SelectTrigger id="mirrorWalletIncome">
+                  <SelectValue placeholder="Don't mirror (Org only)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Don&apos;t mirror (Org only)</SelectItem>
+                  {mirrorContext.accounts.map((acc) => (
+                    <SelectItem key={acc.id} value={acc.id}>
+                      {acc.name} (+ via {mirrorContext.linkedAccountName})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="amount">Amount</Label>

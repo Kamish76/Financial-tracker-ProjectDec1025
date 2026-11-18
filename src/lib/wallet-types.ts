@@ -21,3 +21,15 @@ export type LinkableOrganization = {
   name: string
   currency?: string
 }
+
+export type MirrorWalletContext = {
+  walletOrgId: string
+  walletOrgName: string
+  linkedAccountId: string
+  linkedAccountName: string
+  accounts: Array<{
+    id: string
+    name: string
+    current_balance: number
+  }>
+}

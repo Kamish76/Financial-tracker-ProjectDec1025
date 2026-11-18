@@ -36,6 +36,7 @@ type RecentActivityActionsProps = {
     created_at: string
     account_id?: string | null
     transfer_to_account_id?: string | null
+    mirrored_from_tx_id?: string | null
   }
 }
 
@@ -82,6 +83,7 @@ export function RecentActivityActions({
     funded_by_user_id: null,
     account_id: transaction.account_id ?? null,
     transfer_to_account_id: transaction.transfer_to_account_id ?? null,
+    mirrored_from_tx_id: transaction.mirrored_from_tx_id ?? null,
   }
 
   const handleConfirmDelete = () => {

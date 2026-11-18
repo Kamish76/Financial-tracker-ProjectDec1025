@@ -8,6 +8,7 @@ import { CardSkeleton, RecentActivitySkeleton } from '@/components/page-skeleton
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireOrgMembership } from '@/lib/auth/guards'
 import { isWalletOrganization } from '@/lib/wallet'
+import { getUserMirrorableWalletAccounts } from '@/lib/wallet-accounts'
 import { AddIncomeSheet } from './add-income-sheet'
 import { AddExpenseSheet } from './add-expense-sheet'
 import { RefundSheet } from './refund-sheet'
@@ -43,6 +44,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
 
   const isWallet = isWalletOrganization(organization?.description)
   const canManage = effectiveMembership?.role === 'owner' || effectiveMembership?.role === 'admin'
+  const mirrorContext = !isWallet && canManage ? await getUserMirrorableWalletAccounts(id) : null
 
   const topStatsNode = (
     <Suspense fallback={<CardSkeleton heightClass="h-32" />}>
@@ -85,6 +87,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
             organizationId={id}
             organizationDescription={organization?.description}
             currency={organization?.currency}
+            mirrorContext={mirrorContext}
           />
         ) : (
           <Button type="button" className="w-full justify-start gap-2" disabled aria-disabled>
@@ -96,6 +99,7 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
             organizationId={id}
             organizationDescription={organization?.description}
             currency={organization?.currency}
+            mirrorContext={mirrorContext}
           />
         ) : (
           <Button
@@ -109,7 +113,11 @@ export default async function OrganizationFinancePage({ params }: PageProps) {
           </Button>
         )}
         {canManage ? (
-          <RefundSheet organizationId={id} currency={organization?.currency} />
+          <RefundSheet
+            organizationId={id}
+            currency={organization?.currency}
+            mirrorContext={mirrorContext}
+          />
         ) : (
           <Button
             type="button"

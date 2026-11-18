@@ -118,6 +118,8 @@ export function WalletTransactionEditDialog({
     return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400'
   }
 
+  const isMirroredFromOrg = Boolean(transaction.mirrored_from_tx_id)
+
   const selectableAccounts =
     transaction.type === 'transfer'
       ? accounts
@@ -129,9 +131,19 @@ export function WalletTransactionEditDialog({
         <DialogHeader>
           <div className="flex items-center justify-between pr-4">
             <DialogTitle>Edit Wallet Transaction</DialogTitle>
-            <Badge variant="outline" className={getTypeBadgeClass(transaction.type)}>
-              {getTypeLabel(transaction.type)}
-            </Badge>
+            <div className="flex items-center gap-1.5">
+              {isMirroredFromOrg && (
+                <Badge
+                  variant="outline"
+                  className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+                >
+                  Mirrored from Org
+                </Badge>
+              )}
+              <Badge variant="outline" className={getTypeBadgeClass(transaction.type)}>
+                {getTypeLabel(transaction.type)}
+              </Badge>
+            </div>
           </div>
           <DialogDescription>
             Update details for this wallet transaction.
@@ -139,6 +151,12 @@ export function WalletTransactionEditDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {isMirroredFromOrg && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+              This transfer is auto-mirrored from an organization transaction. Amount and accounts sync automatically from the organization ledger.
+            </div>
+          )}
+
           {/* Amount */}
           <div>
             <Label htmlFor="amount" className="text-sm font-semibold">
@@ -152,7 +170,7 @@ export function WalletTransactionEditDialog({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
-              disabled={isPending}
+              disabled={isPending || isMirroredFromOrg}
             />
           </div>
 
@@ -162,7 +180,7 @@ export function WalletTransactionEditDialog({
               <Label className="text-sm font-semibold">
                 {transaction.type === 'transfer' ? 'From Account' : 'Account'}
               </Label>
-              <Select value={accountId} onValueChange={setAccountId} disabled={isPending}>
+              <Select value={accountId} onValueChange={setAccountId} disabled={isPending || isMirroredFromOrg}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select account..." />
                 </SelectTrigger>
@@ -181,7 +199,7 @@ export function WalletTransactionEditDialog({
           {transaction.type === 'transfer' && accounts.length > 1 && (
             <div>
               <Label className="text-sm font-semibold">To Account</Label>
-              <Select value={transferToAccountId} onValueChange={setTransferToAccountId} disabled={isPending}>
+              <Select value={transferToAccountId} onValueChange={setTransferToAccountId} disabled={isPending || isMirroredFromOrg}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select destination account..." />
                 </SelectTrigger>

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { OrganizationSettings } from './organization-settings'
 import { requireOrgMembership } from '@/lib/auth/guards'
 import { isWalletOrganization } from '@/lib/wallet'
+import { getUserMirrorableWalletAccounts } from '@/lib/wallet-accounts'
 
 type SettingsPageProps = {
 	params: Promise<{
@@ -188,6 +189,10 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 		}
 	}
 
+	const mirrorContext = !organizationWithRole.is_wallet
+		? await getUserMirrorableWalletAccounts(id)
+		: null
+
 	return (
 		<div className="min-h-screen bg-background">
 			<OrganizationSettings
@@ -198,6 +203,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
 				currentUserEmail={user.email}
 				currentUserName={user.user_metadata?.full_name || null}
 				currentUserId={user.id}
+				mirrorContext={mirrorContext}
 			/>
 		</div>
 	)

@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/server"
 import { getOrCreateCategory } from "@/lib/categories"
 import { authorizeOrgAction } from "@/lib/auth/guards"
+import { getUserWalletId } from "@/lib/wallet-server"
 import {
   revalidateOrganizationSections,
 } from "@/lib/revalidation"
@@ -30,6 +31,105 @@ async function verifyActiveOrgMember(
   return null
 }
 
+interface ResolvedMirrorTarget {
+  walletOrgId: string
+  linkedAccountId: string
+  targetAccountId: string
+  orgName: string
+}
+
+async function resolveMirrorTarget(
+  admin: OrgClient,
+  organizationId: string,
+  userId: string,
+  mirrorWalletAccountId: string
+): Promise<ResolvedMirrorTarget | { error: string }> {
+  const walletOrgId = await getUserWalletId(userId)
+  if (!walletOrgId || walletOrgId === organizationId) {
+    return { error: "Personal wallet not found for mirroring" }
+  }
+
+  const [{ data: walletAccounts, error: accError }, { data: orgData }] = await Promise.all([
+    admin
+      .from("wallet_accounts")
+      .select("id, name, is_active, linked_org_id")
+      .eq("organization_id", walletOrgId)
+      .eq("is_active", true),
+    admin.from("organizations").select("name").eq("id", organizationId).maybeSingle(),
+  ])
+
+  const linkedAccount = (walletAccounts || []).find((a) => a.linked_org_id === organizationId)
+  const targetAccount = (walletAccounts || []).find(
+    (a) => a.id === mirrorWalletAccountId && !a.linked_org_id
+  )
+
+  if (accError || !linkedAccount || !targetAccount) {
+    return {
+      error:
+        "Selected wallet sub-account is invalid or this organization is not linked to an active wallet sub-account",
+    }
+  }
+
+  return {
+    walletOrgId,
+    linkedAccountId: linkedAccount.id,
+    targetAccountId: targetAccount.id,
+    orgName: orgData?.name?.trim() || "Org",
+  }
+}
+
+async function createMirroredWalletTransfer(params: {
+  admin: OrgClient
+  target: ResolvedMirrorTarget
+  userId: string
+  orgTxId: string
+  txType: 'income' | 'expense_business' | 'held_return'
+  amount: number
+  description?: string | null
+  occurredAtIso: string
+}): Promise<{ mirroredTransferId?: string; walletOrgId?: string; error?: string }> {
+  const { admin, target, userId, orgTxId, txType, amount, description, occurredAtIso } = params
+
+  const fromAccountId =
+    txType === "income" ? target.linkedAccountId : target.targetAccountId
+  const toAccountId =
+    txType === "income" ? target.targetAccountId : target.linkedAccountId
+
+  const prefix = `[${target.orgName}]`
+  const fallbackLabel =
+    txType === "income" ? "Income" : txType === "held_return" ? "Refund" : "Business expense"
+  const mirrorDesc = description?.trim() ? `${prefix} ${description.trim()}` : `${prefix} ${fallbackLabel}`
+
+  const { data: mirrorTx, error: mirrorError } = await admin
+    .from("transactions")
+    .insert({
+      organization_id: target.walletOrgId,
+      user_id: userId,
+      type: "transfer",
+      amount,
+      account_id: fromAccountId,
+      transfer_to_account_id: toAccountId,
+      category: "Transfer",
+      description: mirrorDesc,
+      occurred_at: occurredAtIso,
+      funded_by_type: "personal",
+      funded_by_user_id: userId,
+      updated_by_user_id: userId,
+      is_initial: false,
+      mirrored_from_tx_id: orgTxId,
+    })
+    .select("id")
+    .single()
+
+  if (mirrorError || !mirrorTx) {
+    console.error("[AUTO_MIRROR] Transfer insert failed", mirrorError?.message)
+    return { error: "Unable to create mirrored wallet transfer" }
+  }
+
+  revalidateOrganizationSections(target.walletOrgId, ["records", "accounts"])
+  return { mirroredTransferId: mirrorTx.id, walletOrgId: target.walletOrgId }
+}
+
 interface InsertOrgTransactionParams {
   organizationId: string
   amount: number
@@ -44,6 +144,7 @@ interface InsertOrgTransactionParams {
   useCurrentUserAsFallback?: boolean
   validateAssignedMember?: boolean
   isInitial?: boolean
+  mirrorWalletAccountId?: string | null
   logTag: string
   insertFailedError: string
 }
@@ -63,6 +164,7 @@ async function insertOrgTransaction(params: InsertOrgTransactionParams) {
     useCurrentUserAsFallback = false,
     validateAssignedMember = false,
     isInitial,
+    mirrorWalletAccountId,
     logTag,
     insertFailedError,
   } = params
@@ -99,8 +201,40 @@ async function insertOrgTransaction(params: InsertOrgTransactionParams) {
     }
   }
 
+  const effectiveFundedByUserId = useCurrentUserAsFallback
+    ? (fundedByUserId || user.id)
+    : (fundedByUserId || null)
+
+  const normalizedMirrorAccountId = mirrorWalletAccountId?.trim() || null
+  let mirrorTarget: ResolvedMirrorTarget | null = null
+
+  if (normalizedMirrorAccountId) {
+    if (txType === "expense_personal" || fundedByType !== "business") {
+      return {
+        error:
+          "Only organization-funded income or business expenses can be mirrored to a linked wallet sub-account",
+      }
+    }
+    if (effectiveFundedByUserId !== user.id) {
+      return {
+        error: "You can only mirror transactions held or paid by yourself to your personal wallet",
+      }
+    }
+    const targetRes = await resolveMirrorTarget(
+      admin,
+      organizationId,
+      user.id,
+      normalizedMirrorAccountId
+    )
+    if ("error" in targetRes) {
+      return { error: targetRes.error }
+    }
+    mirrorTarget = targetRes
+  }
+
   const categoryKind = txType === 'income' ? 'income' : 'expense'
   const categoryId = category ? await getOrCreateCategory(organizationId, category, categoryKind) : null
+  const occurredAtIso = occurredDate.toISOString()
 
   const insertPayload = {
     organization_id: organizationId,
@@ -110,24 +244,59 @@ async function insertOrgTransaction(params: InsertOrgTransactionParams) {
     description: description?.trim() || null,
     category: category?.trim() || null,
     category_id: categoryId,
-    occurred_at: occurredDate.toISOString(),
+    occurred_at: occurredAtIso,
     funded_by_type: fundedByType,
-    funded_by_user_id: useCurrentUserAsFallback ? (fundedByUserId || user.id) : (fundedByUserId || null),
+    funded_by_user_id: effectiveFundedByUserId,
     updated_by_user_id: user.id,
     ...(isInitial !== undefined ? { is_initial: isInitial } : {}),
   }
 
   // Use admin client to bypass RLS after explicit role check
-  const { error: insertError } = await admin.from("transactions").insert(insertPayload)
+  let insertedOrgTxId: string | null = null
+  if (mirrorTarget) {
+    const { data: insertedTx, error: insertError } = await admin
+      .from("transactions")
+      .insert(insertPayload)
+      .select("id")
+      .single()
 
-  if (insertError) {
-    console.error(`${logTag} Insert failed`, insertError.message)
-    return { error: insertFailedError }
+    if (insertError || !insertedTx) {
+      console.error(`${logTag} Insert failed`, insertError?.message)
+      return { error: insertFailedError }
+    }
+    insertedOrgTxId = insertedTx.id
+  } else {
+    const { error: insertError } = await admin.from("transactions").insert(insertPayload)
+
+    if (insertError) {
+      console.error(`${logTag} Insert failed`, insertError.message)
+      return { error: insertFailedError }
+    }
+  }
+
+  let mirroredTransferId: string | undefined
+  if (mirrorTarget && insertedOrgTxId) {
+    const mirrorRes = await createMirroredWalletTransfer({
+      admin,
+      target: mirrorTarget,
+      userId: user.id,
+      orgTxId: insertedOrgTxId,
+      txType: txType as "income" | "expense_business",
+      amount,
+      description,
+      occurredAtIso,
+    })
+
+    if (mirrorRes.error) {
+      await admin.from("transactions").delete().eq("id", insertedOrgTxId)
+      return { error: mirrorRes.error }
+    }
+    mirroredTransferId = mirrorRes.mirroredTransferId
   }
 
   revalidateOrganizationSections(organizationId, ['records', 'settings', 'settings/holdings'])
 
-  return { success: true }
+  return mirroredTransferId ? { success: true, mirroredTransferId } : { success: true }
 }
 
 interface AddIncomeInput {
@@ -138,6 +307,7 @@ interface AddIncomeInput {
   occurredAt: string
   fundedByType: 'business' | 'personal'
   fundedByUserId?: string | null
+  mirrorWalletAccountId?: string | null
 }
 
 export async function addIncome(input: AddIncomeInput) {
@@ -153,6 +323,7 @@ export async function addIncome(input: AddIncomeInput) {
     fundedByType: input.fundedByType,
     fundedByUserId: input.fundedByUserId,
     useCurrentUserAsFallback: true,
+    mirrorWalletAccountId: input.mirrorWalletAccountId,
     logTag: '[ADD_INCOME]',
     insertFailedError: 'Unable to add income right now',
   })
@@ -186,6 +357,7 @@ interface AddExpenseInput {
   category?: string
   occurredAt: string
   expenseType: 'business' | 'personal'
+  mirrorWalletAccountId?: string | null
 }
 
 export async function addExpense(input: AddExpenseInput) {
@@ -203,6 +375,7 @@ export async function addExpense(input: AddExpenseInput) {
     txType: transactionType,
     fundedByType,
     useCurrentUserAsFallback: true,
+    mirrorWalletAccountId: input.mirrorWalletAccountId,
     logTag: '[ADD_EXPENSE]',
     insertFailedError: 'Unable to add expense right now',
   })
@@ -473,6 +646,7 @@ interface AddIncomeForMemberInput {
   category?: string
   occurredAt: string
   assignedToUserId?: string | null
+  mirrorWalletAccountId?: string | null
 }
 
 export async function addIncomeForMember(input: AddIncomeForMemberInput) {
@@ -489,6 +663,7 @@ export async function addIncomeForMember(input: AddIncomeForMemberInput) {
     fundedByUserId: input.assignedToUserId,
     validateAssignedMember: true,
     isInitial: false,
+    mirrorWalletAccountId: input.mirrorWalletAccountId,
     logTag: '[ADD_INCOME_FOR_MEMBER]',
     insertFailedError: 'Unable to add income right now',
   })
@@ -502,6 +677,7 @@ interface AddExpenseForMemberInput {
   occurredAt: string
   expenseType: 'business' | 'personal'
   assignedToUserId?: string | null
+  mirrorWalletAccountId?: string | null
 }
 
 export async function addExpenseForMember(input: AddExpenseForMemberInput) {
@@ -521,6 +697,7 @@ export async function addExpenseForMember(input: AddExpenseForMemberInput) {
     fundedByUserId: input.assignedToUserId,
     validateAssignedMember: true,
     isInitial: false,
+    mirrorWalletAccountId: input.mirrorWalletAccountId,
     logTag: '[ADD_EXPENSE_FOR_MEMBER]',
     insertFailedError: 'Unable to add expense right now',
   })
@@ -677,10 +854,11 @@ interface CreateRefundInput {
   organizationId: string
   amount: number
   description?: string
+  mirrorWalletAccountId?: string | null
 }
 
 export async function createRefund(input: CreateRefundInput) {
-  const { organizationId, amount, description } = input
+  const { organizationId, amount, description, mirrorWalletAccountId } = input
 
   if (!organizationId) {
     return { error: "Organization is required" }
@@ -703,6 +881,21 @@ export async function createRefund(input: CreateRefundInput) {
   const { user } = auth
   const admin = createAdminClient()
 
+  const normalizedMirrorAccountId = mirrorWalletAccountId?.trim() || null
+  let mirrorTarget: ResolvedMirrorTarget | null = null
+  if (normalizedMirrorAccountId) {
+    const targetRes = await resolveMirrorTarget(
+      admin,
+      organizationId,
+      user.id,
+      normalizedMirrorAccountId
+    )
+    if ("error" in targetRes) {
+      return { error: targetRes.error }
+    }
+    mirrorTarget = targetRes
+  }
+
   // Atomic stored procedure execution with row-level locks (AGENTS.md Rule 5)
   const { data, error } = await admin.rpc('process_member_refund', {
     p_org_id: organizationId,
@@ -716,12 +909,40 @@ export async function createRefund(input: CreateRefundInput) {
     return { error: error.message || "Unable to process refund" }
   }
 
-  const result = data as { success?: boolean; error?: string } | null
+  const result = data as {
+    success?: boolean
+    error?: string
+    reimbursement_id?: string
+    transaction_id?: string
+  } | null
   if (!result || !result.success) {
     return { error: result?.error || "Unable to process refund" }
   }
 
+  let mirroredTransferId: string | undefined
+  if (mirrorTarget && result.transaction_id) {
+    const mirrorRes = await createMirroredWalletTransfer({
+      admin,
+      target: mirrorTarget,
+      userId: user.id,
+      orgTxId: result.transaction_id,
+      txType: "held_return",
+      amount,
+      description,
+      occurredAtIso: new Date().toISOString(),
+    })
+
+    if (mirrorRes.error) {
+      await admin.from("transactions").delete().eq("id", result.transaction_id)
+      if (result.reimbursement_id) {
+        await admin.from("reimbursement_requests").delete().eq("id", result.reimbursement_id)
+      }
+      return { error: mirrorRes.error }
+    }
+    mirroredTransferId = mirrorRes.mirroredTransferId
+  }
+
   revalidateOrganizationSections(organizationId, ['records', 'settings', 'settings/holdings'])
 
-  return { success: true }
+  return mirroredTransferId ? { success: true, mirroredTransferId } : { success: true }
 }

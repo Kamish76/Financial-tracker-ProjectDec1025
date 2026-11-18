@@ -4,11 +4,19 @@ import { NextRequest } from 'next/server'
 import * as guards from '@/lib/auth/guards'
 import * as supabaseServer from '@/lib/supabase/server'
 import * as categories from '@/lib/categories'
+import * as walletServer from '@/lib/wallet-server'
 import { getAccountsWithBalances, updateWalletAccount } from '@/lib/wallet-accounts'
 import { addWalletTransaction } from '@/lib/wallet-transactions'
 import { createTransaction, updateTransaction } from '@/app/(authenticated)/organizations/[id]/records/actions'
 import { fetchOrganizationMembers } from '@/app/(authenticated)/organizations/[id]/records/utils'
-import { setMemberBaseline, addIncomeForMember, addExpenseForMember } from '@/app/(authenticated)/organizations/[id]/actions'
+import {
+  setMemberBaseline,
+  addIncomeForMember,
+  addExpenseForMember,
+  addIncome,
+  addExpense,
+  createRefund,
+} from '@/app/(authenticated)/organizations/[id]/actions'
 import { GET as healthCheckGet } from '@/app/api/health-check/route'
 
 vi.mock('next/cache', () => ({
@@ -428,5 +436,249 @@ describe('Audit hardening & reliability fixes', () => {
     expect(expRes).toEqual({ success: true })
     expect(insertedPayloads[0]).toMatchObject({ type: 'income', funded_by_type: 'business', funded_by_user_id: 'member-1', is_initial: false })
     expect(insertedPayloads[1]).toMatchObject({ type: 'expense_personal', funded_by_type: 'personal', funded_by_user_id: 'member-1', is_initial: false })
+  })
+})
+
+describe('Organization ↔ Personal Wallet Sub-Account Auto-Mirror', () => {
+  const orgId = 'biz-org-1'
+  const walletOrgId = 'wallet-org-1'
+  const userId = 'user-owner-1'
+  const linkedAccountId = 'acc-linked'
+  const mayaAccountId = 'acc-maya'
+
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.spyOn(guards, 'authorizeOrgAction').mockResolvedValue({
+      ok: true,
+      user: { id: userId } as User,
+      membership: { organizationId: orgId, userId, role: 'owner', isActive: true },
+    })
+    vi.spyOn(categories, 'getOrCreateCategory').mockResolvedValue('cat-1')
+    vi.spyOn(walletServer, 'getUserWalletId').mockResolvedValue(walletOrgId)
+  })
+
+  function mockAutoMirrorSupabase(capturedInserts: Record<string, unknown>[]) {
+    let insertCounter = 0
+    vi.spyOn(supabaseServer, 'createAdminClient').mockImplementation(() => {
+      const makeBuilder = (table: string) => {
+        const builder: Record<string, unknown> = {
+          select: () => builder,
+          eq: () => builder,
+          insert: (payload: Record<string, unknown>) => {
+            capturedInserts.push(payload)
+            insertCounter++
+            const txId = `tx-${insertCounter}`
+            return {
+              select: () => ({
+                single: async () => ({ data: { id: txId }, error: null }),
+              }),
+              then: (resolve: (v: unknown) => unknown) => resolve({ data: { id: txId }, error: null }),
+            }
+          },
+          delete: () => builder,
+          maybeSingle: async () => {
+            if (table === 'organizations') {
+              return { data: { id: orgId, name: 'KYUBI' }, error: null }
+            }
+            if (table === 'organization_members') {
+              return { data: { organization_id: orgId, user_id: 'other-member', is_active: true }, error: null }
+            }
+            return { data: null, error: null }
+          },
+          then: (resolve: (v: unknown) => unknown) => {
+            if (table === 'wallet_accounts') {
+              return resolve({
+                data: [
+                  { id: linkedAccountId, name: 'Linked KYUBI', is_active: true, linked_org_id: orgId },
+                  { id: mayaAccountId, name: 'Maya', is_active: true, linked_org_id: null },
+                ],
+                error: null,
+              })
+            }
+            return resolve({ data: [], error: null })
+          },
+        }
+        return builder
+      }
+      return {
+        from: makeBuilder,
+        rpc: async () => ({
+          data: { success: true, reimbursement_id: 'reimb-1', transaction_id: 'refund-org-tx-1' },
+          error: null,
+        }),
+      } as unknown as ReturnType<typeof supabaseServer.createAdminClient>
+    })
+  }
+
+  it('addIncome with mirrorWalletAccountId creates paired Wallet transfer from linkedAccount to targetAccount', async () => {
+    const capturedInserts: Record<string, unknown>[] = []
+    mockAutoMirrorSupabase(capturedInserts)
+
+    const res = await addIncome({
+      organizationId: orgId,
+      amount: 1500,
+      category: 'Sales',
+      description: 'Order #42',
+      occurredAt: '2026-11-18T10:00:00.000Z',
+      fundedByType: 'business',
+      mirrorWalletAccountId: mayaAccountId,
+    })
+
+    expect(res).toEqual({ success: true, mirroredTransferId: 'tx-2' })
+    expect(capturedInserts).toHaveLength(2)
+    expect(capturedInserts[0]).toMatchObject({
+      organization_id: orgId,
+      type: 'income',
+      amount: 1500,
+      funded_by_type: 'business',
+      funded_by_user_id: userId,
+    })
+    expect(capturedInserts[1]).toMatchObject({
+      organization_id: walletOrgId,
+      type: 'transfer',
+      amount: 1500,
+      account_id: linkedAccountId,
+      transfer_to_account_id: mayaAccountId,
+      description: '[KYUBI] Order #42',
+      mirrored_from_tx_id: 'tx-1',
+    })
+  })
+
+  it('addExpense (business) and createRefund with mirrorWalletAccountId create paired Wallet transfer from targetAccount to linkedAccount', async () => {
+    const capturedInserts: Record<string, unknown>[] = []
+    mockAutoMirrorSupabase(capturedInserts)
+
+    const expRes = await addExpense({
+      organizationId: orgId,
+      amount: 450,
+      category: 'Supplies',
+      description: 'Packaging',
+      occurredAt: '2026-11-18T11:00:00.000Z',
+      expenseType: 'business',
+      mirrorWalletAccountId: mayaAccountId,
+    })
+
+    expect(expRes).toEqual({ success: true, mirroredTransferId: 'tx-2' })
+    expect(capturedInserts[1]).toMatchObject({
+      organization_id: walletOrgId,
+      type: 'transfer',
+      amount: 450,
+      account_id: mayaAccountId,
+      transfer_to_account_id: linkedAccountId,
+      description: '[KYUBI] Packaging',
+      mirrored_from_tx_id: 'tx-1',
+    })
+
+    const refundRes = await createRefund({
+      organizationId: orgId,
+      amount: 200,
+      description: 'Customer return',
+      mirrorWalletAccountId: mayaAccountId,
+    })
+
+    expect(refundRes).toEqual({ success: true, mirroredTransferId: 'tx-3' })
+    expect(capturedInserts[2]).toMatchObject({
+      organization_id: walletOrgId,
+      type: 'transfer',
+      amount: 200,
+      account_id: mayaAccountId,
+      transfer_to_account_id: linkedAccountId,
+      description: '[KYUBI] Customer return',
+      mirrored_from_tx_id: 'refund-org-tx-1',
+    })
+  })
+
+  it('rejects mirrorWalletAccountId for personal expense, personal-funded income, and other-member income', async () => {
+    const capturedInserts: Record<string, unknown>[] = []
+    mockAutoMirrorSupabase(capturedInserts)
+
+    const personalExpRes = await addExpense({
+      organizationId: orgId,
+      amount: 100,
+      occurredAt: '2026-11-18T10:00:00.000Z',
+      expenseType: 'personal',
+      mirrorWalletAccountId: mayaAccountId,
+    })
+    expect(personalExpRes).toMatchObject({
+      error: expect.stringContaining('Only organization-funded income or business expenses'),
+    })
+
+    const personalIncRes = await addIncome({
+      organizationId: orgId,
+      amount: 100,
+      occurredAt: '2026-11-18T10:00:00.000Z',
+      fundedByType: 'personal',
+      mirrorWalletAccountId: mayaAccountId,
+    })
+    expect(personalIncRes).toMatchObject({
+      error: expect.stringContaining('Only organization-funded income or business expenses'),
+    })
+
+    const otherMemberRes = await addIncomeForMember({
+      organizationId: orgId,
+      amount: 300,
+      occurredAt: '2026-11-18T10:00:00.000Z',
+      assignedToUserId: 'other-member',
+      mirrorWalletAccountId: mayaAccountId,
+    })
+    expect(otherMemberRes).toMatchObject({
+      error: expect.stringContaining('only mirror transactions held or paid by yourself'),
+    })
+    expect(capturedInserts).toHaveLength(0)
+  })
+
+  it('updateTransaction rejects amount or account edits on mirrored Wallet transfers while allowing note updates', async () => {
+    vi.spyOn(supabaseServer, 'createAdminClient').mockImplementation(() => {
+      const makeBuilder = () => {
+        const builder: Record<string, unknown> = {
+          select: () => builder,
+          update: () => builder,
+          eq: () => builder,
+          maybeSingle: async () => ({
+            data: {
+              id: 'wallet-mirror-tx-1',
+              organization_id: walletOrgId,
+              is_initial: false,
+              type: 'transfer',
+              account_id: linkedAccountId,
+              transfer_to_account_id: mayaAccountId,
+              amount: 1500,
+              mirrored_from_tx_id: 'org-tx-1',
+            },
+            error: null,
+          }),
+        }
+        return builder
+      }
+      return { from: makeBuilder } as unknown as ReturnType<typeof supabaseServer.createAdminClient>
+    })
+
+    const blockedAmount = await updateTransaction({
+      organizationId: walletOrgId,
+      transactionId: 'wallet-mirror-tx-1',
+      amount: 2000,
+    })
+    expect(blockedAmount).toMatchObject({
+      error: expect.stringContaining('auto-mirrored from an organization transaction'),
+    })
+
+    const blockedAccount = await updateTransaction({
+      organizationId: walletOrgId,
+      transactionId: 'wallet-mirror-tx-1',
+      accountId: mayaAccountId,
+    })
+    expect(blockedAccount).toMatchObject({
+      error: expect.stringContaining('auto-mirrored from an organization transaction'),
+    })
+
+    const allowedNoteEdit = await updateTransaction({
+      organizationId: walletOrgId,
+      transactionId: 'wallet-mirror-tx-1',
+      amount: 1500,
+      accountId: linkedAccountId,
+      transferToAccountId: mayaAccountId,
+      description: '[KYUBI] Updated note',
+    })
+    expect(allowedNoteEdit).toMatchObject({ success: true })
   })
 })
