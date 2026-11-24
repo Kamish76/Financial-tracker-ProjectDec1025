@@ -53,11 +53,8 @@ export async function addWalletTransaction(input: AddWalletTransactionInput): Pr
     const { user } = auth
     const adminClient = createAdminClient()
 
-    // 3. Validate account(s) and resolve category in parallel
-    const catType = input.type === 'income' ? 'income' : 'expense'
-    const shouldResolveCategory = input.type !== 'transfer' && Boolean(input.category?.trim())
-
-    const [sourceResult, destResult, categoryId] = await Promise.all([
+    // 3. Validate account(s) in parallel before resolving/creating category
+    const [sourceResult, destResult] = await Promise.all([
       adminClient
         .from('wallet_accounts')
         .select('id, organization_id, is_active, linked_org_id')
@@ -74,9 +71,6 @@ export async function addWalletTransaction(input: AddWalletTransactionInput): Pr
             .eq('is_active', true)
             .maybeSingle()
         : Promise.resolve({ data: null }),
-      shouldResolveCategory
-        ? getOrCreateCategory(input.organizationId, input.category!.trim(), catType)
-        : Promise.resolve(null),
     ])
 
     const sourceAccount = sourceResult.data
@@ -94,6 +88,12 @@ export async function addWalletTransaction(input: AddWalletTransactionInput): Pr
     if (input.type === 'transfer' && !destResult.data) {
       return { error: 'Invalid destination account.' }
     }
+
+    const catType = input.type === 'income' ? 'income' : 'expense'
+    const categoryId =
+      input.type !== 'transfer' && input.category?.trim()
+        ? await getOrCreateCategory(input.organizationId, input.category.trim(), catType)
+        : null
 
     // 4. Insert transaction
     const { data, error } = await adminClient

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import type { WalletAccount, AccountWithBalance } from '@/lib/wallet-types'
 import { AddTransactionModal } from './add-transaction-modal'
@@ -12,6 +13,7 @@ type WalletFabProps = {
 }
 
 export function WalletFab({ organizationId, accounts, currency }: WalletFabProps) {
+  const router = useRouter()
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   if (!accounts || accounts.length === 0) {
@@ -37,6 +39,7 @@ export function WalletFab({ organizationId, accounts, currency }: WalletFabProps
         organizationId={organizationId}
         accounts={accounts}
         currency={currency}
+        onTransactionAdded={() => router.refresh()}
       />
     </>
   )
