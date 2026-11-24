@@ -265,7 +265,7 @@ export function AddTransactionModal({
       setTxDate(formatLocalDateInput(new Date().toISOString()))
       setTxTime(new Date().toTimeString().split(' ')[0].substring(0, 5))
     }
-  }, [isOpen, initialTab, initialAccountId, orgCategories])
+  }, [isOpen, initialTab, initialAccountId])
   /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   // Derive valid selected account for the current tab without an extra render effect
