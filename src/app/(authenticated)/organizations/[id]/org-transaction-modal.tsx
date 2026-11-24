@@ -206,7 +206,7 @@ export function OrgTransactionModal({
   }, [error])
 
   // Reset form when modal opens or closes
-  /* eslint-disable react-hooks/set-state-in-effect */
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!isOpen) {
       setMirrorWalletAccountId('')
@@ -232,8 +232,8 @@ export function OrgTransactionModal({
     }
     setTxDate(formatLocalDateInput(new Date().toISOString()))
     setTxTime(new Date().toTimeString().split(' ')[0].substring(0, 5))
-  }, [isOpen, initialTab, isWallet, orgCategories])
-  /* eslint-enable react-hooks/set-state-in-effect */
+  }, [isOpen, initialTab, isWallet])
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   const currentCategoriesList = useMemo(() => {
     return activeTab === 'income' ? orgCategories.income : orgCategories.expense

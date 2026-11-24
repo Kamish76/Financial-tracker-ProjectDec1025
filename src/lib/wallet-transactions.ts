@@ -1,9 +1,9 @@
 'use server'
 
-import { requireUser } from '@/lib/auth/guards'
+import { authorizeOrgAction } from '@/lib/auth/guards'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getOrCreateCategory } from '@/lib/categories'
-import { revalidatePath } from 'next/cache'
+import { revalidateOrganizationSections } from '@/lib/revalidation'
 
 type AddWalletTransactionInput = {
   organizationId: string
@@ -22,10 +22,7 @@ export async function addWalletTransaction(input: AddWalletTransactionInput): Pr
   error?: string
 }> {
   try {
-    const user = await requireUser()
-    const adminClient = createAdminClient()
-
-    // 1. Enforce Non-Negative amount safeguard
+    // 1. Enforce Non-Negative amount safeguard and basic input validation before DB calls
     if (input.amount <= 0 || isNaN(input.amount)) {
       return { error: 'Transaction amount must be greater than 0.' }
     }
@@ -43,40 +40,40 @@ export async function addWalletTransaction(input: AddWalletTransactionInput): Pr
       }
     }
 
-    // 2. Verify org access (following our project rules: check owner_id or active member using maybeSingle)
-    const { data: org } = await adminClient
-      .from('organizations')
-      .select('id')
-      .eq('id', input.organizationId)
-      .eq('owner_id', user.id)
-      .maybeSingle()
+    // 2. Verify org access via cached auth context (reused by getOrCreateCategory)
+    const auth = await authorizeOrgAction(
+      input.organizationId,
+      ['owner', 'admin', 'member'],
+      'You do not have permission to add transactions to this wallet.'
+    )
+    if (!auth.ok) {
+      return { error: auth.error }
+    }
 
-    let hasAccess = !!org
-    if (!hasAccess) {
-      const { data: member } = await adminClient
-        .from('organization_members')
-        .select('organization_id, user_id, is_active')
+    const { user } = auth
+    const adminClient = createAdminClient()
+
+    // 3. Validate account(s) in parallel before resolving/creating category
+    const [sourceResult, destResult] = await Promise.all([
+      adminClient
+        .from('wallet_accounts')
+        .select('id, organization_id, is_active, linked_org_id')
+        .eq('id', input.accountId)
         .eq('organization_id', input.organizationId)
-        .eq('user_id', user.id)
         .eq('is_active', true)
-        .maybeSingle()
+        .maybeSingle(),
+      input.type === 'transfer' && input.transferToAccountId
+        ? adminClient
+            .from('wallet_accounts')
+            .select('id, organization_id, is_active')
+            .eq('id', input.transferToAccountId)
+            .eq('organization_id', input.organizationId)
+            .eq('is_active', true)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ])
 
-      hasAccess = !!member
-    }
-
-    if (!hasAccess) {
-      return { error: 'You do not have permission to add transactions to this wallet.' }
-    }
-
-    // Verify account belongs to organization and is active
-    const { data: sourceAccount } = await adminClient
-      .from('wallet_accounts')
-      .select('id, organization_id, is_active, linked_org_id')
-      .eq('id', input.accountId)
-      .eq('organization_id', input.organizationId)
-      .eq('is_active', true)
-      .maybeSingle()
-
+    const sourceAccount = sourceResult.data
     if (!sourceAccount) {
       return { error: 'Invalid source account.' }
     }
@@ -88,26 +85,15 @@ export async function addWalletTransaction(input: AddWalletTransactionInput): Pr
       }
     }
 
-    if (input.type === 'transfer' && input.transferToAccountId) {
-      const { data: destAccount } = await adminClient
-        .from('wallet_accounts')
-        .select('id, organization_id, is_active')
-        .eq('id', input.transferToAccountId)
-        .eq('organization_id', input.organizationId)
-        .eq('is_active', true)
-        .maybeSingle()
-
-      if (!destAccount) {
-        return { error: 'Invalid destination account.' }
-      }
+    if (input.type === 'transfer' && !destResult.data) {
+      return { error: 'Invalid destination account.' }
     }
 
-    // 3. Resolve category ID if category string was specified and it is not a transfer
-    let categoryId: string | null = null
-    if (input.type !== 'transfer' && input.category?.trim()) {
-      const catType = input.type === 'income' ? 'income' : 'expense'
-      categoryId = await getOrCreateCategory(input.organizationId, input.category.trim(), catType)
-    }
+    const catType = input.type === 'income' ? 'income' : 'expense'
+    const categoryId =
+      input.type !== 'transfer' && input.category?.trim()
+        ? await getOrCreateCategory(input.organizationId, input.category.trim(), catType)
+        : null
 
     // 4. Insert transaction
     const { data, error } = await adminClient
@@ -137,8 +123,8 @@ export async function addWalletTransaction(input: AddWalletTransactionInput): Pr
       return { error: error.message }
     }
 
-    // 5. Revalidate wallet paths
-    revalidatePath(`/organizations/${input.organizationId}`, 'layout')
+    // 5. Revalidate affected wallet sections without forcing a full-layout revalidation
+    revalidateOrganizationSections(input.organizationId, ['records', 'accounts'])
 
     return {
       success: true,
