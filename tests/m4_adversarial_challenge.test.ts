@@ -182,21 +182,8 @@ describe('Milestone 4 Adversarial Challenge: Empirical Verification', () => {
       expect(modalContent).toContain('tabIndex={-1}')
     })
 
-    it('empirically evaluates math calculation engine edge cases', () => {
-      // Extract evaluateMathExpression implementation and strip TS types
-      const mathFuncMatch = modalContent.match(/function evaluateMathExpression\(expr: string\): number \{[\s\S]*?\n\}/)
-      expect(mathFuncMatch).toBeTruthy()
-
-      const jsCode = mathFuncMatch![0]
-        .replace(/expr: string\): number/, 'expr)')
-        .replace(/: \(number \| string\)\[\]/g, '')
-        .replace(/: (?:number|string)\[\]/g, '')
-        .replace(/ as number/g, '')
-        .replace(/let curNum = ''/g, "let curNum = ''")
-
-      const evaluateMathExpression = new Function(
-        `return (${jsCode})`
-      )() as (expr: string) => number
+    it('empirically evaluates math calculation engine edge cases', async () => {
+      const { evaluateMathExpression } = await import('@/lib/utils')
 
       // Test cases
       expect(evaluateMathExpression('100')).toBe(100)
@@ -204,6 +191,15 @@ describe('Milestone 4 Adversarial Challenge: Empirical Verification', () => {
       expect(evaluateMathExpression('10 - 25')).toBe(-15)
       expect(evaluateMathExpression('5 × 4')).toBe(20)
       expect(evaluateMathExpression('100 ÷ 4')).toBe(25)
+      // Negative numbers & unary minus
+      expect(evaluateMathExpression('-50')).toBe(-50)
+      expect(evaluateMathExpression('-15.75')).toBe(-15.75)
+      expect(evaluateMathExpression('-50 + 20')).toBe(-30)
+      expect(evaluateMathExpression('-5 × 4')).toBe(-20)
+      expect(evaluateMathExpression('10 × -5')).toBe(-50)
+      expect(evaluateMathExpression('10 - -5')).toBe(15)
+      expect(evaluateMathExpression('-')).toBe(0)
+      expect(evaluateMathExpression('-0')).toBe(0)
       // Precedence: multiplication before addition
       expect(evaluateMathExpression('2 + 3 × 4')).toBe(14)
       expect(evaluateMathExpression('10 - 4 ÷ 2')).toBe(8)
@@ -211,6 +207,7 @@ describe('Milestone 4 Adversarial Challenge: Empirical Verification', () => {
       expect(evaluateMathExpression('12.50 + 7.25')).toBe(19.75)
       // Consecutive operators (malformed expression safely evaluates to 0)
       expect(evaluateMathExpression('10 + + 5')).toBe(0)
+      expect(evaluateMathExpression('5 × + 2')).toBe(0)
       // Division by zero
       expect(evaluateMathExpression('10 ÷ 0')).toBe(0)
       // Empty or invalid input

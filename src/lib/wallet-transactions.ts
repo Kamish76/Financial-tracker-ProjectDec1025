@@ -4,6 +4,7 @@ import { authorizeOrgAction } from '@/lib/auth/guards'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getOrCreateCategory } from '@/lib/categories'
 import { revalidateOrganizationSections } from '@/lib/revalidation'
+import { normalizeTransactionAmount } from '@/lib/utils'
 
 type AddWalletTransactionInput = {
   organizationId: string
@@ -22,9 +23,10 @@ export async function addWalletTransaction(input: AddWalletTransactionInput): Pr
   error?: string
 }> {
   try {
-    // 1. Enforce Non-Negative amount safeguard and basic input validation before DB calls
-    if (input.amount <= 0 || isNaN(input.amount)) {
-      return { error: 'Transaction amount must be greater than 0.' }
+    // 1. Normalize negative amounts via Math.abs (2dp) and reject zero/non-finite values before DB calls
+    const normalizedAmount = normalizeTransactionAmount(input.amount)
+    if (normalizedAmount === null) {
+      return { error: 'Transaction amount cannot be 0.' }
     }
 
     if (!input.accountId) {
@@ -102,7 +104,7 @@ export async function addWalletTransaction(input: AddWalletTransactionInput): Pr
         organization_id: input.organizationId,
         user_id: user.id,
         type: input.type,
-        amount: input.amount,
+        amount: normalizedAmount,
         account_id: input.accountId,
         transfer_to_account_id: input.type === 'transfer' ? input.transferToAccountId : null,
         category_id: categoryId,
