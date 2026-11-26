@@ -347,6 +347,9 @@ describe('Unit Tests: Financial Accounting Calculations & Precision', () => {
       expect(evaluateMathExpression('100+25×2')).toBe(150)
       expect(evaluateMathExpression('150÷3-10')).toBe(40)
       expect(evaluateMathExpression('50÷0')).toBe(0)
+      expect(evaluateMathExpression('-50')).toBe(-50)
+      expect(evaluateMathExpression('-100+25×2')).toBe(-50)
+      expect(evaluateMathExpression('10×-5')).toBe(-50)
     })
 
     it('preserves exact timestamp when date is unchanged and local time when date changes', async () => {

@@ -7,6 +7,7 @@ import { getUserWalletId } from "@/lib/wallet-server"
 import {
   revalidateOrganizationSections,
 } from "@/lib/revalidation"
+import { normalizeTransactionAmount } from "@/lib/utils"
 
 type OrgClient = ReturnType<typeof createAdminClient>
 type AllowedRoles = Parameters<typeof authorizeOrgAction>[1]
@@ -172,8 +173,9 @@ async function insertOrgTransaction(params: InsertOrgTransactionParams) {
     return { error: "Organization is required" }
   }
 
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return { error: "Amount must be greater than 0" }
+  const normalizedAmount = normalizeTransactionAmount(amount)
+  if (normalizedAmount === null) {
+    return { error: "Amount cannot be 0" }
   }
 
   if (!occurredAt) {
@@ -239,7 +241,7 @@ async function insertOrgTransaction(params: InsertOrgTransactionParams) {
     organization_id: organizationId,
     user_id: user.id,
     type: txType,
-    amount,
+    amount: normalizedAmount,
     description: description?.trim() || null,
     category: category?.trim() || null,
     category_id: categoryId,
@@ -281,7 +283,7 @@ async function insertOrgTransaction(params: InsertOrgTransactionParams) {
       userId: user.id,
       orgTxId: insertedOrgTxId,
       txType: txType as "income" | "expense_business",
-      amount,
+      amount: normalizedAmount,
       description,
       occurredAtIso,
     })
@@ -397,8 +399,9 @@ export async function addInitialTransaction(input: AddInitialTransactionInput) {
     return { error: "Organization is required" }
   }
 
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return { error: "Amount must be greater than 0" }
+  const normalizedAmount = normalizeTransactionAmount(amount)
+  if (normalizedAmount === null) {
+    return { error: "Amount cannot be 0" }
   }
 
   if (!occurredAt) {
@@ -451,7 +454,7 @@ export async function addInitialTransaction(input: AddInitialTransactionInput) {
     organization_id: organizationId,
     user_id: user.id, // Owner who created this initial transaction (audit trail)
     type: transactionType,
-    amount,
+    amount: normalizedAmount,
     description: description?.trim() || null,
     category: category?.trim() || null,
     category_id: categoryId,
@@ -497,8 +500,9 @@ export async function updateInitialTransaction(input: UpdateInitialTransactionIn
     return { error: "Organization and transaction are required" }
   }
 
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return { error: "Amount must be greater than 0" }
+  const normalizedAmount = normalizeTransactionAmount(amount)
+  if (normalizedAmount === null) {
+    return { error: "Amount cannot be 0" }
   }
 
   if (!occurredAt) {
@@ -558,7 +562,7 @@ export async function updateInitialTransaction(input: UpdateInitialTransactionIn
     : null
 
   const updatePayload = {
-    amount,
+    amount: normalizedAmount,
     description: description?.trim() || null,
     category: category?.trim() || null,
     category_id: categoryId,
@@ -862,8 +866,9 @@ export async function createRefund(input: CreateRefundInput) {
     return { error: "Organization is required" }
   }
 
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return { error: "Amount must be greater than 0" }
+  const normalizedAmount = normalizeTransactionAmount(amount)
+  if (normalizedAmount === null) {
+    return { error: "Amount cannot be 0" }
   }
 
   const auth = await authorizeOrgAction(
@@ -883,7 +888,7 @@ export async function createRefund(input: CreateRefundInput) {
   const { data, error } = await admin.rpc('process_member_refund', {
     p_org_id: organizationId,
     p_user_id: user.id,
-    p_amount: amount,
+    p_amount: normalizedAmount,
     p_description: description?.trim() || null,
   })
 

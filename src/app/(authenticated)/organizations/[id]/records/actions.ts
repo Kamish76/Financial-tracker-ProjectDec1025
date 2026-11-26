@@ -15,6 +15,7 @@ import { getUserWalletId } from '@/lib/wallet-server'
 import { requireOrgMembership, authorizeOrgAction } from '@/lib/auth/guards'
 import { getOrCreateCategory } from '@/lib/categories'
 import { revalidateOrganizationSections } from '@/lib/revalidation'
+import { normalizeTransactionAmount } from '@/lib/utils'
 
 export async function fetchTransactionAggregates(
 	organizationId: string,
@@ -95,6 +96,10 @@ export async function createTransaction(
 
 	const { user } = auth
 	const payload = (typeof organizationIdOrInput === 'object' ? organizationIdOrInput : data || {}) as Record<string, unknown>
+	const normalizedAmount = normalizeTransactionAmount(payload.amount ?? 0)
+	if (normalizedAmount === null) {
+		return { error: 'Amount cannot be 0' }
+	}
 	const admin = createAdminClient()
 
 	const txType = String(payload.type ?? 'expense_business')
@@ -111,7 +116,7 @@ export async function createTransaction(
 	const insertPayload = {
 		organization_id: organizationId,
 		user_id: user.id,
-		amount: Number(payload.amount ?? 0),
+		amount: normalizedAmount,
 		type: txType,
 		description: payload.description ? String(payload.description).trim() : null,
 		category: categoryStr,
@@ -210,9 +215,15 @@ export async function updateTransaction(
 		return { error: 'Only organization owners can edit initial transactions' }
 	}
 
+	const normalizedAmount =
+		updateData.amount !== undefined ? normalizeTransactionAmount(updateData.amount) : undefined
+	if (updateData.amount !== undefined && normalizedAmount === null) {
+		return { error: 'Amount cannot be 0' }
+	}
+
 	if (existingTx.mirrored_from_tx_id) {
 		const amountChanged =
-			updateData.amount !== undefined && Number(updateData.amount) !== Number(existingTx.amount)
+			normalizedAmount !== undefined && normalizedAmount !== Number(existingTx.amount)
 		const accountChanged =
 			(updateData.accountId !== undefined || updateData.account_id !== undefined) &&
 			(updateData.accountId ?? updateData.account_id) !== existingTx.account_id
@@ -233,7 +244,7 @@ export async function updateTransaction(
 		updated_at: new Date().toISOString(),
 	}
 
-	if (updateData.amount !== undefined) updatePayload.amount = Number(updateData.amount)
+	if (normalizedAmount !== undefined) updatePayload.amount = normalizedAmount
 	if (updateData.description !== undefined) {
 		updatePayload.description = updateData.description ? String(updateData.description).trim() : null
 	}

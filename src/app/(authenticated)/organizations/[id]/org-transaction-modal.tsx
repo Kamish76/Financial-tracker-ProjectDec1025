@@ -301,8 +301,17 @@ export function OrgTransactionModal({
         return
       }
 
-      if (displayExpr === '0' && '0123456789'.includes(key)) {
-        setDisplayExpr(key)
+      if (displayExpr === '0') {
+        if ('0123456789'.includes(key)) {
+          setDisplayExpr(key)
+        } else if (key === '-') {
+          setDisplayExpr('-')
+        } else {
+          setDisplayExpr('0' + key)
+        }
+      } else if (displayExpr === '-') {
+        if ('+-×÷'.includes(key)) return
+        setDisplayExpr(key === '.' ? '-0.' : '-' + key)
       } else {
         const lastChar = displayExpr.slice(-1)
         const isOp = '+-×÷.'.includes(key)
@@ -471,7 +480,7 @@ export function OrgTransactionModal({
 
       if (e.key === 'Enter') {
         e.preventDefault()
-        const isEvaluated = !/[+\-×÷]/.test(displayExpr)
+        const isEvaluated = !/[+\-×÷]/.test(displayExpr.replace(/^-/, ''))
         if (isEvaluated && isAmountValid && !isSubmitting) {
           handleSave()
         } else {
@@ -944,7 +953,7 @@ export function OrgTransactionModal({
                 <span className={`text-4xl font-light tracking-tight ${accentText}`}>
                   {displayExpr}
                 </span>
-                {displayExpr.match(/[+\-×÷]/) && (
+                {displayExpr !== '-' && displayExpr.match(/[+\-×÷]/) && (
                   <div className="text-xs text-muted-foreground mt-0.5">
                     = {formatCurrency(evaluatedAmount, currency)}
                   </div>
@@ -961,7 +970,7 @@ export function OrgTransactionModal({
               </button>
             </div>
 
-            {evaluatedAmount === 0 && displayExpr !== '0' && (
+            {evaluatedAmount === 0 && displayExpr !== '0' && displayExpr !== '-' && (
               <div className="flex items-center gap-1.5 text-xs text-destructive px-2">
                 <AlertCircle className="h-3.5 w-3.5" />
                 <span>Amount cannot be 0</span>

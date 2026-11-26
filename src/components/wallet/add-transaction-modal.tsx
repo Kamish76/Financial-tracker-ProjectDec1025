@@ -10,7 +10,7 @@ import {
   DEFAULT_INCOME_CATEGORIES,
   DEFAULT_EXPENSE_CATEGORIES,
 } from '@/lib/category-constants'
-import { formatCurrency, formatLocalDateInput } from '@/lib/utils'
+import { formatCurrency, evaluateMathExpression, formatLocalDateInput } from '@/lib/utils'
 import { 
   X, 
   Check, 
@@ -45,75 +45,6 @@ function getDisplayBalance(acc: WalletAccount | AccountWithBalance, currency?: s
 }
 
 type TabType = 'income' | 'expense' | 'transfer'
-
-// Safely evaluates arithmetic expressions without eval()
-function evaluateMathExpression(expr: string): number {
-  try {
-    // Replace visual symbols with standard JS operators
-    const clean = expr
-      .replace(/×/g, '*')
-      .replace(/÷/g, '/')
-      .replace(/[^0-9+\-*/.]/g, '')
-
-    if (!clean || /^[^0-9(]/.test(clean)) return 0
-
-    // Tokenize and evaluate simple BODMAS/operator order
-    const tokens: (number | string)[] = []
-    let curNum = ''
-    for (const char of clean) {
-      if ('+-*/'.includes(char)) {
-        if (curNum !== '') {
-          tokens.push(parseFloat(curNum))
-          curNum = ''
-        }
-        tokens.push(char)
-      } else {
-        curNum += char
-      }
-    }
-    if (curNum !== '') {
-      tokens.push(parseFloat(curNum))
-    }
-
-    if (tokens.length === 0) return 0
-    if (tokens.length === 1 && typeof tokens[0] === 'number') return tokens[0]
-
-    // First pass: multiplication and division
-    const pass1: (number | string)[] = []
-    let i = 0
-    while (i < tokens.length) {
-      const token = tokens[i]
-      if (token === '*' || token === '/') {
-        const prev = pass1.pop() as number
-        const next = (tokens[i + 1] ?? 1) as number
-        if (token === '*') {
-          pass1.push(prev * next)
-        } else {
-          pass1.push(next === 0 ? 0 : prev / next)
-        }
-        i += 2
-      } else {
-        pass1.push(token)
-        i++
-      }
-    }
-
-    // Second pass: addition and subtraction
-    let result = (pass1[0] as number) || 0
-    i = 1
-    while (i < pass1.length) {
-      const op = pass1[i]
-      const val = (pass1[i + 1] ?? 0) as number
-      if (op === '+') result += val
-      else if (op === '-') result -= val
-      i += 2
-    }
-
-    return isNaN(result) ? 0 : Number(result.toFixed(2))
-  } catch {
-    return 0
-  }
-}
 
 export function AddTransactionModal({
   isOpen,
@@ -303,8 +234,17 @@ export function AddTransactionModal({
       return
     }
 
-    if (displayExpr === '0' && '0123456789'.includes(key)) {
-      setDisplayExpr(key)
+    if (displayExpr === '0') {
+      if ('0123456789'.includes(key)) {
+        setDisplayExpr(key)
+      } else if (key === '-') {
+        setDisplayExpr('-')
+      } else {
+        setDisplayExpr('0' + key)
+      }
+    } else if (displayExpr === '-') {
+      if ('+-×÷'.includes(key)) return
+      setDisplayExpr(key === '.' ? '-0.' : '-' + key)
     } else {
       // Prevent consecutive operators
       const lastChar = displayExpr.slice(-1)
@@ -445,7 +385,7 @@ export function AddTransactionModal({
       if (e.key === 'Enter') {
         e.preventDefault()
         // Check if expression is just a number or evaluated
-        const isEvaluated = !/[+\-×÷]/.test(displayExpr)
+        const isEvaluated = !/[+\-×÷]/.test(displayExpr.replace(/^-/, ''))
         if (isEvaluated && isAmountValid && !isSubmitting) {
           handleSave()
         } else {
@@ -848,7 +788,7 @@ export function AddTransactionModal({
                 {displayExpr}
               </span>
               {/* Show evaluated value preview if displayExpr is an expression */}
-              {displayExpr.match(/[+\-×÷]/) && (
+              {displayExpr !== '-' && displayExpr.match(/[+\-×÷]/) && (
                 <div className="text-xs text-muted-foreground mt-0.5">
                   = {formatCurrency(evaluatedAmount, currency)}
                 </div>
@@ -864,7 +804,7 @@ export function AddTransactionModal({
             </button>
           </div>
 
-          {evaluatedAmount === 0 && displayExpr !== '0' && (
+          {evaluatedAmount === 0 && displayExpr !== '0' && displayExpr !== '-' && (
             <div className="flex items-center gap-1.5 text-xs text-destructive px-2">
               <AlertCircle className="h-3.5 w-3.5" />
               <span>Amount cannot be 0</span>
