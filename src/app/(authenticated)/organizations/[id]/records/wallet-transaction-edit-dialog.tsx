@@ -75,8 +75,8 @@ export function WalletTransactionEditDialog({
     setError(null)
 
     const parsedAmount = Number(amount)
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      setError("Amount must be greater than 0")
+    if (!Number.isFinite(parsedAmount) || parsedAmount === 0) {
+      setError("Amount cannot be 0")
       return
     }
 
@@ -89,7 +89,7 @@ export function WalletTransactionEditDialog({
       const result = await updateTransaction({
         organizationId,
         transactionId: transaction.id,
-        amount: parsedAmount,
+        amount: Math.abs(parsedAmount),
         description: description.trim() || undefined,
         category: category.trim() || undefined,
         accountId: accountId || null,
@@ -166,7 +166,6 @@ export function WalletTransactionEditDialog({
               id="amount"
               type="number"
               step="0.01"
-              min="0"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"

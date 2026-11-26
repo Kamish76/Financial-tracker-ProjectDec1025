@@ -743,4 +743,152 @@ describe('Organization ↔ Personal Wallet Sub-Account Auto-Mirror', () => {
     expect(revalidatePath).toHaveBeenCalledWith(`/organizations/${walletOrgId}/records`)
     expect(revalidatePath).toHaveBeenCalledWith(`/organizations/${walletOrgId}/accounts`)
   })
+
+  it('normalizes negative transaction amounts with Math.abs and rejects 0 or NaN across server actions', async () => {
+    const insertedPayloads: Array<Record<string, unknown>> = []
+    const updatedPayloads: Array<Record<string, unknown>> = []
+    const orgId = 'org-biz-neg-1'
+    const mayaAccountId = 'acc-maya-neg-1'
+    const linkedAccountId = 'acc-linked-neg-1'
+
+    vi.spyOn(walletServer, 'getUserWalletId').mockResolvedValue(walletOrgId)
+    vi.spyOn(categories, 'getOrCreateCategory').mockResolvedValue(null)
+    vi.spyOn(guards, 'authorizeOrgAction').mockResolvedValue({
+      ok: true,
+      user: { id: userId } as User,
+      membership: { organizationId: orgId, userId, role: 'owner', isActive: true },
+    })
+
+    vi.spyOn(supabaseServer, 'createAdminClient').mockImplementation(() => {
+      const makeBuilder = (table: string) => {
+        const builder: Record<string, unknown> = {
+          select: () => builder,
+          eq: () => builder,
+          insert: (payload: Record<string, unknown>) => {
+            insertedPayloads.push(payload)
+            return builder
+          },
+          update: (payload: Record<string, unknown>) => {
+            updatedPayloads.push(payload)
+            return builder
+          },
+          maybeSingle: async () => {
+            if (table === 'organizations') return { data: { id: orgId, name: 'NegOrg' }, error: null }
+            if (table === 'transactions') {
+              return {
+                data: {
+                  id: 'tx-existing-neg',
+                  organization_id: orgId,
+                  is_initial: false,
+                  type: 'expense_business',
+                  account_id: null,
+                  transfer_to_account_id: null,
+                  amount: 50,
+                  mirrored_from_tx_id: null,
+                },
+                error: null,
+              }
+            }
+            if (table === 'wallet_accounts') {
+              return {
+                data: { id: mayaAccountId, organization_id: walletOrgId, is_active: true, linked_org_id: null },
+                error: null,
+              }
+            }
+            return { data: null, error: null }
+          },
+          single: async () => ({ data: { id: 'new-neg-tx' }, error: null }),
+          then: (resolve: (v: unknown) => unknown) => {
+            if (table === 'wallet_accounts') {
+              return resolve({
+                data: [
+                  { id: linkedAccountId, name: 'Linked', is_active: true, linked_org_id: orgId },
+                  { id: mayaAccountId, name: 'Maya', is_active: true, linked_org_id: null },
+                ],
+                error: null,
+              })
+            }
+            return resolve({ data: null, error: null })
+          },
+        }
+        return builder
+      }
+      return { from: makeBuilder } as unknown as ReturnType<typeof supabaseServer.createAdminClient>
+    })
+
+    // Zero and NaN must be rejected
+    expect((await addWalletTransaction({
+      organizationId: walletOrgId,
+      type: 'expense_personal',
+      amount: 0,
+      accountId: mayaAccountId,
+    })).error).toBeTruthy()
+    expect((await addWalletTransaction({
+      organizationId: walletOrgId,
+      type: 'expense_personal',
+      amount: Number.NaN,
+      accountId: mayaAccountId,
+    })).error).toBeTruthy()
+    expect((await addWalletTransaction({
+      organizationId: walletOrgId,
+      type: 'expense_personal',
+      amount: -0.001,
+      accountId: mayaAccountId,
+    })).error).toBeTruthy()
+    expect(await addIncome({
+      organizationId: orgId,
+      amount: 0,
+      occurredAt: '2026-11-26T10:00:00.000Z',
+      fundedByType: 'business',
+    })).toMatchObject({ error: 'Amount cannot be 0' })
+    expect(await updateTransaction({
+      organizationId: orgId,
+      transactionId: 'tx-existing-neg',
+      amount: 0,
+    })).toMatchObject({ error: 'Amount cannot be 0' })
+
+    // Negative amounts must be normalized to positive via Math.abs
+    const walletRes = await addWalletTransaction({
+      organizationId: walletOrgId,
+      type: 'expense_personal',
+      amount: -75.5,
+      accountId: mayaAccountId,
+    })
+    expect(walletRes.success).toBe(true)
+
+    const incomeRes = await addIncome({
+      organizationId: orgId,
+      amount: -75.5,
+      occurredAt: '2026-11-26T10:00:00.000Z',
+      fundedByType: 'business',
+      mirrorWalletAccountId: mayaAccountId,
+    })
+    expect(incomeRes).toMatchObject({ success: true })
+
+    const expenseRes = await addExpense({
+      organizationId: orgId,
+      amount: -42.25,
+      occurredAt: '2026-11-26T10:00:00.000Z',
+      expenseType: 'business',
+    })
+    expect(expenseRes).toMatchObject({ success: true })
+
+    const createRes = await createTransaction({
+      organizationId: orgId,
+      type: 'income',
+      amount: -120,
+    })
+    expect(createRes).toMatchObject({ success: true })
+
+    const updateRes = await updateTransaction({
+      organizationId: orgId,
+      transactionId: 'tx-existing-neg',
+      amount: -99.95,
+    })
+    expect(updateRes).toMatchObject({ success: true })
+
+    // Inserted: walletRes (75.5), incomeRes org (75.5), incomeRes mirror (75.5), expenseRes (42.25), createRes (120)
+    expect(insertedPayloads.map((p) => p.amount)).toEqual([75.5, 75.5, 75.5, 42.25, 120])
+    expect(updatedPayloads.map((p) => p.amount)).toEqual([99.95])
+  })
 })

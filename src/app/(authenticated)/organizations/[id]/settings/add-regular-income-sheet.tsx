@@ -112,8 +112,8 @@ export function AddRegularIncomeSheet({
     const parsedAmount = Number(amount)
     const dateValue = occurredAt || defaultDate
 
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      setError("Amount must be greater than 0")
+    if (!Number.isFinite(parsedAmount) || parsedAmount === 0) {
+      setError("Amount cannot be 0")
       return
     }
 
@@ -125,7 +125,7 @@ export function AddRegularIncomeSheet({
     startTransition(async () => {
       const result = await addIncomeForMember({
         organizationId,
-        amount: parsedAmount,
+        amount: Math.abs(parsedAmount),
         category: category.trim() || undefined,
         description: description.trim() || undefined,
         occurredAt: dateValue,
@@ -219,7 +219,6 @@ export function AddRegularIncomeSheet({
               id="amount"
               name="amount"
               type="number"
-              min="0"
               step="0.01"
               inputMode="decimal"
               required
