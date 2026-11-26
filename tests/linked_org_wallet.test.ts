@@ -863,7 +863,7 @@ describe('Organization ↔ Personal Wallet Sub-Account Auto-Mirror', () => {
       fundedByType: 'business',
       mirrorWalletAccountId: mayaAccountId,
     })
-    expect(incomeRes.success).toBe(true)
+    expect(incomeRes).toMatchObject({ success: true })
 
     const expenseRes = await addExpense({
       organizationId: orgId,
@@ -871,21 +871,21 @@ describe('Organization ↔ Personal Wallet Sub-Account Auto-Mirror', () => {
       occurredAt: '2026-11-26T10:00:00.000Z',
       expenseType: 'business',
     })
-    expect(expenseRes.success).toBe(true)
+    expect(expenseRes).toMatchObject({ success: true })
 
     const createRes = await createTransaction({
       organizationId: orgId,
       type: 'income',
       amount: -120,
     })
-    expect(createRes.success).toBe(true)
+    expect(createRes).toMatchObject({ success: true })
 
     const updateRes = await updateTransaction({
       organizationId: orgId,
       transactionId: 'tx-existing-neg',
       amount: -99.95,
     })
-    expect(updateRes.success).toBe(true)
+    expect(updateRes).toMatchObject({ success: true })
 
     // Inserted: walletRes (75.5), incomeRes org (75.5), incomeRes mirror (75.5), expenseRes (42.25), createRes (120)
     expect(insertedPayloads.map((p) => p.amount)).toEqual([75.5, 75.5, 75.5, 42.25, 120])
